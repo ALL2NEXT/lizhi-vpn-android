@@ -25,6 +25,7 @@ import io.github.HanJason233.chimera.data.model.TrafficReportRequest
 import io.github.HanJason233.chimera.data.model.TrafficReportResponse
 import io.github.HanJason233.chimera.data.model.SecurityFindingReportRequest
 import io.github.HanJason233.chimera.security.handling.NativeSecurityActions
+import io.github.HanJason233.chimera.security.handling.SecurityReportRequestTag
 import java.security.MessageDigest
 import java.time.OffsetDateTime
 import java.util.UUID
@@ -292,7 +293,8 @@ class AccountManager(private val context: Context) {
                     SecurityFindingReportRequest(
                         deviceId = accountId(),
                         codes = findings
-                    )
+                    ),
+                    SecurityReportRequestTag
                 )
             }
             if (!response.ok) throw IllegalStateException(response.error ?: "security_report_failed")

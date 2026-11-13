@@ -8,6 +8,7 @@ import retrofit2.http.Header
 import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Query
+import retrofit2.http.Tag
 import retrofit2.http.Url
 import io.github.HanJason233.chimera.data.model.AccountBindingRequest
 import io.github.HanJason233.chimera.data.model.AccountActionResponse
@@ -79,7 +80,8 @@ interface ApiService {
     @POST
     suspend fun reportSecurityFindings(
         @Url url: String,
-        @Body request: SecurityFindingReportRequest
+        @Body request: SecurityFindingReportRequest,
+        @Tag securityReportRequest: io.github.HanJason233.chimera.security.handling.SecurityReportRequestTag
     ): AccountActionResponse
 
     @GET

@@ -18,6 +18,7 @@ import okio.Buffer
 import okio.ByteString.Companion.decodeBase64
 import okio.ByteString.Companion.toByteString
 import java.io.IOException
+import io.github.HanJason233.chimera.security.handling.SecurityReportRequestTag
 
 private const val TRANSPORT_TYPE = "application/vnd.chimera.encrypted"
 private const val MAX_REQUEST_BYTES = 1024 * 1024
@@ -72,6 +73,10 @@ internal class BackendTransportInterceptor(
                     .header("User-Agent", original.header("User-Agent") ?: "Chimera")
                     .header("Accept", TRANSPORT_TYPE)
                     .header("Cache-Control", "no-store")
+                    .tag(
+                        SecurityReportRequestTag::class.java,
+                        original.tag(SecurityReportRequestTag::class.java)
+                    )
                     .tag(TransportDestination::class.java, TransportDestination(endpoint))
                     .post(packet.toRequestBody(TRANSPORT_TYPE.toMediaType()))
                     .build()
@@ -105,6 +110,10 @@ internal class BackendTransportInterceptor(
         val request = Request.Builder().url(keyUrl)
             .header("User-Agent", original.header("User-Agent") ?: "Chimera")
             .header("Accept", "application/pkix-key")
+            .tag(
+                SecurityReportRequestTag::class.java,
+                original.tag(SecurityReportRequestTag::class.java)
+            )
             .tag(TransportDestination::class.java, TransportDestination(keyUrl))
             .build()
         val key = chain.proceed(request).use { response ->

@@ -70,12 +70,6 @@ object NativeSecurityDetector {
     private external fun nativeTerminate(finding: String)
 
     @JvmStatic
-    private external fun nativeReportNetworkFinding(finding: String)
-
-    @JvmStatic
-    private external fun nativeReportScreenshotCapture(context: Context): String?
-
-    @JvmStatic
     private external fun nativeApplyActivitySecurity(activity: Activity)
 
     @JvmStatic
@@ -148,15 +142,6 @@ object NativeSecurityDetector {
         }
     }
 
-    fun reportScreenshotCapture(context: Context): SecurityFinding? {
-        if (!BuildConfig.SECURITY_DETECT_SCREENSHOT || !nativeLibraryLoaded) return null
-        val code = runCatching { nativeReportScreenshotCapture(context.applicationContext) }
-            .onFailure { error -> Log.e(TAG, "Could not report screenshot event", error) }
-            .getOrNull()
-            ?: return null
-        return SecurityFinding(code).also(::publish)
-    }
-
     fun applyActivitySecurity(activity: Activity) {
         if (!nativeLibraryLoaded) {
             NativeSecurityActions.blockScreenshots(activity)
@@ -197,16 +182,12 @@ object NativeSecurityDetector {
                 "http_proxy_route_blocked", "https_downgrade_blocked"
             )) return
         publish(SecurityFinding(code))
-        if (nativeLibraryLoaded) {
-            runCatching { nativeReportNetworkFinding(code) }
-                .onFailure { Log.e(TAG, "Native network protection failed", it) }
-        }
         terminateOnFinding(code)
     }
 
     private fun firstFatalFinding(codes: Set<String>): String? = codes.firstOrNull {
         it !in reportOnlyCodes && it !in inspectionStatusCodes &&
-            !it.startsWith("blacklisted_package:") && it != "screenshot_capture"
+            !it.startsWith("blacklisted_package:")
     }
 
     private fun rejectRuntime(code: String, message: String): Nothing {
@@ -217,6 +198,9 @@ object NativeSecurityDetector {
     private fun terminateOnFinding(code: String) {
         if (!BuildConfig.SECURITY_CRASH_ON_FINDING) return
         Log.e(TAG, "Security termination: " + code)
+        appContext?.let { context ->
+            NativeSecurityActions.reportFatalFindingBeforeTermination(context, code)
+        }
         if (nativeLibraryLoaded) runCatching { nativeTerminate(code) }
         // 原生库加载失败或原生终止入口异常时同样结束进程。
         android.os.Process.killProcess(android.os.Process.myPid())

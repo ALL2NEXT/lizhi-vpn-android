@@ -38,27 +38,8 @@ void applyCaptureProtection(JNIEnv* env) {
 #endif
 }
 
-void reportNetworkFinding(JNIEnv* env, jstring finding) {
-    if (finding == nullptr) {
-        fatalFinding(nullptr, "capture_detection_unavailable");
-        return;
-    }
-    const char* value = env->GetStringUTFChars(finding, nullptr);
-    if (value == nullptr) {
-        detection_utils::clearPendingException(env);
-        fatalFinding(nullptr, "capture_detection_unavailable");
-        return;
-    }
-    const std::string code(value);
-    env->ReleaseStringUTFChars(finding, value);
-    if (code == "tls_validation_failed" || code == "cleartext_traffic_blocked" ||
-            code == "http_proxy_route_blocked" || code == "https_downgrade_blocked") {
-        // 网络拦截器已经拒绝该请求，随后立即终止当前应用进程。
-        fatalFinding(nullptr, code.c_str());
-    }
-}
-
 void detectCapture(JNIEnv* env, jobject context, std::vector<std::string>* findings) {
+    ReportContextScope reportContext(env, context);
 #if CHIMERA_DETECT_CAPTURE || CHIMERA_BLOCK_HTTP_PROXY
     applyCaptureProtection(env);
     // 保持请求防护，HTTP/PAC 代理或检测错误命中后直接终止，不检查 VPN/TUN 接口。

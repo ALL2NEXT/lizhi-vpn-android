@@ -60,22 +60,15 @@ void nativeTerminate(JNIEnv* env, jclass, jstring finding) {
     chimera::security::terminateOnFinding(code.c_str());
 }
 
-void nativeReportNetworkFinding(JNIEnv* env, jclass, jstring finding) {
-    chimera::security::reportNetworkFinding(env, finding);
-}
-
-jstring nativeReportScreenshotCapture(JNIEnv* env, jclass /* 未使用的 JNI 类参数 */, jobject context) {
-    (void) context;
-    return chimera::security::reportScreenshotCapture(env);
-}
-
 }  // 匿名命名空间结束
 
 void nativeApplyActivitySecurity(JNIEnv* env, jclass, jobject activity) {
+    chimera::security::ReportContextScope reportContext(env, activity);
     chimera::security::applyScreenshotProtection(env, activity);
 }
 
 jobjectArray nativeRefreshCapturePolicy(JNIEnv* env, jclass, jobject context) {
+    chimera::security::ReportContextScope reportContext(env, context);
     std::vector<std::string> findings;
     chimera::security::detectCapture(env, context, &findings);
     return toJavaFindings(env, findings);
@@ -96,10 +89,6 @@ extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
              reinterpret_cast<void*>(nativeScan)},
             {"nativeTerminate", "(Ljava/lang/String;)V",
              reinterpret_cast<void*>(nativeTerminate)},
-            {"nativeReportNetworkFinding", "(Ljava/lang/String;)V",
-             reinterpret_cast<void*>(nativeReportNetworkFinding)},
-            {"nativeReportScreenshotCapture", "(Landroid/content/Context;)Ljava/lang/String;",
-             reinterpret_cast<void*>(nativeReportScreenshotCapture)},
             {"nativeApplyActivitySecurity", "(Landroid/app/Activity;)V",
              reinterpret_cast<void*>(nativeApplyActivitySecurity)},
             {"nativeRefreshCapturePolicy", "(Landroid/content/Context;)[Ljava/lang/String;",

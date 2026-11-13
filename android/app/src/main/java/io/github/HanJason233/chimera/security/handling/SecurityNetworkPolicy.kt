@@ -54,42 +54,48 @@ internal class RequestSecurityPolicy(
             .addNetworkInterceptor(::interceptNetwork)
 
     private fun interceptRequest(chain: Interceptor.Chain): Response {
-        checkTarget(chain.request().url)
-        checkRuntime()
+        val request = chain.request()
+        val shouldReport = request.tag(SecurityReportRequestTag::class.java) == null
+        checkTarget(request.url, shouldReport)
+        if (shouldReport) checkRuntime()
         return try {
-            chain.proceed(chain.request())
+            chain.proceed(request)
         } catch (error: IOException) {
-            if (isTlsValidationFailure(error)) reportFinding("tls_validation_failed")
+            if (shouldReport && isTlsValidationFailure(error)) {
+                reportFinding("tls_validation_failed")
+            }
             throw error
         }
     }
 
     private fun interceptNetwork(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val shouldReport = request.tag(SecurityReportRequestTag::class.java) == null
         // 网络拦截器会在每个重定向 hop 执行，连接池复用也不能跳过路由检查。
-        checkTarget(chain.request().url)
+        checkTarget(request.url, shouldReport)
         val connection = chain.connection() ?: throw IOException("网络连接不可用")
         val proxy = connection.route().proxy
         if (proxy.type() != Proxy.Type.DIRECT && !isInternalSocks(proxy)) {
-            reportFinding("http_proxy_route_blocked")
+            if (shouldReport) reportFinding("http_proxy_route_blocked")
             throw IOException("已阻止通过外部代理发送应用请求")
         }
-        if (chain.request().url.isHttps && connection.handshake() == null) {
+        if (request.url.isHttps && connection.handshake() == null) {
             throw SSLPeerUnverifiedException("HTTPS connection has no verified TLS session")
         }
-        val response = chain.proceed(chain.request())
+        val response = chain.proceed(request)
         val location = response.header("Location")
-        if (chain.request().url.isHttps && response.code in setOf(301, 302, 303, 307, 308) &&
-            location != null && chain.request().url.resolve(location)?.isHttps == false) {
+        if (request.url.isHttps && response.code in setOf(301, 302, 303, 307, 308) &&
+            location != null && request.url.resolve(location)?.isHttps == false) {
             response.close()
-            reportFinding("https_downgrade_blocked")
+            if (shouldReport) reportFinding("https_downgrade_blocked")
             throw IOException("已阻止 HTTPS 降级到明文连接")
         }
         return response
     }
 
-    private fun checkTarget(url: HttpUrl) {
+    private fun checkTarget(url: HttpUrl, shouldReport: Boolean) {
         if (!url.isHttps && !allowCleartextProbe && !isLoopbackHost(url.host)) {
-            reportFinding("cleartext_traffic_blocked")
+            if (shouldReport) reportFinding("cleartext_traffic_blocked")
             throw IOException("已阻止向外部地址发送未加密的应用请求")
         }
     }

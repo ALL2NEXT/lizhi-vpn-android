@@ -70,7 +70,6 @@ import io.github.HanJason233.chimera.ui.theme.MonetThemeOverlay
 import io.github.HanJason233.chimera.platform.LauncherIdentityManager
 import io.github.HanJason233.chimera.viewmodel.MainViewModel
 import io.github.HanJason233.chimera.viewmodel.RoutingAssetsViewModel
-import io.github.HanJason233.chimera.security.detection.ScreenshotCaptureDetector
 import io.github.HanJason233.chimera.security.detection.NativeSecurityDetector
 import io.github.HanJason233.chimera.security.handling.NativeSecurityActions
 
@@ -578,12 +577,10 @@ class MainActivity : ComponentActivity() {
         super.onStart()
         NativeSecurityDetector.setForeground(this, true)
         NativeSecurityActions.flushPendingFindings(this)
-        ScreenshotCaptureDetector.start(this)
     }
 
     override fun onStop() {
         NativeSecurityDetector.setForeground(this, false)
-        ScreenshotCaptureDetector.stop(this)
         super.onStop()
     }
 

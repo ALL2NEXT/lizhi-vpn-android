@@ -2,22 +2,15 @@
 
 #include "detection_utils.h"
 
-#include <android/log.h>
-
-#ifndef CHIMERA_DETECT_SCREENSHOT
-#define CHIMERA_DETECT_SCREENSHOT 1
-#endif
-
 #ifndef CHIMERA_BLOCK_SCREENSHOTS
 #define CHIMERA_BLOCK_SCREENSHOTS 1
 #endif
-
-#define TAG "NativeSecurity"
 
 namespace chimera {
 namespace security {
 
 void applyScreenshotProtection(JNIEnv* env, jobject activity) {
+    ReportContextScope reportContext(env, activity);
 #if CHIMERA_BLOCK_SCREENSHOTS
     if (env == nullptr || activity == nullptr) {
         fatalFinding(nullptr, "screenshot_protection_unavailable");
@@ -41,17 +34,6 @@ void applyScreenshotProtection(JNIEnv* env, jobject activity) {
 #else
     (void) env;
     (void) activity;
-#endif
-}
-
-jstring reportScreenshotCapture(JNIEnv* env) {
-#if CHIMERA_DETECT_SCREENSHOT
-    // 将 Android 截图回调转换为统一检测码。
-    __android_log_print(ANDROID_LOG_INFO, TAG, "Screenshot capture callback received");
-    return env->NewStringUTF("screenshot_capture");
-#else
-    (void) env;
-    return nullptr;
 #endif
 }
 

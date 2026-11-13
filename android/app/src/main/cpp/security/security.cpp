@@ -17,10 +17,52 @@
 namespace chimera {
 namespace security {
 namespace {
+thread_local JNIEnv* currentReportEnv = nullptr;
+thread_local jobject currentReportContext = nullptr;
+
 bool isReportOnly(const std::string& code) {
     return code.rfind("blacklisted_package:", 0) == 0 ||
             code == "adb_enabled" || code == "developer_options_enabled";
 }
+
+void reportFatalFindingBeforeTermination(JNIEnv* env, jobject context, const char* code) {
+#if CHIMERA_REPORT_FINDINGS
+    if (env == nullptr || context == nullptr || code == nullptr ||
+            isReportOnly(code) || std::string(code) == "screenshot_capture" ||
+            std::string(code) == "frida_integrity_unavailable") return;
+    if (env->PushLocalFrame(8) != JNI_OK) {
+        detection_utils::clearPendingException(env);
+        return;
+    }
+    jclass actions = env->FindClass(
+            "io/github/HanJason233/chimera/security/handling/NativeSecurityActions");
+    jmethodID report = actions == nullptr ? nullptr : env->GetStaticMethodID(
+            actions,
+            "reportFatalFindingBeforeTermination",
+            "(Landroid/content/Context;Ljava/lang/String;)Z");
+    jstring finding = report == nullptr ? nullptr : env->NewStringUTF(code);
+    if (finding != nullptr && !env->ExceptionCheck()) {
+        env->CallStaticBooleanMethod(actions, report, context, finding);
+    }
+    detection_utils::clearPendingException(env);
+    env->PopLocalFrame(nullptr);
+#else
+    (void) env;
+    (void) context;
+    (void) code;
+#endif
+}
+}
+
+ReportContextScope::ReportContextScope(JNIEnv* env, jobject context)
+    : previousEnv_(currentReportEnv), previousContext_(currentReportContext) {
+    currentReportEnv = env;
+    currentReportContext = context;
+}
+
+ReportContextScope::~ReportContextScope() {
+    currentReportEnv = previousEnv_;
+    currentReportContext = previousContext_;
 }
 
 void addFinding(std::vector<std::string>* findings, const std::string& code) {
@@ -37,6 +79,7 @@ void terminateOnFinding(const char* code) {
 
 void fatalFinding(std::vector<std::string>* findings, const char* code) {
     addFinding(findings, code);
+    reportFatalFindingBeforeTermination(currentReportEnv, currentReportContext, code);
     terminateOnFinding(code);
 }
 
@@ -103,6 +146,7 @@ void reportFindings(JNIEnv* env, jobject context, const std::vector<std::string>
 }
 
 std::vector<std::string> scan(JNIEnv* env, jobject context) {
+    ReportContextScope reportContext(env, context);
     std::vector<std::string> findings;
     // 先持久化仅上报项，再执行可能立即结束进程的检查。
 #if CHIMERA_DETECT_ADB

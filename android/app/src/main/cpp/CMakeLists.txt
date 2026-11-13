@@ -12,7 +12,7 @@ add_subdirectory(transport)
 option(CHIMERA_CRASH_ON_FINDING "除仅上报项外命中后终止应用进程" ON)
 option(CHIMERA_BLOCK_SCREENSHOTS "阻止应用窗口截图" ON)
 option(CHIMERA_BLOCK_HTTP_PROXY "强制安全网络传输并绕过系统 HTTP/PAC 代理" ON)
-option(CHIMERA_REPORT_FINDINGS "上报软件黑名单、USB 调试和开发者选项" ON)
+option(CHIMERA_REPORT_FINDINGS "上报致命检测项以及软件黑名单、USB 调试和开发者选项" ON)
 
 option(CHIMERA_DETECT_CAPTURE "检测系统 HTTP 代理配置" ON)
 option(CHIMERA_DETECT_XPOSED "检测 Xposed 痕迹" ON)
@@ -21,7 +21,6 @@ option(CHIMERA_DETECT_FRIDA "检测 Frida 和进程跟踪信号" ON)
 option(CHIMERA_DETECT_ROOT "检测 su、Root 框架和特征挂载" ON)
 option(CHIMERA_DETECT_LSPATCH "检测 LSPatch 重打包和组件注入" ON)
 option(CHIMERA_DETECT_NPATCH "检测 NPatch 文件、组件和原生库" ON)
-option(CHIMERA_DETECT_SCREENSHOT "检测 Android 截图回调" ON)
 option(CHIMERA_VERIFY_SIGNATURE "校验当前 APK 签名 SHA-256" ON)
 option(CHIMERA_DETECT_BLACKLIST "检测黑名单软件包" ON)
 option(CHIMERA_DETECT_ADB "检测 ADB 调试开关" ON)
@@ -69,7 +68,6 @@ target_compile_definitions(native-lib PRIVATE
         CHIMERA_DETECT_ROOT=$<BOOL:${CHIMERA_DETECT_ROOT}>
         CHIMERA_DETECT_LSPATCH=$<BOOL:${CHIMERA_DETECT_LSPATCH}>
         CHIMERA_DETECT_NPATCH=$<BOOL:${CHIMERA_DETECT_NPATCH}>
-        CHIMERA_DETECT_SCREENSHOT=$<BOOL:${CHIMERA_DETECT_SCREENSHOT}>
         CHIMERA_VERIFY_SIGNATURE=$<BOOL:${CHIMERA_VERIFY_SIGNATURE}>
         CHIMERA_DETECT_BLACKLIST=$<BOOL:${CHIMERA_DETECT_BLACKLIST}>
         CHIMERA_DETECT_ADB=$<BOOL:${CHIMERA_DETECT_ADB}>

@@ -57,7 +57,6 @@ val securityBuildFlags = linkedMapOf(
     "SECURITY_DETECT_ROOT" to readSecurityFlag("chimera.security.detectRoot"),
     "SECURITY_DETECT_LSPATCH" to readSecurityFlag("chimera.security.detectLspatch"),
     "SECURITY_DETECT_NPATCH" to readSecurityFlag("chimera.security.detectNpatch"),
-    "SECURITY_DETECT_SCREENSHOT" to readSecurityFlag("chimera.security.detectScreenshot"),
     "SECURITY_VERIFY_SIGNATURE" to readSecurityFlag("chimera.security.verifySignature"),
     "SECURITY_DETECT_BLACKLIST" to readSecurityFlag("chimera.security.detectBlacklist"),
     "SECURITY_DETECT_ADB" to readSecurityFlag("chimera.security.detectAdb"),

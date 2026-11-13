@@ -8,11 +8,22 @@
 namespace chimera {
 namespace security {
 
+class ReportContextScope {
+public:
+    ReportContextScope(JNIEnv* env, jobject context);
+    ~ReportContextScope();
+
+    ReportContextScope(const ReportContextScope&) = delete;
+    ReportContextScope& operator=(const ReportContextScope&) = delete;
+
+private:
+    JNIEnv* previousEnv_;
+    jobject previousContext_;
+};
+
 std::vector<std::string> scan(JNIEnv* env, jobject context);
-jstring reportScreenshotCapture(JNIEnv* env);
 void applyScreenshotProtection(JNIEnv* env, jobject activity);
 void applyCaptureProtection(JNIEnv* env);
-void reportNetworkFinding(JNIEnv* env, jstring finding);
 void addFinding(std::vector<std::string>* findings, const std::string& code);
 void fatalFinding(std::vector<std::string>* findings, const char* code);
 void terminateOnFinding(const char* code);
