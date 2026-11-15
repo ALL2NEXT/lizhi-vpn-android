@@ -70,8 +70,7 @@ internal fun SubscriptionGroupingScreen(
     testProgress: SpeedTestProgress?,
     testResults: Map<String, HomeNodeTestResultsEntity>,
     displayedTestStage: ManualGroupTestStage,
-    testRunStartedAt: Long,
-    testedNodeIds: Set<String>,
+    testingNodeIds: Set<String>,
     nodeDisplaySettings: NodeDisplaySettings,
     protocolCoreSettings: ProtocolCoreSettings,
     onRunManualGroupTest: (ManualGroupTestStage) -> Unit,
@@ -236,11 +235,9 @@ internal fun SubscriptionGroupingScreen(
                 nodes = nodes,
                 testResults = testResults,
                 testStage = displayedTestStage,
-                testRunStartedAt = testRunStartedAt,
-                testedNodeIds = testedNodeIds,
+                testingNodeIds = testingNodeIds,
                 selectedNodeId = selectedNodeId,
                 isTesting = isTesting,
-                isManualGroupTest = testProgress?.isManualGroupTest == true,
                 nodeDisplaySettings = nodeDisplaySettings,
                 protocolCoreSettings = protocolCoreSettings,
                 onNodeSelected = handleNodeSelected,
@@ -501,11 +498,9 @@ private fun NodeListContent(
     nodes: List<Node>,
     testResults: Map<String, HomeNodeTestResultsEntity>,
     testStage: ManualGroupTestStage,
-    testRunStartedAt: Long,
-    testedNodeIds: Set<String>,
+    testingNodeIds: Set<String>,
     selectedNodeId: String?,
     isTesting: Boolean,
-    isManualGroupTest: Boolean,
     nodeDisplaySettings: NodeDisplaySettings,
     protocolCoreSettings: ProtocolCoreSettings,
     onNodeSelected: (Node) -> Unit,
@@ -577,7 +572,6 @@ private fun NodeListContent(
                             items = displayNodes,
                             key = { it.id }
                         ) { node ->
-                            val isTestTarget = node.id in testedNodeIds
                             NodeListItem(
                                 node = node,
                                 isSelected = node.id == selectedNodeId,
@@ -587,9 +581,7 @@ private fun NodeListContent(
                                 testResult = testResults[node.id],
                                 testStage = testStage,
                                 isTestRunning = isTesting &&
-                                    isManualGroupTest &&
-                                    testRunStartedAt > 0L &&
-                                    isTestTarget,
+                                    node.id in testingNodeIds,
                                 canStartTest = canStartTest,
                                 onTest = { stage -> onRunManualNodeTest(node, stage) },
                                 onShare = if (node.subscriptionSourceId.isNullOrBlank()) {

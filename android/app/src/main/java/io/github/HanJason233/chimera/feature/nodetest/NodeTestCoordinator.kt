@@ -39,6 +39,7 @@ internal class NodeTestCoordinator(
     private val startSelectedOrFirstConnection: () -> Unit,
     private val bandwidthTest: suspend (Node, Long, String) -> Float,
     private val executor: NodeTestExecutor,
+    private val onNodeTestingChanged: (String, Boolean) -> Unit,
     private val _isTesting: kotlinx.coroutines.flow.MutableStateFlow<Boolean>,
     private val _speedTestProgress: kotlinx.coroutines.flow.MutableStateFlow<SpeedTestProgress?>,
     private val _unlockTestState: kotlinx.coroutines.flow.MutableStateFlow<UnlockTestUiState>,
@@ -52,6 +53,7 @@ internal class NodeTestCoordinator(
         protocolCoreSettings = protocolCoreSettings,
         hysteriaUpMbps = hysteriaUpMbps,
         hysteriaDownMbps = hysteriaDownMbps,
+        onNodeTestingChanged = onNodeTestingChanged,
         updateProgress = ::updateSpeedTestProgress
     )
     private var activeTestJob: kotlinx.coroutines.Job? = null
@@ -60,7 +62,16 @@ internal class NodeTestCoordinator(
         node: Node,
         durationMs: Long,
         downloadUrl: String
-    ): Float = bandwidthTest(node, durationMs, downloadUrl)
+    ): Float {
+        onNodeTestingChanged(node.id, true)
+        try {
+            val speedMbps = bandwidthTest(node, durationMs, downloadUrl)
+            nodeDao().updateDownloadMbps(node.id, speedMbps)
+            return speedMbps
+        } finally {
+            onNodeTestingChanged(node.id, false)
+        }
+    }
 
     private fun updateSpeedTestProgress(
         title: String,
@@ -163,7 +174,7 @@ internal class NodeTestCoordinator(
                                     )
                                 }
                             )
-                            executor.applyUrlTestResults(
+                            executor.finishUrlTestResults(
                                 results,
                                 autoDeleteTimeoutNodes = false,
                                 rememberLastTestResultMode = false
@@ -171,12 +182,11 @@ internal class NodeTestCoordinator(
                         }
 
                         SpeedTestStage.BANDWIDTH -> {
-                            val speedMbps = testNodeDownloadBandwidthMbps(
+                            testNodeDownloadBandwidthMbps(
                                 node = node,
                                 durationMs = settings.bandwidthTestDurationMs,
                                 downloadUrl = settings.bandwidthTestUrl
                             )
-                            nodeDao().updateDownloadMbps(node.id, speedMbps)
                             updateSpeedTestProgress(
                                 progressTitle,
                                 progressStage,
@@ -345,7 +355,7 @@ internal class NodeTestCoordinator(
                             )
                         }
                     )
-                    executor.applyUrlTestResults(
+                    executor.finishUrlTestResults(
                         urlTestResults,
                         autoDeleteTimeoutNodes = settings.urlTestAutoDeleteTimeoutNodes
                     )
@@ -388,7 +398,6 @@ internal class NodeTestCoordinator(
                                             durationMs = settings.bandwidthTestDurationMs,
                                             downloadUrl = settings.bandwidthTestUrl
                                         )
-                                        nodeDao().updateDownloadMbps(node.id, speedMbps)
                                         node to speedMbps
                                     }
                                 }.awaitAll()
@@ -647,7 +656,7 @@ internal class NodeTestCoordinator(
                             _error.value = "URL Test 未能启动"
                             return@launch
                         }
-                        executor.applyUrlTestResults(
+                        executor.finishUrlTestResults(
                             results,
                             autoDeleteTimeoutNodes = settings.urlTestAutoDeleteTimeoutNodes
                         )
@@ -679,7 +688,6 @@ internal class NodeTestCoordinator(
                                                 durationMs = settings.bandwidthTestDurationMs,
                                                 downloadUrl = settings.bandwidthTestUrl
                                             )
-                                            nodeDao().updateDownloadMbps(node.id, speedMbps)
                                             node to speedMbps
                                         }
                                     }.awaitAll()

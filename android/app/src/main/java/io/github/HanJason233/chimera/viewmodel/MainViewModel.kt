@@ -110,6 +110,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     
     private val _isTesting = MutableStateFlow(false)
     val isTesting = _isTesting.asStateFlow()
+    /** 仅记录已取得并发执行名额的节点，排队节点不显示测试中。 */
+    private val _testingNodeIds = MutableStateFlow<Set<String>>(emptySet())
+    internal val testingNodeIds = _testingNodeIds.asStateFlow()
+
+    private fun updateNodeTestingState(nodeId: String, testing: Boolean) {
+        _testingNodeIds.update { ids -> if (testing) ids + nodeId else ids - nodeId }
+    }
     /** 保存当前持有全局测速锁的任务，供首页测试卡片中断。 */
     private var hysteriaBandwidthAdaptiveJob: Job? = null
     @Volatile
@@ -519,6 +526,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         settingsRepository = settingsRepository,
         activeConnectionNode = activeConnectionNode,
         latencyTester = latencyTester,
+        onNodeTestingChanged = ::updateNodeTestingState,
         tcpingConcurrency = tcpingConcurrency,
         tcpingTestTimeoutMs = tcpingTestTimeoutMs,
         hysteriaUpMbps = hysteriaUpMbps,
@@ -543,6 +551,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         startSelectedOrFirstConnection = ::startSelectedOrFirstConnection,
         bandwidthTest = ::testNodeDownloadBandwidthMbps,
         executor = nodeTestExecutor,
+        onNodeTestingChanged = ::updateNodeTestingState,
         _isTesting = _isTesting,
         _speedTestProgress = _speedTestProgress,
         _unlockTestState = _unlockTestState,

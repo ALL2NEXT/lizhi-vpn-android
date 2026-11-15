@@ -121,7 +121,9 @@ class LatencyTester {
         nodes: List<Node>,
         timeoutMs: Long = io.github.HanJason233.chimera.AppConfig.TCPING_TEST_TIMEOUT,
         concurrency: Int = io.github.HanJason233.chimera.AppConfig.TCPING_CONCURRENCY,
-        onProgress: ((completed: Int, total: Int) -> Unit)? = null
+        onProgress: ((completed: Int, total: Int) -> Unit)? = null,
+        onNodeTestingChanged: ((nodeId: String, testing: Boolean) -> Unit)? = null,
+        onNodeResult: (suspend (LatencyResult) -> Unit)? = null
     ): List<LatencyResult> = withContext(Dispatchers.IO) {
         Log.d(tag, "========== TCPing START: ${nodes.size} nodes ==========")
         
@@ -130,10 +132,16 @@ class LatencyTester {
         val totalCount = nodes.size
 
         val results = parallelMapOrdered(nodes, concurrency) { node ->
-            val result = testNodeSimple(node, timeoutMs.coerceAtLeast(500L))
-            val current = completedCount.incrementAndGet()
-            reportProgress(current, totalCount, lastProgressAt, onProgress)
-            result
+            onNodeTestingChanged?.invoke(node.id, true)
+            try {
+                val result = testNodeSimple(node, timeoutMs.coerceAtLeast(500L))
+                onNodeResult?.invoke(result)
+                val current = completedCount.incrementAndGet()
+                reportProgress(current, totalCount, lastProgressAt, onProgress)
+                result
+            } finally {
+                onNodeTestingChanged?.invoke(node.id, false)
+            }
         }
         Log.d(tag, "========== TCPing END: ${results.size} results ==========")
         results
@@ -214,7 +222,9 @@ class LatencyTester {
         measurementTimeoutMs: Long = io.github.HanJason233.chimera.AppConfig.URL_TEST_MEASUREMENT_TIMEOUT,
         retryCount: Int = io.github.HanJason233.chimera.AppConfig.URL_TEST_RETRY_COUNT,
         concurrency: Int = io.github.HanJason233.chimera.AppConfig.URL_TEST_CONCURRENCY,
-        onProgress: ((completed: Int, total: Int) -> Unit)? = null
+        onProgress: ((completed: Int, total: Int) -> Unit)? = null,
+        onNodeTestingChanged: ((nodeId: String, testing: Boolean) -> Unit)? = null,
+        onNodeResult: (suspend (LatencyResult) -> Unit)? = null
     ): List<LatencyResult> = withContext(Dispatchers.IO) {
         Log.d(tag, "========== URL Test START: ${nodes.size} nodes ==========")
         
@@ -225,14 +235,21 @@ class LatencyTester {
             ?.takeIf { it.isNotBlank() && it != targetUrl }
 
         val firstPass = parallelMapOrdered(nodes, concurrency) { node ->
-            val result = urlTestNode(
-                node, targetUrl, normalizedFallbackUrl,
-                warmupTimeoutMs, measurementTimeoutMs, retryCount
-            )
-            val current = completedCount.incrementAndGet()
-            reportProgress(current, totalCount, lastProgressAt, onProgress)
-            result
+            onNodeTestingChanged?.invoke(node.id, true)
+            try {
+                val result = urlTestNode(
+                    node, targetUrl, normalizedFallbackUrl,
+                    warmupTimeoutMs, measurementTimeoutMs, retryCount
+                )
+                onNodeResult?.invoke(result)
+                val current = completedCount.incrementAndGet()
+                reportProgress(current, totalCount, lastProgressAt, onProgress)
+                result
+            } finally {
+                onNodeTestingChanged?.invoke(node.id, false)
+            }
         }
+        val firstPassById = firstPass.associateBy(LatencyResult::nodeId)
         val nodesById = nodes.associateBy(Node::id)
         val finalists = UrlTestSamplePolicy.selectFinalistIds(
             firstPass,
@@ -245,15 +262,27 @@ class LatencyTester {
         } else {
             Log.d(tag, "URL Test rechecking ${finalists.size} finalists with warm connections")
             parallelMapOrdered(finalists, concurrency.coerceAtMost(finalists.size)) { node ->
-                node.id to buildList {
-                    repeat(io.github.HanJason233.chimera.AppConfig.URL_TEST_RECHECK_ATTEMPTS) {
-                        add(
-                            urlTestNode(
-                                node, targetUrl, normalizedFallbackUrl,
-                                warmupTimeoutMs, measurementTimeoutMs, retryCount
+                onNodeTestingChanged?.invoke(node.id, true)
+                try {
+                    val samples = buildList {
+                        repeat(io.github.HanJason233.chimera.AppConfig.URL_TEST_RECHECK_ATTEMPTS) {
+                            add(
+                                urlTestNode(
+                                    node, targetUrl, normalizedFallbackUrl,
+                                    warmupTimeoutMs, measurementTimeoutMs, retryCount
+                                )
                             )
-                        )
+                        }
                     }
+                    // 首轮结果与复测结果都逐节点发布，不等待其他节点完成。
+                    val result = UrlTestSamplePolicy.stabilize(
+                        listOf(firstPassById.getValue(node.id)),
+                        mapOf(node.id to samples)
+                    ).single()
+                    onNodeResult?.invoke(result)
+                    node.id to samples
+                } finally {
+                    onNodeTestingChanged?.invoke(node.id, false)
                 }
             }.toMap()
         }

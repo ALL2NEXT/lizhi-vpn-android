@@ -47,6 +47,7 @@ internal class HomeCandidateTestRunner(
     private val protocolCoreSettings: kotlinx.coroutines.flow.StateFlow<ProtocolCoreSettings>,
     private val hysteriaUpMbps: kotlinx.coroutines.flow.StateFlow<Int>,
     private val hysteriaDownMbps: kotlinx.coroutines.flow.StateFlow<Int>,
+    private val onNodeTestingChanged: (String, Boolean) -> Unit,
     private val updateProgress: (String, String, Int, Int, Boolean) -> Unit
 ) {
     private fun updateSpeedTestProgress(
@@ -117,6 +118,7 @@ internal class HomeCandidateTestRunner(
         nodes.map { node ->
             async {
                 val outcome = nodeSemaphore.withPermit {
+                    onNodeTestingChanged(node.id, true)
                     var proxySession: NodeTestProxyManager.Session? = null
                     try {
                         val session = NodeTestProxyManager.createSession(
@@ -229,6 +231,8 @@ internal class HomeCandidateTestRunner(
                             unlockTestsPassed = false
                         )
                     } finally {
+                        // 结果已持久化即可展示，代理清理不占用列表的测试中状态。
+                        onNodeTestingChanged(node.id, false)
                         proxySession?.let { session ->
                             withContext(NonCancellable + Dispatchers.IO) {
                                 runCatching { session.stop() }

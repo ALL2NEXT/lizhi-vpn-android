@@ -78,8 +78,7 @@ private fun nodeTestResultDisplay(
     isTestRunning: Boolean
 ): NodeTestResultDisplay? {
     if (isTestRunning) {
-        if (stage == ManualGroupTestStage.IP_QUALITY) return null
-        return NodeTestResultDisplay("检测中", isError = false)
+        return NodeTestResultDisplay("测试中", isError = false)
     }
 
     val latestStage = stored?.lastTestStage
@@ -130,9 +129,8 @@ private fun nodeTestResultDisplay(
                 ?: return null
             val result = HomeTestResultCodec.decodeLinkType(json) ?: return null
             when (result.state) {
-                LinkTypeTestState.IDLE -> null
-                LinkTypeTestState.TESTING ->
-                    NodeTestResultDisplay("检测中", isError = false)
+                // 测试中状态只读取实时任务，不能从历史记录恢复。
+                LinkTypeTestState.IDLE, LinkTypeTestState.TESTING -> null
                 LinkTypeTestState.DIRECT ->
                     NodeTestResultDisplay("直连", isError = false)
                 LinkTypeTestState.RELAY ->

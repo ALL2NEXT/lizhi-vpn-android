@@ -23,6 +23,7 @@ internal class NodeTestExecutor(
     private val hysteriaUpMbps: kotlinx.coroutines.flow.StateFlow<Int>,
     private val hysteriaDownMbps: kotlinx.coroutines.flow.StateFlow<Int>,
     private val protocolCoreSettings: kotlinx.coroutines.flow.StateFlow<ProtocolCoreSettings>,
+    private val onNodeTestingChanged: (String, Boolean) -> Unit,
     private val _lastTestResultSortMode: kotlinx.coroutines.flow.MutableStateFlow<NodeTestResultSortMode>,
     private val _error: kotlinx.coroutines.flow.MutableStateFlow<String?>
 ) {
@@ -47,7 +48,9 @@ internal class NodeTestExecutor(
                 warmupTimeoutMs = warmupTimeoutMs,
                 measurementTimeoutMs = measurementTimeoutMs,
                 concurrency = concurrency,
-                onProgress = onProgress
+                onProgress = onProgress,
+                onNodeTestingChanged = onNodeTestingChanged,
+                onNodeResult = ::persistUrlTestResult
             )
             val testedById = testedResults.associateBy(LatencyTester.LatencyResult::nodeId)
             val results = nodes.map { node ->
@@ -57,6 +60,7 @@ internal class NodeTestExecutor(
                     isAvailable = false
                 )
             }
+            results.filter { it.nodeId !in testedById }.forEach { persistUrlTestResult(it) }
             Log.d("NodeTestExecutor", "Got ${results.size} URL test results")
             return results
         } finally {
@@ -64,19 +68,22 @@ internal class NodeTestExecutor(
         }
     }
 
-    internal suspend fun applyUrlTestResults(
+    private suspend fun persistUrlTestResult(result: LatencyTester.LatencyResult) {
+        val updatedRows = nodeDao().updateUrlTestResults(
+            listOf(NodeLatencyUpdate(result.nodeId, result.latency, result.isAvailable)),
+            System.currentTimeMillis()
+        )
+        if (updatedRows != 1) {
+            Log.w("NodeTestExecutor", "URL test result was not applied: ${result.nodeId}")
+        }
+    }
+
+    internal suspend fun finishUrlTestResults(
         results: List<LatencyTester.LatencyResult>,
         autoDeleteTimeoutNodes: Boolean,
         rememberLastTestResultMode: Boolean = true
     ) {
-
-        val updates = results.map { result ->
-            NodeLatencyUpdate(result.nodeId, result.latency, result.isAvailable)
-        }
-        val updatedRows = nodeDao().updateUrlTestResults(updates, System.currentTimeMillis())
-        if (updatedRows != updates.size) {
-            Log.w("NodeTestExecutor", "Only $updatedRows/${updates.size} URL test results were applied")
-        }
+        // 结果已在节点完成时写入；整批结束后只处理排序指标和自动删除。
         if (rememberLastTestResultMode) {
             _lastTestResultSortMode.value = NodeTestResultSortMode.URL_TEST_LATENCY
         }
@@ -128,14 +135,17 @@ internal class NodeTestExecutor(
             nodes = currentNodes,
             timeoutMs = timeoutMs,
             concurrency = concurrency,
-            onProgress = onProgress
+            onProgress = onProgress,
+            onNodeTestingChanged = onNodeTestingChanged,
+            onNodeResult = { result ->
+                nodeDao().updateTcpingResults(
+                    listOf(NodeLatencyUpdate(result.nodeId, result.latency, result.isAvailable)),
+                    System.currentTimeMillis()
+                )
+            }
         )
         Log.d("NodeTestExecutor", "Got ${results.size} test results")
 
-        val updates = results.map { result ->
-            NodeLatencyUpdate(result.nodeId, result.latency, result.isAvailable)
-        }
-        nodeDao().updateTcpingResults(updates, System.currentTimeMillis())
         if (rememberLastTestResultMode) {
             _lastTestResultSortMode.value = NodeTestResultSortMode.TCPING_LATENCY
         }
