@@ -1412,6 +1412,7 @@ async function pushSection(section) {
   if (!currentState || settingsSaveInFlight || !SETTINGS_SECTIONS.includes(section)) return false;
   const session = settingsSession;
   const version = settingsDraftVersions.get(section) || 0;
+  let saveSucceeded = false;
   settingsSaveInFlight = section;
   settingsSaveMessages.delete(section);
   updateSettingsSaveControls();
@@ -1453,20 +1454,21 @@ async function pushSection(section) {
       settingsDirtySections.delete(section);
       settingsSaveMessages.set(section, {text: '已保存' + (data.state.updatedAt ? ' · ' + data.state.updatedAt.replace('T', ' ') : ''), error: false});
     } else {
-      settingsSaveMessages.set(section, {text: '已保存提交时的内容，后续修改仍未保存', error: false});
+      settingsSaveMessages.set(section, {text: '正在保存最新修改…', error: false});
     }
-    show('当前模块已保存，其他模块的草稿已保留');
+    saveSucceeded = true;
     return true;
   } catch (error) {
     if (session !== settingsSession) return false;
     const message = error.message || '保存失败，请检查网络后重试';
-    settingsSaveMessages.set(section, {text: message + '，草稿已保留', error: true});
+    settingsSaveMessages.set(section, {text: message, error: true});
     show(message, true);
     return false;
   } finally {
     if (session === settingsSession) {
       settingsSaveInFlight = '';
       updateSettingsSaveControls();
+      resumePendingSettingsSaves(section, version, saveSucceeded);
     }
   }
 }

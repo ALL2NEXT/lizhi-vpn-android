@@ -32,16 +32,12 @@
      .tab-panel { display: none; box-sizing: border-box; flex: 1 1 auto; width: 100%; min-height: 0; padding: 28px; margin: 0; background: #ffffff; border: 0; border-radius: 0; }
      .tab-panel.active { display: block; }
      .dashboard-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
-     .dashboard-heading h2 { margin-bottom: 6px; }
-     .dashboard-heading p { margin: 0; }
      .dashboard-heading button { flex: 0 0 auto; margin: 0; }
-    .settings-page-heading { flex-wrap: wrap; align-items: flex-start; gap: 16px; margin-bottom: 20px; }
-    .settings-page-heading h2 { margin-bottom: 0; }
+     .dashboard-actions { justify-content: flex-end; }
+    .settings-page-heading { flex-wrap: wrap; align-items: flex-start; justify-content: flex-end; gap: 16px; margin-bottom: 20px; }
     .settings-page-save { display: grid; flex: 0 0 auto; justify-items: end; gap: 5px; }
     .settings-page-save-status { color: var(--ink-muted); font-size: 13px; }
     .settings-page-save-status.error { color: var(--red); }
-    .settings-page-save-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-    .settings-page-save-actions button { margin: 0; }
      .growth-card { margin-bottom: 14px; padding: 18px; background: #ffffff; border: 1px solid #dadce0; border-radius: 14px; }
      .growth-toolbar { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
      .growth-toolbar h3 { margin: 0 0 4px; color: #202124; font-size: 16px; }
@@ -238,7 +234,6 @@
      .system-logs-empty { padding: 48px 22px; color: #687890; text-align: center; }
      .system-logs-heading { align-items: center; }
      .system-logs-title { display: flex; align-items: center; gap: 10px; }
-     .system-logs-title h2 { margin: 0; }
      .system-logs-settings-button { display: grid; place-items: center; width: 34px; min-width: 34px; min-height: 34px; margin: 0; padding: 6px; }
      .system-logs-settings-button svg { width: 19px; height: 19px; fill: currentColor; }
      .system-logs-heading-actions { display: flex; align-items: center; gap: 14px; }
@@ -731,8 +726,6 @@
       }
     }
     .dashboard-heading { align-items: center; margin-bottom: 30px; }
-    .dashboard-heading h2 { margin-bottom: 6px; }
-    .dashboard-heading p { max-width: 900px; margin-top: 8px; color: var(--ink-muted); font-size: 14px; }
     .growth-card, .distribution-card, .user-table-card {
       background: var(--surface);
       border-color: #e3e9f1;
@@ -1244,14 +1237,6 @@
       box-shadow: 0 8px 28px rgb(32 33 36 / 16%);
     }
 
-    /* 长列表页把保存操作放回文档流，避免固定栏遮住列表末尾。 */
-    .tab-panel[data-settings-dirty="false"] [data-settings-save]:disabled {
-      color: #778397;
-      background: #e8edf4;
-      opacity: 1;
-      cursor: not-allowed;
-    }
-
     /* 关于页链接使用两列，给长网址留出可读空间。 */
     .about-links-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
@@ -1440,8 +1425,6 @@
     .subscription-manager-title p { margin: 0; color: #64748b; font-size: 14px; }
     .subscription-manager-save { grid-area: status; justify-self: end; gap: 4px; }
     .subscription-manager-save-status { min-height: 14px; font-size: 12px; text-align: right; }
-    .subscription-manager-save-actions { flex-wrap: nowrap; }
-    .subscription-manager-save-actions button { min-height: 36px; padding: 8px 14px; }
     .subscription-list-search {
       box-sizing: border-box;
       display: flex;

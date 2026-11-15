@@ -68,6 +68,12 @@
  function esc(data) { return String(data == null ? '' : data).replace(/[&<>"']/g, function(c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
  function headers() { return {'content-type':'application/json','authorization':'Bearer ' + adminToken}; }
  function show(message, error) { statusEl.textContent = message; statusEl.style.color = error ? '#c42b1c' : '#107c10'; }
+ // 顶部状态栏展示当前模块标题，替代登录成功提示。
+ function showDashboardTitle(name) {
+   const tab = document.querySelector('.tab-button[data-tab="' + name + '"]');
+   statusEl.textContent = tab ? tab.textContent.trim() : '';
+   statusEl.style.color = '#107c10';
+ }
  function showLoginError(message) { loginStatusEl.textContent = message || ''; }
  function parseResponseJson(responseText) {
    try { return JSON.parse(responseText); } catch (_) { return {}; }
@@ -143,7 +149,7 @@
        console.error('admin dashboard initialization failed', error);
      }
      const usersLoaded = await loadUsers();
-     show(usersLoaded ? '登录成功' : '已进入后台，但用户数据读取失败', !usersLoaded);
+     if (!usersLoaded) show('已进入后台，但用户数据读取失败', true);
      passwordInput.value = '';
      showLoginError('');
    } catch (error) {
@@ -181,6 +187,7 @@
    trafficZeroFilters.today = false;
    trafficZeroFilters.month = false;
    trafficZeroFilters.total = false;
+   statusEl.textContent = '';
    el('dashboard').hidden = true;
    loginGate.hidden = false;
    passwordInput.value = '';
@@ -188,6 +195,7 @@
    passwordInput.focus();
  }
  function activateTab(name) {
+   showDashboardTitle(name);
    document.body.classList.toggle('subscriptions-fullscreen', name === 'subscriptions');
    document.querySelectorAll('.tab-button[data-tab]').forEach(function(button) {
      const active = button.dataset.tab === name;
