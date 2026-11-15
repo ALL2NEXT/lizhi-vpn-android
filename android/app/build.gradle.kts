@@ -61,7 +61,6 @@ val securityFlagProperties = linkedMapOf(
     "SECURITY_DETECT_BLACKLIST" to "chimera.security.detectBlacklist",
     "SECURITY_DETECT_ADB" to "chimera.security.detectAdb",
     "SECURITY_DETECT_DEVELOPER_MODE" to "chimera.security.detectDeveloperMode",
-    "SECURITY_CRASH_ON_FINDING" to "chimera.security.crashOnFinding",
     "SECURITY_BLOCK_SCREENSHOTS" to "chimera.security.blockScreenshots",
     "SECURITY_BLOCK_HTTP_PROXY" to "chimera.security.blockHttpProxy",
     "SECURITY_REPORT_FINDINGS" to "chimera.security.reportFindings"
@@ -72,7 +71,9 @@ fun readSecurityFlags(defaultEnabled: Boolean): LinkedHashMap<String, Boolean> =
         name to readSecurityFlag(propertyName, defaultEnabled)
     }
 
-val debugSecurityBuildFlags = readSecurityFlags(defaultEnabled = false)
+val debugSecurityBuildFlags = readSecurityFlags(defaultEnabled = false).apply {
+    put("SECURITY_REPORT_FINDINGS", readSecurityFlag("chimera.security.reportFindings", true))
+}
 val releaseSecurityBuildFlags = readSecurityFlags(defaultEnabled = true)
 val expectedSecurityCertSha256 = providers.gradleProperty("chimera.security.expectedCertSha256")
     .orElse("0C2E2593E6D882994D2E8F19F60B5CE84FEA2BE609E07803978752A423EBD39F")
@@ -81,9 +82,11 @@ val expectedSecurityCertSha256 = providers.gradleProperty("chimera.security.expe
 check(expectedSecurityCertSha256.matches(Regex("[0-9A-F]{64}"))) {
     "chimera.security.expectedCertSha256 must contain 64 hexadecimal characters"
 }
-fun securityCmakeOptions(flags: Map<String, Boolean>): List<String> = flags.map { (name, enabled) ->
-    "-DCHIMERA_${name.removePrefix("SECURITY_")}=${if (enabled) "ON" else "OFF"}"
-} + "-DCHIMERA_EXPECTED_CERT_SHA256=$expectedSecurityCertSha256"
+fun securityCmakeOptions(flags: Map<String, Boolean>): List<String> = flags
+    .filterKeys { it != "SECURITY_REPORT_FINDINGS" }
+    .map { (name, enabled) ->
+        "-DCHIMERA_${name.removePrefix("SECURITY_")}=${if (enabled) "ON" else "OFF"}"
+    } + "-DCHIMERA_EXPECTED_CERT_SHA256=$expectedSecurityCertSha256"
 
 // sing-box is compiled as a standalone Android PIE process and packaged into
 // nativeLibraryDir. HEV owns TUN; LAN sharing can add a separate SOCKS inbound.

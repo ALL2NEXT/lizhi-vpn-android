@@ -264,8 +264,8 @@ void inspectNativeIntegrity(const std::string& mapsText, std::vector<std::string
     const auto maps = parseMaps(mapsText);
     IntegrityProbe probe{&maps};
     dl_iterate_phdr(compareLoadedLibrary, &probe);
-    if (probe.changed) fatalFinding(findings, "native_code_modified");
-    if (probe.writable) fatalFinding(findings, "native_code_writable");
+    if (probe.changed) addFinding(findings, "native_code_modified");
+    if (probe.writable) addFinding(findings, "native_code_writable");
     if (probe.limited || !probe.selfChecked || !probe.libcChecked) {
         // This is a capability status, not a finding. Never claim unsupported memory checks passed.
         findings->push_back("frida_integrity_unavailable");
@@ -280,27 +280,27 @@ void detectFrida(std::vector<std::string>* findings) {
     std::string maps;
     static const char* kMaps[] = {"frida", "linjector", "libgadget"};
     if (!detection_utils::readFile("/proc/self/maps", &maps) || maps.empty()) {
-        fatalFinding(findings, "process_maps_unavailable");
+        addFinding(findings, "process_maps_unavailable");
     } else {
         if (detection_utils::containsAny(detection_utils::toLower(maps), kMaps, sizeof(kMaps) / sizeof(kMaps[0]))) {
-            fatalFinding(findings, "frida_maps");
+            addFinding(findings, "frida_maps");
         }
         inspectNativeIntegrity(maps, findings);
     }
     bool threadsAvailable = false;
     bool threadTraced = false;
-    if (hasFridaThread(&threadsAvailable, &threadTraced)) fatalFinding(findings, "frida_thread");
-    if (threadTraced) fatalFinding(findings, "instrumentation_thread_tracer");
-    if (!threadsAvailable) fatalFinding(findings, "frida_threads_unavailable");
+    if (hasFridaThread(&threadsAvailable, &threadTraced)) addFinding(findings, "frida_thread");
+    if (threadTraced) addFinding(findings, "instrumentation_thread_tracer");
+    if (!threadsAvailable) addFinding(findings, "frida_threads_unavailable");
     bool descriptorsAvailable = false;
-    if (hasFridaDescriptor(&descriptorsAvailable)) fatalFinding(findings, "frida_named_pipe");
-    if (!descriptorsAvailable) fatalFinding(findings, "frida_fds_unavailable");
+    if (hasFridaDescriptor(&descriptorsAvailable)) addFinding(findings, "frida_named_pipe");
+    if (!descriptorsAvailable) addFinding(findings, "frida_fds_unavailable");
     static const char* kServerPaths[] = {
         "/data/local/tmp/frida-server", "/data/local/tmp/re.frida.server",
         "/system/bin/frida-server", "/system/xbin/frida-server"
     };
     for (const char* path : kServerPaths) {
-        if (detection_utils::fileExists(path)) { fatalFinding(findings, "frida_server_artifact"); break; }
+        if (detection_utils::fileExists(path)) { addFinding(findings, "frida_server_artifact"); break; }
     }
     bool openPort = false;
     bool dbus = false;
@@ -311,11 +311,11 @@ void detectFrida(std::vector<std::string>* findings) {
             dbus = dbus || result.dbus;
         }
     }
-    if (dbus) fatalFinding(findings, "frida_dbus");
-    else if (openPort) fatalFinding(findings, "frida_listener"); // Preserve the selected strict port policy.
+    if (dbus) addFinding(findings, "frida_dbus");
+    else if (openPort) addFinding(findings, "frida_listener"); // Preserve the selected strict port policy.
     bool tracerAvailable = false;
-    if (hasTracerPid(&tracerAvailable)) fatalFinding(findings, "instrumentation_tracer");
-    if (!tracerAvailable) fatalFinding(findings, "tracer_status_unavailable");
+    if (hasTracerPid(&tracerAvailable)) addFinding(findings, "instrumentation_tracer");
+    if (!tracerAvailable) addFinding(findings, "tracer_status_unavailable");
 #else
     (void) findings;
 #endif

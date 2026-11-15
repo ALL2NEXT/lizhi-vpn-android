@@ -188,9 +188,9 @@ void detectSignature(JNIEnv* env, jobject context, std::vector<std::string>* fin
     bool signatureAvailable = false;
     const bool signatureMatches = currentSignerMatches(env, context, &signatureAvailable);
     if (!signatureAvailable) {
-        fatalFinding(findings, "signature_unavailable");
+        addFinding(findings, "signature_unavailable");
     } else if (!signatureMatches) {
-        fatalFinding(findings, "signature_mismatch");
+        addFinding(findings, "signature_mismatch");
     }
 #else
     (void) env;

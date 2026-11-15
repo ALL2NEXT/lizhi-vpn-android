@@ -34,15 +34,12 @@ void detectBlacklist(JNIEnv* env, jobject context, std::vector<std::string>* fin
             "org.meowcat.edxposed.manager",
             "com.topjohnwu.magisk",
             "com.saurik.substrate"};
-    std::vector<std::string> reports;
     for (size_t i = 0; i < sizeof(kBlacklistedPackages) / sizeof(kBlacklistedPackages[0]); ++i) {
         if (detection_utils::hasPackage(env, context, kBlacklistedPackages[i])) {
             const std::string code = std::string("blacklisted_package:") + kBlacklistedPackages[i];
             addFinding(findings, code);
-            reports.push_back(code);
         }
     }
-    reportFindings(env, context, reports);
 #else
     (void) env;
     (void) context;

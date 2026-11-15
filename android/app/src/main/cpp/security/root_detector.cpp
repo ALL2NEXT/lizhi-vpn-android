@@ -12,7 +12,7 @@ namespace security {
 
 void detectRoot(std::vector<std::string>* findings) {
 #if CHIMERA_DETECT_ROOT
-    if (geteuid() == 0) fatalFinding(findings, "root_uid");
+    if (geteuid() == 0) addFinding(findings, "root_uid");
     // Inspect artifacts only; never execute su or request superuser authorization.
     static const char* kSuPaths[] = {
         "/system/bin/su", "/system/xbin/su", "/sbin/su", "/su/bin/su",
@@ -20,7 +20,7 @@ void detectRoot(std::vector<std::string>* findings) {
         "/data/local/xbin/su", "/data/local/su", "/debug_ramdisk/su", "/data/adb/magisk/magisk"
     };
     for (const char* path : kSuPaths) {
-        if (detection_utils::fileExists(path)) { fatalFinding(findings, "root_su_binary"); break; }
+        if (detection_utils::fileExists(path)) { addFinding(findings, "root_su_binary"); break; }
     }
     const char* environmentPath = std::getenv("PATH");
     if (environmentPath != nullptr) {
@@ -29,7 +29,7 @@ void detectRoot(std::vector<std::string>* findings) {
         for (size_t count = 0; count < 64 && std::getline(paths, directory, ':'); ++count) {
             if (directory.empty() || directory.front() != '/') continue;
             if (detection_utils::fileExists((directory + "/su").c_str())) {
-                fatalFinding(findings, "root_su_binary");
+                addFinding(findings, "root_su_binary");
                 break;
             }
         }
@@ -39,18 +39,18 @@ void detectRoot(std::vector<std::string>* findings) {
         "/data/adb/magisk", "/data/adb/ksu", "/data/adb/ap", "/data/adb/modules"
     };
     for (const char* path : kRootPaths) {
-        if (detection_utils::fileExists(path)) { fatalFinding(findings, "root_framework_artifact"); break; }
+        if (detection_utils::fileExists(path)) { addFinding(findings, "root_framework_artifact"); break; }
     }
     std::string mounts;
     if (!detection_utils::readTextFile("/proc/self/mountinfo", &mounts) || mounts.empty()) {
-        fatalFinding(findings, "root_mounts_unavailable");
+        addFinding(findings, "root_mounts_unavailable");
     } else {
         // Generic overlay/tmpfs mounts also occur on stock Android; require framework-specific evidence.
         static const char* kMountMarkers[] = {
             "magisk", "/data/adb/modules", "/data/adb/ksu", "/data/adb/ap/", "kernelsu", "apatch"
         };
         if (detection_utils::containsAny(mounts, kMountMarkers, sizeof(kMountMarkers) / sizeof(kMountMarkers[0]))) {
-            fatalFinding(findings, "root_mount");
+            addFinding(findings, "root_mount");
         }
     }
     static const char* kContexts[] = {"/proc/self/attr/current", "/proc/self/attr/prev"};
@@ -59,13 +59,13 @@ void detectRoot(std::vector<std::string>* findings) {
         static const char* kContextMarkers[] = {"u:r:magisk:", "u:r:su:", "u:r:zygisk:", "u:r:ksu:"};
         if (detection_utils::readTextFile(path, &context) && detection_utils::containsAny(
                 context, kContextMarkers, sizeof(kContextMarkers) / sizeof(kContextMarkers[0]))) {
-            fatalFinding(findings, "root_selinux_context");
+            addFinding(findings, "root_selinux_context");
             break;
         }
     }
     std::string status;
     if (!detection_utils::readTextFile("/proc/self/status", &status) || status.empty()) {
-        fatalFinding(findings, "root_status_unavailable");
+        addFinding(findings, "root_status_unavailable");
     } else {
         std::istringstream lines(status);
         std::string line;
@@ -76,17 +76,17 @@ void detectRoot(std::vector<std::string>* findings) {
             unsigned long long capabilities = 0;
             value >> std::hex >> capabilities;
             readCapabilities = !value.fail();
-            if (readCapabilities && capabilities != 0) fatalFinding(findings, "root_capabilities");
+            if (readCapabilities && capabilities != 0) addFinding(findings, "root_capabilities");
             break;
         }
-        if (!readCapabilities) fatalFinding(findings, "root_status_unavailable");
+        if (!readCapabilities) addFinding(findings, "root_status_unavailable");
     }
     // Debuggable/test-keys builds alone are not proof of Root.
     static const char* kMagiskProperties[] = {"init.svc.magisk_daemon", "init.svc.magisk_service"};
     for (const char* name : kMagiskProperties) {
         char value[PROP_VALUE_MAX]{};
         if (__system_property_get(name, value) > 0 && std::string(value) == "running") {
-            fatalFinding(findings, "root_magisk_service");
+            addFinding(findings, "root_magisk_service");
             break;
         }
     }

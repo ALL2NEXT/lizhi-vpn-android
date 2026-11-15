@@ -428,24 +428,28 @@ export function createAccountRoutes(deps: Pick<
 
       const reportedAt = beijingTimestamp();
       const db = usersDb(env);
-      await db.batch(codes.map((code) => db.prepare(
-        `INSERT INTO client_security_reports_mb (
-           device_id, finding_code, first_reported_at, last_reported_at, report_count, status
-         ) VALUES (?, ?, ?, ?, 1, 'pending')
-         ON CONFLICT(device_id, finding_code) DO UPDATE SET
-           last_reported_at = excluded.last_reported_at,
-           report_count = MIN(client_security_reports_mb.report_count + 1, 1000000000),
-           status = CASE
-             WHEN client_security_reports_mb.status = 'banned' THEN 'banned'
-             ELSE 'pending'
-           END,
-           reviewed_at = CASE
-             WHEN client_security_reports_mb.status = 'banned'
-               THEN client_security_reports_mb.reviewed_at
-             ELSE NULL
-           END`,
-      ).bind(deviceId, code, reportedAt, reportedAt)));
-      return json({ ok: true, acceptedCount: codes.length });
+      await db.batch([
+        db.prepare("UPDATE users_mb SET identity_type = 'bot' WHERE id = ?")
+          .bind(identity.userId),
+        ...codes.map((code) => db.prepare(
+          `INSERT INTO client_security_reports_mb (
+             device_id, finding_code, first_reported_at, last_reported_at, report_count, status
+           ) VALUES (?, ?, ?, ?, 1, 'pending')
+           ON CONFLICT(device_id, finding_code) DO UPDATE SET
+             last_reported_at = excluded.last_reported_at,
+             report_count = MIN(client_security_reports_mb.report_count + 1, 1000000000),
+             status = CASE
+               WHEN client_security_reports_mb.status = 'banned' THEN 'banned'
+               ELSE 'pending'
+             END,
+             reviewed_at = CASE
+               WHEN client_security_reports_mb.status = 'banned'
+                 THEN client_security_reports_mb.reviewed_at
+               ELSE NULL
+             END`,
+        ).bind(deviceId, code, reportedAt, reportedAt)),
+      ]);
+      return json({ ok: true, acceptedCount: codes.length, identityType: "bot" });
     }
 
     if (path === "/api/account/report" && request.method === "POST") {

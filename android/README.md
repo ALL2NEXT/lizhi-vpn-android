@@ -4,7 +4,7 @@ Native security checks and their Gradle build switches are documented in [docs/n
 
 ## 安全防护构建配置
 
-`Debug` 构建默认关闭安全检测、上报、检测后退出、截图拦截和代理拦截，方便开发与调试；`Release` 构建默认开启这些防护。可使用 `chimera.security.*` Gradle 项目属性按需覆盖单项开关，具体开关见上方安全检测文档。
+`Debug` 构建默认关闭安全检测、截图拦截和代理拦截，风控上报通道保持开启；`Release` 构建默认开启检测、上报及相关防护。检测命中只上报，后台会将关联账号身份标记为机器人，客户端不会因风控检测退出。可使用 `chimera.security.*` Gradle 项目属性按需覆盖单项开关，具体开关见上方安全检测文档。
 
 Android 客户端的独立 Gradle 工程。
 

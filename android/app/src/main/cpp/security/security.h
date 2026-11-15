@@ -8,26 +8,9 @@
 namespace chimera {
 namespace security {
 
-class ReportContextScope {
-public:
-    ReportContextScope(JNIEnv* env, jobject context);
-    ~ReportContextScope();
-
-    ReportContextScope(const ReportContextScope&) = delete;
-    ReportContextScope& operator=(const ReportContextScope&) = delete;
-
-private:
-    JNIEnv* previousEnv_;
-    jobject previousContext_;
-};
-
 std::vector<std::string> scan(JNIEnv* env, jobject context);
-void applyScreenshotProtection(JNIEnv* env, jobject activity);
-void applyCaptureProtection(JNIEnv* env);
+void applyScreenshotProtection(JNIEnv* env, jobject activity, std::vector<std::string>* findings);
 void addFinding(std::vector<std::string>* findings, const std::string& code);
-void fatalFinding(std::vector<std::string>* findings, const char* code);
-void terminateOnFinding(const char* code);
-void reportFindings(JNIEnv* env, jobject context, const std::vector<std::string>& findings);
 void detectCapture(JNIEnv* env, jobject context, std::vector<std::string>* findings);
 void detectXposed(JNIEnv* env, jobject context, std::vector<std::string>* findings);
 void detectLsposed(JNIEnv* env, jobject context, std::vector<std::string>* findings);
@@ -40,5 +23,5 @@ void detectBlacklist(JNIEnv* env, jobject context, std::vector<std::string>* fin
 void detectAdb(JNIEnv* env, jobject context, std::vector<std::string>* findings);
 void detectDeveloperMode(JNIEnv* env, jobject context, std::vector<std::string>* findings);
 
-}  // security 命名空间结束
-}  // chimera 命名空间结束
+}  // namespace security
+}  // namespace chimera

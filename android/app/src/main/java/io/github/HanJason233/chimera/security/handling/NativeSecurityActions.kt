@@ -11,22 +11,21 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
 
-/** native 层调用的 Android 平台操作桥接。策略选择仍由 native 编译开关控制。 */
+/** JNI bridge for Android screenshot/proxy protection and queued risk reporting. */
 @Keep
 object NativeSecurityActions {
     private const val TAG = "NativeSecurity"
     private const val PREFERENCES_NAME = "native_security_reports"
     private const val PENDING_CODES_KEY = "pending_finding_codes"
     private const val MAX_PENDING_CODES = 64
-    private const val FATAL_REPORT_TIMEOUT_MS = 5_000L
     private const val BACKGROUND_REPORT_TIMEOUT_MS = 10_000L
     private val reportScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val reportMutex = Mutex()
+    private val reportedCodes = linkedSetOf<String>()
 
     @JvmStatic
     fun blockScreenshots(activity: Activity) {
@@ -41,45 +40,22 @@ object NativeSecurityActions {
     }
 
     @JvmStatic
+    @Synchronized
     fun reportFindings(context: Context, codes: Array<String>): Boolean {
         if (!BuildConfig.SECURITY_REPORT_FINDINGS) return false
-        val findings = normalizeFindings(codes).filter(::isReportOnly)
+        val findings = normalizeFindings(codes).filter(::isReportable)
         if (findings.isEmpty()) return false
 
         val appContext = context.applicationContext
-        val saved = enqueueFindings(appContext, findings)
+        val newFindings = findings.filterNot(reportedCodes::contains)
+        if (newFindings.isEmpty()) {
+            flushPendingFindings(appContext)
+            return true
+        }
+        val saved = enqueueFindings(appContext, newFindings)
+        if (saved) reportedCodes.addAll(newFindings)
         if (saved) flushPendingFindings(appContext)
         return saved
-    }
-
-    /** Fatal native findings are persisted and uploaded before the native layer aborts. */
-    @JvmStatic
-    fun reportFatalFindingBeforeTermination(context: Context, code: String): Boolean {
-        if (!BuildConfig.SECURITY_REPORT_FINDINGS) return false
-        val finding = normalizeFindings(arrayOf(code))
-            .filter { !isReportOnly(it) && it != "screenshot_capture" }
-            .singleOrNull()
-            ?: return false
-        val appContext = context.applicationContext
-        if (!enqueueFindings(appContext, listOf(finding))) return false
-
-        val uploaded = runCatching {
-            runBlocking {
-                withTimeout(FATAL_REPORT_TIMEOUT_MS) {
-                    flushPendingFindingsNow(
-                        appContext = appContext,
-                        timeoutMs = FATAL_REPORT_TIMEOUT_MS,
-                        prioritizedCodes = setOf(finding)
-                    )
-                }
-            }
-        }.onFailure { error ->
-            Log.w(TAG, "Could not upload fatal security finding before termination; queued for retry", error)
-        }.getOrDefault(false)
-        if (!uploaded) {
-            Log.w(TAG, "Fatal security finding remains queued for retry: $finding")
-        }
-        return uploaded
     }
 
     private fun normalizeFindings(codes: Array<String>): List<String> = codes.asSequence()
@@ -100,10 +76,6 @@ object NativeSecurityActions {
             .putStringSet(PENDING_CODES_KEY, bounded)
             .commit()
     }
-
-    private fun isReportOnly(code: String): Boolean =
-        code.startsWith("blacklisted_package:") ||
-            code == "adb_enabled" || code == "developer_options_enabled"
 
     private fun isReportable(code: String): Boolean =
         code != "screenshot_capture" && code != "frida_integrity_unavailable"

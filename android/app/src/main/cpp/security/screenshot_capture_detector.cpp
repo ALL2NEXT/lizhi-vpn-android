@@ -9,11 +9,11 @@
 namespace chimera {
 namespace security {
 
-void applyScreenshotProtection(JNIEnv* env, jobject activity) {
-    ReportContextScope reportContext(env, activity);
+void applyScreenshotProtection(
+        JNIEnv* env, jobject activity, std::vector<std::string>* findings) {
 #if CHIMERA_BLOCK_SCREENSHOTS
     if (env == nullptr || activity == nullptr) {
-        fatalFinding(nullptr, "screenshot_protection_unavailable");
+        addFinding(findings, "screenshot_protection_unavailable");
         return;
     }
     jclass actions = env->FindClass(
@@ -23,17 +23,18 @@ void applyScreenshotProtection(JNIEnv* env, jobject activity) {
     if (block == nullptr) {
         detection_utils::clearPendingException(env);
         if (actions != nullptr) env->DeleteLocalRef(actions);
-        fatalFinding(nullptr, "screenshot_protection_unavailable");
+        addFinding(findings, "screenshot_protection_unavailable");
         return;
     }
     env->CallStaticVoidMethod(actions, block, activity);
     const bool failed = env->ExceptionCheck();
     detection_utils::clearPendingException(env);
     env->DeleteLocalRef(actions);
-    if (failed) fatalFinding(nullptr, "screenshot_protection_unavailable");
+    if (failed) addFinding(findings, "screenshot_protection_unavailable");
 #else
     (void) env;
     (void) activity;
+    (void) findings;
 #endif
 }
 

@@ -9,10 +9,6 @@
 
 namespace {
 
-void clearPendingException(JNIEnv* env) {
-    if (env->ExceptionCheck()) env->ExceptionClear();
-}
-
 jobjectArray toJavaFindings(JNIEnv* env, const std::vector<std::string>& findings) {
     jclass stringClass = env->FindClass("java/lang/String");
     if (stringClass == nullptr) {
@@ -47,28 +43,15 @@ jobjectArray nativeScan(JNIEnv* env, jclass, jobject context) {
     return toJavaFindings(env, findings);
 }
 
-void nativeTerminate(JNIEnv* env, jclass, jstring finding) {
-    std::string code = "native_scan_error";
-    if (finding != nullptr) {
-        const char* text = env->GetStringUTFChars(finding, nullptr);
-        if (text != nullptr) {
-            code = text;
-            env->ReleaseStringUTFChars(finding, text);
-        }
-        clearPendingException(env);
-    }
-    chimera::security::terminateOnFinding(code.c_str());
-}
-
 }  // 匿名命名空间结束
 
-void nativeApplyActivitySecurity(JNIEnv* env, jclass, jobject activity) {
-    chimera::security::ReportContextScope reportContext(env, activity);
-    chimera::security::applyScreenshotProtection(env, activity);
+jobjectArray nativeApplyActivitySecurity(JNIEnv* env, jclass, jobject activity) {
+    std::vector<std::string> findings;
+    chimera::security::applyScreenshotProtection(env, activity, &findings);
+    return toJavaFindings(env, findings);
 }
 
 jobjectArray nativeRefreshCapturePolicy(JNIEnv* env, jclass, jobject context) {
-    chimera::security::ReportContextScope reportContext(env, context);
     std::vector<std::string> findings;
     chimera::security::detectCapture(env, context, &findings);
     return toJavaFindings(env, findings);
@@ -87,9 +70,7 @@ extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
     JNINativeMethod methods[] = {
             {"nativeScan", "(Landroid/content/Context;)[Ljava/lang/String;",
              reinterpret_cast<void*>(nativeScan)},
-            {"nativeTerminate", "(Ljava/lang/String;)V",
-             reinterpret_cast<void*>(nativeTerminate)},
-            {"nativeApplyActivitySecurity", "(Landroid/app/Activity;)V",
+            {"nativeApplyActivitySecurity", "(Landroid/app/Activity;)[Ljava/lang/String;",
              reinterpret_cast<void*>(nativeApplyActivitySecurity)},
             {"nativeRefreshCapturePolicy", "(Landroid/content/Context;)[Ljava/lang/String;",
              reinterpret_cast<void*>(nativeRefreshCapturePolicy)}};

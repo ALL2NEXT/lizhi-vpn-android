@@ -45,32 +45,32 @@ bool hasPopulatedCache(JNIEnv* env, jclass owner, const char* fieldName) {
 void detectXposed(JNIEnv* env, jobject context, std::vector<std::string>* findings) {
 #if CHIMERA_DETECT_XPOSED
     detection_utils::LocalFrame frame(env);
-    if (!frame) { fatalFinding(findings, "xposed_classloader_unavailable"); return; }
+    if (!frame) { addFinding(findings, "xposed_classloader_unavailable"); return; }
     const auto loaders = detection_utils::collectClassLoaders(env, context);
-    if (loaders.empty()) fatalFinding(findings, "xposed_classloader_unavailable");
+    if (loaders.empty()) addFinding(findings, "xposed_classloader_unavailable");
     jclass helpers = detection_utils::findClassInLoaders(env, loaders, "de.robv.android.xposed.XposedHelpers");
-    if (hasPopulatedCache(env, helpers, "methodCache")) fatalFinding(findings, "xposed_method_cache");
+    if (hasPopulatedCache(env, helpers, "methodCache")) addFinding(findings, "xposed_method_cache");
     jclass bridge = detection_utils::findClassInLoaders(env, loaders, "de.robv.android.xposed.XposedBridge");
-    if (hasPopulatedCache(env, bridge, "sHookedMethodCallbacks")) fatalFinding(findings, "xposed_hook_callbacks");
-    if (bridge != nullptr || helpers != nullptr) fatalFinding(findings, "xposed_class");
+    if (hasPopulatedCache(env, bridge, "sHookedMethodCallbacks")) addFinding(findings, "xposed_hook_callbacks");
+    if (bridge != nullptr || helpers != nullptr) addFinding(findings, "xposed_class");
 
     static const char* kLoaderMarkers[] = {"de.robv.android.xposed", "xposedbridge.jar", "org.meowcat.edxposed"};
     for (const auto& description : detection_utils::describeClassLoaders(env, loaders)) {
         if (detection_utils::containsAny(description, kLoaderMarkers, sizeof(kLoaderMarkers) / sizeof(kLoaderMarkers[0]))) {
-            fatalFinding(findings, "xposed_classloader");
+            addFinding(findings, "xposed_classloader");
             break;
         }
     }
     static const char* kStackPrefixes[] = {"de.robv.android.xposed.", "com.saurik.substrate."};
     if (detection_utils::stackContains(env, kStackPrefixes, sizeof(kStackPrefixes) / sizeof(kStackPrefixes[0]))) {
-        fatalFinding(findings, "xposed_stack");
+        addFinding(findings, "xposed_stack");
     }
     static const char* kMapMarkers[] = {"xposedbridge", "libxposed", "libedxp", "riru_xposed"};
     std::string maps;
     if (!detection_utils::readTextFile("/proc/self/maps", &maps) || maps.empty()) {
-        fatalFinding(findings, "xposed_maps_unavailable");
+        addFinding(findings, "xposed_maps_unavailable");
     } else if (detection_utils::containsAny(maps, kMapMarkers, sizeof(kMapMarkers) / sizeof(kMapMarkers[0]))) {
-        fatalFinding(findings, "xposed_artifact");
+        addFinding(findings, "xposed_artifact");
     }
     if (
             detection_utils::fileExists("/system/framework/XposedBridge.jar") ||
@@ -78,7 +78,7 @@ void detectXposed(JNIEnv* env, jobject context, std::vector<std::string>* findin
             detection_utils::fileExists("/system/lib64/libxposed_art.so") ||
             detection_utils::fileExists("/system/bin/app_process.orig") ||
             detection_utils::fileExists("/system/bin/app_process64_xposed")) {
-        fatalFinding(findings, "xposed_artifact");
+        addFinding(findings, "xposed_artifact");
     }
 #else
     (void) env;

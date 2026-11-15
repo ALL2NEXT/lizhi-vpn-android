@@ -16,7 +16,6 @@ void detectAdb(JNIEnv* env, jobject context, std::vector<std::string>* findings)
     if (detection_utils::getGlobalSettingInt(env, context, "adb_enabled", 0, &adbEnabled) &&
             adbEnabled != 0) {
         addFinding(findings, "adb_enabled");
-        reportFindings(env, context, {"adb_enabled"});
     }
 #else
     (void) env;

@@ -43,9 +43,9 @@ bool hasUnexpectedNativeMethod(JNIEnv* env) {
 void detectLsposed(JNIEnv* env, jobject context, std::vector<std::string>* findings) {
 #if CHIMERA_DETECT_LSPOSED
     detection_utils::LocalFrame frame(env);
-    if (!frame) { fatalFinding(findings, "lsposed_classloader_unavailable"); return; }
+    if (!frame) { addFinding(findings, "lsposed_classloader_unavailable"); return; }
     const auto loaders = detection_utils::collectClassLoaders(env, context);
-    if (loaders.empty()) fatalFinding(findings, "lsposed_classloader_unavailable");
+    if (loaders.empty()) addFinding(findings, "lsposed_classloader_unavailable");
     static const char* kClasses[] = {
         "org.lsposed.lspd.core.Main", "org.lsposed.lspd.nativebridge.HookBridge",
         "org.lsposed.lspd.impl.LSPosedBridge", "org.lsposed.lspd.deopt.PrebuiltMethodsDeopter"
@@ -54,33 +54,33 @@ void detectLsposed(JNIEnv* env, jobject context, std::vector<std::string>* findi
         jclass found = detection_utils::findClassInLoaders(env, loaders, name);
         if (found == nullptr) continue;
         env->DeleteLocalRef(found);
-        fatalFinding(findings, "lsposed_class");
+        addFinding(findings, "lsposed_class");
         break;
     }
     static const char* kLoaderMarkers[] = {"org.lsposed.lspd.", "lspd/inmemorydexclassloader", "/lsposed/"};
     for (const auto& description : detection_utils::describeClassLoaders(env, loaders)) {
         if (detection_utils::containsAny(description, kLoaderMarkers, sizeof(kLoaderMarkers) / sizeof(kLoaderMarkers[0]))) {
-            fatalFinding(findings, "lsposed_classloader");
+            addFinding(findings, "lsposed_classloader");
             break;
         }
     }
     static const char* kStackPrefixes[] = {"org.lsposed.lspd.", "org.lsposed.lsplant."};
     if (detection_utils::stackContains(env, kStackPrefixes, sizeof(kStackPrefixes) / sizeof(kStackPrefixes[0]))) {
-        fatalFinding(findings, "lsposed_stack");
+        addFinding(findings, "lsposed_stack");
     }
-    if (hasUnexpectedNativeMethod(env)) fatalFinding(findings, "art_method_native");
+    if (hasUnexpectedNativeMethod(env)) addFinding(findings, "art_method_native");
     static const char* kMapMarkers[] = {"/lsposed/", "/lspd/", "liblspd", "liblsposed", "liblsplant", "zygisk_lsposed", "riru_lsposed"};
     std::string maps;
     if (!detection_utils::readTextFile("/proc/self/maps", &maps) || maps.empty()) {
-        fatalFinding(findings, "lsposed_maps_unavailable");
+        addFinding(findings, "lsposed_maps_unavailable");
     } else if (detection_utils::containsAny(maps, kMapMarkers, sizeof(kMapMarkers) / sizeof(kMapMarkers[0]))) {
-        fatalFinding(findings, "lsposed_artifact");
+        addFinding(findings, "lsposed_artifact");
     }
     if (
             detection_utils::fileExists("/data/adb/lspd") ||
             detection_utils::fileExists("/data/adb/modules/zygisk_lsposed") ||
             detection_utils::fileExists("/data/adb/modules/lsposed")) {
-        fatalFinding(findings, "lsposed_artifact");
+        addFinding(findings, "lsposed_artifact");
     }
 #else
     (void) env;

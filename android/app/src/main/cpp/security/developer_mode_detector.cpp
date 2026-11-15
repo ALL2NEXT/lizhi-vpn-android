@@ -17,7 +17,6 @@ void detectDeveloperMode(JNIEnv* env, jobject context, std::vector<std::string>*
                 env, context, "development_settings_enabled", 0, &developerModeEnabled) &&
             developerModeEnabled != 0) {
         addFinding(findings, "developer_options_enabled");
-        reportFindings(env, context, {"developer_options_enabled"});
     }
 #else
     (void) env;
