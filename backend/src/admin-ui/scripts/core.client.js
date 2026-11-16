@@ -68,10 +68,12 @@
  function esc(data) { return String(data == null ? '' : data).replace(/[&<>"']/g, function(c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
  function headers() { return {'content-type':'application/json','authorization':'Bearer ' + adminToken}; }
  function show(message, error) { statusEl.textContent = message; statusEl.style.color = error ? '#c42b1c' : '#107c10'; }
- // 顶部状态栏展示当前模块标题，替代登录成功提示。
+ // 页面标题与临时操作提示分开，保存控件可以和标题保持同一行。
  function showDashboardTitle(name) {
    const tab = document.querySelector('.tab-button[data-tab="' + name + '"]');
-   statusEl.textContent = tab ? tab.textContent.trim() : '';
+   const title = document.getElementById('dashboardTitle');
+   if (title) title.textContent = tab ? tab.textContent.trim() : '';
+   statusEl.textContent = '';
    statusEl.style.color = '#107c10';
  }
  function showLoginError(message) { loginStatusEl.textContent = message || ''; }
