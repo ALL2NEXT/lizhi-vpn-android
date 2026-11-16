@@ -437,10 +437,6 @@ function setActivityPeriod(period) {
   });
   loadActivityChart(period);
 }
-function refreshUserTrends() {
-  loadGrowthChart(growthPeriod);
-  loadActivityChart(activityPeriod);
-}
 async function loadActivityChart(period) {
   const host = el('userActivityChart');
   const summary = el('userActivitySummary');
