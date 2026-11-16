@@ -1,4 +1,4 @@
-    :root { color-scheme: light; font-family: "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif; }
+    :root { --settings-save-toolbar-height: 58px; color-scheme: light; font-family: "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif; }
      body { min-height: 100vh; margin: 0; background: #ffffff; color: #202124; }
      main { width: 100%; min-width: 1200px; min-height: 100vh; margin: 0; }
      h1 { font-size: 24px; margin: 0 0 6px; }
@@ -29,6 +29,30 @@
 
      .sidebar-logout { width: 100%; margin: 16px 0 0; }
      .dashboard-workspace { display: flex; flex-direction: column; min-width: 0; min-height: 100vh; background: #ffffff; }
+     .settings-save-toolbar {
+       position: sticky;
+       top: 0;
+       z-index: 30;
+       box-sizing: border-box;
+       display: flex;
+       flex: 0 0 auto;
+       align-items: center;
+       gap: 18px;
+       min-height: var(--settings-save-toolbar-height);
+       padding: 10px 28px;
+       background: var(--surface, #ffffff);
+       border-bottom: 1px solid var(--line, #dadce0);
+     }
+     .settings-save-status { flex: 1 1 auto; min-width: 0; overflow: hidden; color: var(--ink-muted, #5f6368); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+     .settings-save-status.error { color: var(--red, #b3261e); }
+     .settings-autosave-toggle { position: relative; display: inline-flex; flex: 0 0 auto; align-items: center; gap: 10px; color: var(--ink, #202124); font-size: 13px; cursor: pointer; user-select: none; }
+     .settings-autosave-toggle input { position: absolute; width: 1px; height: 1px; margin: 0; opacity: 0; }
+     .settings-autosave-track { position: relative; box-sizing: border-box; width: 38px; height: 22px; border: 1px solid #aeb7c4; border-radius: 999px; background: #aeb7c4; transition: background-color .15s ease, border-color .15s ease; }
+     .settings-autosave-track::after { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #ffffff; box-shadow: 0 1px 2px rgb(0 0 0 / 25%); content: ""; transition: transform .15s ease; }
+     .settings-autosave-toggle input:checked + .settings-autosave-track { border-color: #0078d4; background: #0078d4; }
+     .settings-autosave-toggle input:checked + .settings-autosave-track::after { transform: translateX(16px); }
+     .settings-autosave-toggle input:focus-visible + .settings-autosave-track { outline: 2px solid #0078d4; outline-offset: 3px; }
+     .settings-save-toolbar > button { flex: 0 0 auto; margin: 0; }
      .tab-panel { display: none; box-sizing: border-box; flex: 1 1 auto; width: 100%; min-height: 0; padding: 28px; margin: 0; background: #ffffff; border: 0; border-radius: 0; }
      .tab-panel.active { display: block; }
      .dashboard-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
@@ -565,7 +589,7 @@
       .user-row.search-current td { box-shadow: inset 0 0 0 2px #1a73e8; }
       .user-row[hidden] { display: none; }
       button:disabled { cursor: not-allowed; opacity: .5; }
-     #status { position: sticky; top: 0; z-index: 20; box-sizing: border-box; color: #1a73e8; background: #ffffff; }
+     #status { position: sticky; top: var(--settings-save-toolbar-height); z-index: 20; box-sizing: border-box; color: #1a73e8; background: #ffffff; }
      #status:not(:empty) { min-height: 44px; padding: 11px 28px; border-bottom: 1px solid #dadce0; }
      .hint { margin-top: 4px; }
      button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 2px solid #1a73e8; outline-offset: 3px; }
@@ -1402,7 +1426,7 @@
       display: flex;
       box-sizing: border-box;
       width: 100%;
-      height: 100vh;
+      height: auto;
       min-height: 0;
       padding: 10px;
       overflow: hidden;
@@ -1646,6 +1670,9 @@
       .user-admin-layout { grid-template-columns: 220px minmax(0, 1fr); gap: 12px; }
     }
     @media (max-width: 700px) {
+      :root { --settings-save-toolbar-height: 88px; }
+      .settings-save-toolbar { flex-wrap: wrap; gap: 8px 14px; padding: 8px 12px; }
+      .settings-save-status { flex-basis: 100%; }
       .user-admin-layout { grid-template-columns: minmax(0, 1fr); }
       .user-admin-sidebar { order: 0; }
       .user-admin-workspace { order: 1; }

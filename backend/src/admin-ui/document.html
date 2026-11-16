@@ -89,6 +89,15 @@
      </aside>
 
      <div class="dashboard-workspace">
+       <div id="settingsSaveToolbar" class="settings-save-toolbar" role="region" aria-label="配置保存">
+         <span id="settingsSaveStatus" class="settings-save-status" role="status" aria-live="polite">所有修改已保存</span>
+         <label class="settings-autosave-toggle">
+           <span>自动保存</span>
+           <input id="settingsAutoSaveToggle" type="checkbox" role="switch" checked>
+           <span class="settings-autosave-track" aria-hidden="true"></span>
+         </label>
+         <button id="settingsManualSave" type="button" disabled>保存配置</button>
+       </div>
        <div id="status" role="status" aria-live="polite"></div>
 
    <section class="card tab-panel" role="tabpanel" data-panel="user-trends">
@@ -409,7 +418,6 @@
           <p id="subscriptionSummary">0 个分组 · 0 条订阅 · 0 条启用</p>
         </div>
         <div class="settings-page-save subscription-manager-save">
-          <span class="settings-page-save-status subscription-manager-save-status" data-settings-save-status role="status" aria-live="polite">所有修改已保存</span>
           <button class="secondary" type="button" data-action="close-subscription-editor">关闭</button>
         </div>
       </header>
@@ -536,9 +544,6 @@
     </div>
   </section>
   <section class="card tab-panel" role="tabpanel" data-panel="about-page">
-    <div class="dashboard-heading settings-page-heading">
-      <div class="settings-page-save"><span class="settings-page-save-status" data-settings-save-status role="status" aria-live="polite">所有修改已保存</span></div>
-    </div>
     <div class="settings-sections">
       <section class="settings-section">
         <h3 class="settings-section-title">应用基础信息</h3>
@@ -560,9 +565,6 @@
     </div>
   </section>
   <section class="card tab-panel" role="tabpanel" data-panel="update-management">
-    <div class="dashboard-heading settings-page-heading">
-      <div class="settings-page-save"><span class="settings-page-save-status" data-settings-save-status role="status" aria-live="polite">所有修改已保存</span></div>
-    </div>
     <div class="settings-sections">
       <section class="settings-section">
         <h3 class="settings-section-title">应用更新</h3>
@@ -576,9 +578,6 @@
     </div>
   </section>
   <section class="card tab-panel" role="tabpanel" data-panel="registration-control">
-    <div class="dashboard-heading settings-page-heading">
-      <div class="settings-page-save"><span class="settings-page-save-status" data-settings-save-status role="status" aria-live="polite">所有修改已保存</span></div>
-    </div>
     <div class="settings-sections">
       <section class="settings-section">
         <h3 class="settings-section-title">注册控制</h3>
