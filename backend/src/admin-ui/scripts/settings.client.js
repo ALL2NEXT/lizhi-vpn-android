@@ -1138,6 +1138,10 @@ function fillState(state, section) {
       setValue('githubUrl', settings.githubUrl);
       setValue('telegramUrl', settings.telegramUrl);
     }
+    if (!section || section === 'update-management') {
+      setValue('latestAppVersion', settings.latestAppVersion);
+      setValue('appDownloadUrl', settings.appDownloadUrl);
+    }
     if (!section || section === 'registration-control') {
       const registrationMode = settings.registrationEnabled === false
         ? 'closed'
@@ -1210,6 +1214,8 @@ function formState() {
       feedbackUrl: value('feedbackUrl'),
       githubUrl: value('githubUrl'),
       telegramUrl: value('telegramUrl'),
+      latestAppVersion: value('latestAppVersion'),
+      appDownloadUrl: value('appDownloadUrl'),
       registrationEnabled: registrationMode !== 'closed',
       requireAdminRegistrationCode: registrationMode === 'code'
     }
@@ -1429,6 +1435,11 @@ async function pushSection(section) {
           feedbackUrl: form.settings.feedbackUrl,
           githubUrl: form.settings.githubUrl,
           telegramUrl: form.settings.telegramUrl
+        })
+      : section === 'update-management'
+        ? Object.assign({}, currentState.settings, {
+          latestAppVersion: form.settings.latestAppVersion,
+          appDownloadUrl: form.settings.appDownloadUrl
         })
       : section === 'registration-control'
         ? Object.assign({}, currentState.settings, {

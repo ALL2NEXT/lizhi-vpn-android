@@ -588,6 +588,8 @@ export const DEFAULT_STATE: AppState = {
     feedbackUrl: "",
     githubUrl: "",
     telegramUrl: "",
+    latestAppVersion: "",
+    appDownloadUrl: "",
     // 后台可关闭游客注册正式用户；默认保持现有注册流程开放。
     registrationEnabled: true,
     requireAdminRegistrationCode: false,

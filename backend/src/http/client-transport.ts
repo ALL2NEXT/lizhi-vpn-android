@@ -115,6 +115,7 @@ export async function sealResponsePacket(plaintext: Uint8Array, responseKey: Cry
 
 function isClientPath(path: string): boolean {
   return path === "/api/client" || path === "/api/app/proxy-packages" ||
+    path === "/api/app/update" ||
     path.startsWith("/api/client/notifications") || path.startsWith("/api/account/") ||
     path.startsWith("/api/subscription/");
 }

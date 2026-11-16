@@ -23,11 +23,15 @@ import io.github.HanJason233.chimera.data.model.TrafficReportRequest
 import io.github.HanJason233.chimera.data.model.TrafficReportResponse
 import io.github.HanJason233.chimera.data.model.ClientNotificationFeed
 import io.github.HanJason233.chimera.data.model.NotificationActionResponse
+import io.github.HanJason233.chimera.data.model.AppUpdateInfoResponse
 
 interface ApiService {
     
     @GET
     suspend fun getBackendConfig(@Url url: String): String
+
+    @GET
+    suspend fun getAppUpdateInfo(@Url url: String): AppUpdateInfoResponse
 
     @GET
     suspend fun getSubscription(

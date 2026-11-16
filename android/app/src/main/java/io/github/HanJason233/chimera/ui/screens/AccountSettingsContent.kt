@@ -68,6 +68,8 @@ internal fun AccountSettingsOverviewContent(
     onOpenTraffic: () -> Unit,
     onOpenClientInfo: () -> Unit,
     onAbout: () -> Unit,
+    isCheckingUpdate: Boolean,
+    onCheckUpdate: () -> Unit,
     onSwitchAccount: () -> Unit,
     onDeleteAccount: () -> Unit
 ) {
@@ -114,6 +116,14 @@ internal fun AccountSettingsOverviewContent(
             subtitle = "应用版本、官网与反馈方式",
             onClick = onAbout
         )
+        SettingsOperationRow(
+            icon = Icons.Filled.Refresh,
+            title = if (isCheckingUpdate) "正在检查更新…" else "检查更新",
+            subtitle = "检查并打开最新版本下载链接",
+            enabled = !isCheckingUpdate,
+            loading = isCheckingUpdate,
+            onClick = onCheckUpdate
+        )
 
         SettingsGroupLabel(title = "账户操作")
         SettingsOperationRow(
@@ -139,7 +149,9 @@ internal fun AccountSettingsOverviewContent(
 @Composable
 internal fun OfflineAccountSettingsOverviewContent(
     onSwitchToOnline: () -> Unit,
-    onAbout: () -> Unit
+    onAbout: () -> Unit,
+    isCheckingUpdate: Boolean,
+    onCheckUpdate: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         SettingsGroupLabel(title = "账户", first = true)
@@ -155,6 +167,14 @@ internal fun OfflineAccountSettingsOverviewContent(
             title = "关于",
             subtitle = "应用版本、官网与反馈方式",
             onClick = onAbout
+        )
+        SettingsOperationRow(
+            icon = Icons.Filled.Refresh,
+            title = if (isCheckingUpdate) "正在检查更新…" else "检查更新",
+            subtitle = "检查并打开最新版本下载链接",
+            enabled = !isCheckingUpdate,
+            loading = isCheckingUpdate,
+            onClick = onCheckUpdate
         )
 
         SettingsGroupLabel(title = "账户操作")

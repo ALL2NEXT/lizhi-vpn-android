@@ -171,6 +171,7 @@ const routeDeps = {
 
 const {
   handleClient,
+  handleAppUpdate,
   handleClientNotifications,
   handleProxyAppList,
   handleManagedSubscription,
@@ -278,6 +279,10 @@ async function dispatchWorkerRequest(request: Request, env: Env) {
 
       if (path === "/api/client" && request.method === "GET") {
         return handleClient(request, env);
+      }
+
+      if (path === "/api/app/update" && request.method === "GET") {
+        return handleAppUpdate(env);
       }
 
       if (path.startsWith("/api/client/notifications")) {

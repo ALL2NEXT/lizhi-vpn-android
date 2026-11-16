@@ -1242,9 +1242,12 @@
 
     /* 注册控制和关于页的白色内容区增加内边距，给表单与说明留出呼吸空间。 */
     .tab-panel[data-panel="registration-control"] .settings-section,
-    .tab-panel[data-panel="about-page"] .settings-section {
+    .tab-panel[data-panel="about-page"] .settings-section,
+    .tab-panel[data-panel="update-management"] .settings-section {
       padding: clamp(16px, 2vw, 24px);
     }
+
+    .app-update-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
     /* 订阅分组按状态摘要、订阅表头和逐行编辑分层展示。 */
     .tab-panel[data-panel="subscriptions"] { padding: 16px 24px 16px 16px; background: var(--surface-page); }

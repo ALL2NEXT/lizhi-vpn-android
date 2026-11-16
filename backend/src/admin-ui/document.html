@@ -70,6 +70,7 @@
              <div id="app-settings-subnav" class="nav-submenu" role="group" aria-label="应用设置子菜单">
                <button class="tab-button" role="tab" type="button" data-tab="subscriptions"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 6h16v2L4 8V6zm2-4h12v2H6V2zm14 8H4c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2v-8c0-1.1-.9-2-2-2zm0 10H4v-8h16v8zm-10-7.27v6.53L16 16l-6-3.27z"/></svg><span>订阅分组</span></button>
                <button class="tab-button" role="tab" type="button" data-tab="about-page"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg><span>关于页</span></button>
+               <button class="tab-button" role="tab" type="button" data-tab="update-management"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 .99-.24 1.92-.67 2.74l1.46 1.46A7.94 7.94 0 0 0 20 12c0-4.42-3.58-8-8-8zM6 12c0-.99.24-1.92.67-2.74L5.21 7.8A7.94 7.94 0 0 0 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3c-3.31 0-6-2.69-6-6z"/></svg><span>更新管理</span></button>
                <button class="tab-button" role="tab" type="button" data-tab="notifications"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 5.5A2.5 2.5 0 0 1 5.5 3h13A2.5 2.5 0 0 1 21 5.5v13a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 18.5zm2.3-.5 6.7 5.2L18.7 5zm13.7 2.3-7 5.4-7-5.4v11.2h14z"/></svg><span>通知管理</span></button>
             </div>
           </div>
@@ -555,6 +556,22 @@
           <div class="field"><label><span class="app-info-label"><svg aria-hidden="true"><use href="#app-icon-github"></use></svg>项目源码链接</span><input id="githubUrl" type="url" placeholder="https://github.com/.../..."></label></div>
           <div class="field"><label><span class="app-info-label"><svg aria-hidden="true"><use href="#app-icon-telegram"></use></svg>Telegram 群组链接</span><input id="telegramUrl" type="url" placeholder="https://t.me/..."></label></div>
         </div>
+      </section>
+    </div>
+  </section>
+  <section class="card tab-panel" role="tabpanel" data-panel="update-management">
+    <div class="dashboard-heading settings-page-heading">
+      <div class="settings-page-save"><span class="settings-page-save-status" data-settings-save-status role="status" aria-live="polite">所有修改已保存</span></div>
+    </div>
+    <div class="settings-sections">
+      <section class="settings-section">
+        <h3 class="settings-section-title">应用更新</h3>
+        <p class="settings-section-description">设置客户端检查更新时使用的最新版本号和下载地址。</p>
+        <div class="grid app-update-grid">
+          <div class="field"><label for="latestAppVersion">最新应用版本</label><input id="latestAppVersion" type="text" inputmode="decimal" placeholder="1.0.1"></div>
+          <div class="field"><label for="appDownloadUrl">应用下载链接</label><input id="appDownloadUrl" type="url" placeholder="https://example.com/Chimera.apk"></div>
+        </div>
+        <small class="hint">版本号使用数字点分格式（如 1.2.3）；填写后，客户端发现新版本时会打开下载链接。</small>
       </section>
     </div>
   </section>

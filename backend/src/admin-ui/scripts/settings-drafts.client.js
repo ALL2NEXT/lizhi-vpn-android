@@ -1,4 +1,4 @@
-const SETTINGS_SECTIONS = ['subscriptions', 'about-page', 'registration-control'];
+const SETTINGS_SECTIONS = ['subscriptions', 'about-page', 'update-management', 'registration-control'];
 const settingsDirtySections = new Set();
 const settingsDraftVersions = new Map();
 const settingsSaveMessages = new Map();

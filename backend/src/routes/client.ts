@@ -151,6 +151,18 @@ async function handleClient(request: Request, env: Env) {
   });
 }
 
+async function handleAppUpdate(
+  env: Env,
+  readState: RouteDependencies["readState"],
+  json: RouteDependencies["json"]
+) {
+  const settings = (await readState(env)).settings;
+  return json({
+    latestAppVersion: settings.latestAppVersion,
+    appDownloadUrl: settings.appDownloadUrl,
+  });
+}
+
 async function handleClientNotifications(path: string, request: Request, env: Env) {
   const requestUrl = new URL(request.url);
   const deviceId = normalizeAccountId(requestUrl.searchParams.get("deviceId"));
@@ -360,6 +372,7 @@ async function handleManagedSubscription(path: string, request: Request, env: En
 
   return {
     handleClient,
+    handleAppUpdate: (env: Env) => handleAppUpdate(env, readState, json),
     handleClientNotifications,
     handleProxyAppList,
     handleManagedSubscription,

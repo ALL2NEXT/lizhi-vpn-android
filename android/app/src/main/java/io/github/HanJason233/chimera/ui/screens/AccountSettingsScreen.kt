@@ -1,5 +1,7 @@
 package io.github.HanJason233.chimera.ui.screens
 
+import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -34,6 +36,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,6 +47,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -91,6 +95,8 @@ fun AccountSettingsScreen(
     val skinSettings by viewModel.skinSettings.collectAsStateWithLifecycle()
     var showAboutDialog by remember { mutableStateOf(false) }
     var showBackendDialog by remember { mutableStateOf(false) }
+    var isCheckingUpdate by remember { mutableStateOf(false) }
+    val coroutineScope = rememberCoroutineScope()
     var selectedNotification by remember { mutableStateOf<ClientNotification?>(null) }
     var backendUrlDraft by remember { mutableStateOf(AppConfig.BACKEND_URL) }
     val account = accountInfo
@@ -111,6 +117,53 @@ fun AccountSettingsScreen(
     var showBindDialog by remember(accountInfo?.uid) { mutableStateOf(false) }
     var showSwitchDialog by remember(accountInfo?.uid) { mutableStateOf(false) }
     var showDeleteConfirmation by remember(accountInfo?.uid) { mutableStateOf(false) }
+
+    val onCheckUpdate: () -> Unit = {
+        if (!isCheckingUpdate) {
+            coroutineScope.launch {
+                isCheckingUpdate = true
+                try {
+                    viewModel.checkForAppUpdate().fold(
+                        onSuccess = { result ->
+                            if (!result.updateAvailable) {
+                                Toast.makeText(
+                                    context,
+                                    "当前已是最新版本（${result.currentVersion}）",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            } else {
+                                val downloadUri = Uri.parse(result.downloadUrl)
+                                val downloadScheme = downloadUri.scheme?.lowercase()
+                                if (
+                                    (downloadScheme != "http" && downloadScheme != "https") ||
+                                    downloadUri.host.isNullOrBlank()
+                                ) {
+                                    Toast.makeText(context, "后台下载链接无效", Toast.LENGTH_LONG).show()
+                                } else {
+                                    runCatching {
+                                        context.startActivity(Intent(Intent.ACTION_VIEW, downloadUri))
+                                    }.onFailure {
+                                        Toast.makeText(context, "无法打开应用下载链接", Toast.LENGTH_LONG).show()
+                                    }
+                                }
+                            }
+                        },
+                        onFailure = { error ->
+                            val message = when (error.message) {
+                                "backend_url_missing" -> "未设置后台地址"
+                                "app_update_not_configured" -> "后台尚未配置最新版本及下载链接"
+                                "invalid_app_version" -> "版本号格式无效，无法比较"
+                                else -> "检查更新失败，请检查网络后重试"
+                            }
+                            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+                        }
+                    )
+                } finally {
+                    isCheckingUpdate = false
+                }
+            }
+        }
+    }
 
     LaunchedEffect(Unit) {
         viewModel.clearAccountMessage()
@@ -284,7 +337,9 @@ fun AccountSettingsScreen(
             if (offlineModeEnabled) {
                 OfflineAccountSettingsOverviewContent(
                     onSwitchToOnline = viewModel::exitOfflineMode,
-                    onAbout = { showAboutDialog = true }
+                    onAbout = { showAboutDialog = true },
+                    isCheckingUpdate = isCheckingUpdate,
+                    onCheckUpdate = onCheckUpdate
                 )
             } else if (account == null) {
                 if (page == AccountSettingsPage.OVERVIEW) {
@@ -314,6 +369,8 @@ fun AccountSettingsScreen(
                         onOpenTraffic = { onOpenPage(AccountSettingsPage.TRAFFIC) },
                         onOpenClientInfo = { onOpenPage(AccountSettingsPage.CLIENT_INFO) },
                         onAbout = { showAboutDialog = true },
+                        isCheckingUpdate = isCheckingUpdate,
+                        onCheckUpdate = onCheckUpdate,
                         onSwitchAccount = {
                             switchEmail = ""
                             switchPassword = ""

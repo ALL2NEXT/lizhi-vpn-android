@@ -337,12 +337,19 @@ export function normalizeSettings(value: unknown): Settings {
   const hasRegistrationControl =
     Object.prototype.hasOwnProperty.call(settings, "registrationEnabled") ||
     Object.prototype.hasOwnProperty.call(settings, "formalRegistrationEnabled");
+  const latestAppVersion = normalizeLatestAppVersion(settings.latestAppVersion);
+  const appDownloadUrl = normalizeAppDownloadUrl(settings.appDownloadUrl);
+  if (Boolean(latestAppVersion) !== Boolean(appDownloadUrl)) {
+    throw new Error("incomplete_app_update_config");
+  }
   return {
     websiteUrl: cleanText(settings.websiteUrl),
     feedbackEmail: cleanText(settings.feedbackEmail),
     feedbackUrl: cleanText(settings.feedbackUrl),
     githubUrl: cleanText(settings.githubUrl),
     telegramUrl: cleanText(settings.telegramUrl),
+    latestAppVersion,
+    appDownloadUrl,
     registrationEnabled: parseFlag(
       settings.registrationEnabled ?? settings.formalRegistrationEnabled,
       true,
@@ -352,6 +359,30 @@ export function normalizeSettings(value: unknown): Settings {
       false,
     ),
   };
+}
+
+function normalizeAppDownloadUrl(value: unknown) {
+  const raw = cleanText(value);
+  if (!raw) return "";
+  if (raw.length > 2048) throw new Error("invalid_app_download_url");
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new Error("invalid_app_download_url");
+  }
+  if (!new Set(["http:", "https:"]).has(url.protocol) || !url.hostname || url.username || url.password) {
+    throw new Error("invalid_app_download_url");
+  }
+  return url.toString();
+}
+
+function normalizeLatestAppVersion(value: unknown) {
+  try {
+    return normalizeMinimumAppVersion(value);
+  } catch {
+    throw new Error("invalid_latest_app_version");
+  }
 }
 
 export function publicClientSettings(settings: Settings) {

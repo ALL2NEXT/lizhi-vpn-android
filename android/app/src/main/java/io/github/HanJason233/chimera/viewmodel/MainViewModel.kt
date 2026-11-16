@@ -28,11 +28,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.async
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Job
 import io.github.HanJason233.chimera.AppConfig
+import io.github.HanJason233.chimera.BuildConfig
 import io.github.HanJason233.chimera.data.local.AppDatabase
 import io.github.HanJason233.chimera.data.local.HomeNodeTestResultsEntity
 import io.github.HanJason233.chimera.data.local.NodeLocationUpdate
@@ -55,10 +57,12 @@ import io.github.HanJason233.chimera.network.nodetest.bandwidth.SpeedTestService
 import io.github.HanJason233.chimera.network.nodetest.linktype.LinkTypeTestResult
 import io.github.HanJason233.chimera.network.location.NodeLocationResolver
 import io.github.HanJason233.chimera.network.account.AccountManager
+import io.github.HanJason233.chimera.network.NetworkClient
 import io.github.HanJason233.chimera.network.ip.PublicIpAddressDetector
 import io.github.HanJason233.chimera.service.ServiceManager
 import io.github.HanJason233.chimera.service.BoxVpnService
 import io.github.HanJason233.chimera.util.NetworkUtils
+import io.github.HanJason233.chimera.util.compareAppVersions
 import io.github.HanJason233.chimera.util.DatabasePassphraseManager
 import java.io.File
 import kotlin.math.ceil
@@ -1308,6 +1312,36 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun syncCurrentAccount() = accountSession.syncCurrentAccount()
 
     fun syncAccountOnOverviewEntry() = accountSession.syncAccountOnOverviewEntry()
+
+    suspend fun checkForAppUpdate(): Result<AppUpdateCheckResult> = withContext(Dispatchers.IO) {
+        try {
+            check(AppConfig.BACKEND_URL.isNotBlank()) { "backend_url_missing" }
+            val response = withTimeout(20_000L) {
+                NetworkClient.apiService.getAppUpdateInfo(
+                    "${AppConfig.BACKEND_URL.trimEnd('/')}/api/app/update"
+                )
+            }
+            val latestVersion = response.latestAppVersion.trim()
+            val downloadUrl = response.appDownloadUrl.trim()
+            check(latestVersion.isNotBlank() && downloadUrl.isNotBlank()) {
+                "app_update_not_configured"
+            }
+            val comparison = compareAppVersions(latestVersion, BuildConfig.VERSION_NAME)
+                ?: throw IllegalStateException("invalid_app_version")
+            Result.success(
+                AppUpdateCheckResult(
+                    currentVersion = BuildConfig.VERSION_NAME,
+                    latestVersion = latestVersion,
+                    downloadUrl = downloadUrl,
+                    updateAvailable = comparison > 0
+                )
+            )
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            Result.failure(error)
+        }
+    }
 
     fun refreshClientNotifications(force: Boolean = false) =
         accountSession.refreshClientNotifications(force)

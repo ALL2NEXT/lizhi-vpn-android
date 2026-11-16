@@ -82,6 +82,9 @@
    return new URL(ADMIN_API_BASE + path, window.location.origin).toString();
  }
  function adminErrorMessage(error, fallback) {
+   if (error === 'invalid_latest_app_version') return '最新应用版本格式无效，请使用类似 1.2.3 的数字版本号';
+   if (error === 'invalid_app_download_url') return '应用下载链接必须是有效的 HTTP 或 HTTPS 地址';
+   if (error === 'incomplete_app_update_config') return '请同时填写最新应用版本和应用下载链接，或同时清空';
    if (error === 'invalid_registration_code_count') return '注册码数量必须是 1 到 100 之间的整数';
    if (error === 'invalid_registration_code_max_uses') return '单个注册码可用次数必须是 1 到 1000 之间的整数';
    if (error === 'registration_code_not_found') return '注册码不存在';

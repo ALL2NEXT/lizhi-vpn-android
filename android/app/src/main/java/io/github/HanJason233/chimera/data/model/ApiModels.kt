@@ -19,12 +19,33 @@ data class BackendAppSettings(
     @SerializedName("telegramUrl")
     val telegramUrl: String = "",
 
+    @SerializedName("latestAppVersion")
+    val latestAppVersion: String = "",
+
+    @SerializedName("appDownloadUrl")
+    val appDownloadUrl: String = "",
+
     @SerializedName("registrationEnabled")
     val registrationEnabled: Boolean = true,
 
     @SerializedName("requireAdminRegistrationCode")
     val requireAdminRegistrationCode: Boolean = false,
 
+)
+
+data class AppUpdateInfoResponse(
+    @SerializedName("latestAppVersion")
+    val latestAppVersion: String = "",
+
+    @SerializedName("appDownloadUrl")
+    val appDownloadUrl: String = ""
+)
+
+data class AppUpdateCheckResult(
+    val currentVersion: String,
+    val latestVersion: String,
+    val downloadUrl: String,
+    val updateAvailable: Boolean
 )
 
 /** 后台发布给客户端的单条应用内通知及当前账户的已读状态。 */

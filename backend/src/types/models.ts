@@ -44,6 +44,8 @@ export interface Settings {
   feedbackUrl: string;
   githubUrl: string;
   telegramUrl: string;
+  latestAppVersion: string;
+  appDownloadUrl: string;
   registrationEnabled: boolean;
   requireAdminRegistrationCode: boolean;
 }
