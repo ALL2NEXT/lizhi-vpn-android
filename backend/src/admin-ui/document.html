@@ -205,22 +205,22 @@
               <input id="userAdminSearch" type="search" placeholder="搜索 UID、昵称、邮箱、品牌或型号" oninput="renderAdminUsers()">
             </label>
             <fieldset class="user-admin-filter-section">
-              <legend>账号状态</legend>
-              <div class="user-admin-filter-options" role="group" aria-label="按账号状态筛选">
+              <legend>封禁状态</legend>
+              <div class="user-admin-filter-options" role="group" aria-label="按封禁状态筛选">
                 <label class="user-admin-filter-option"><input type="checkbox" data-admin-user-filter="status" value="active" checked onchange="renderAdminUsers()">正常</label>
                 <label class="user-admin-filter-option"><input type="checkbox" data-admin-user-filter="status" value="banned" checked onchange="renderAdminUsers()">封禁</label>
               </div>
             </fieldset>
             <fieldset class="user-admin-filter-section">
-              <legend>账户类型</legend>
-              <div class="user-admin-filter-options" role="group" aria-label="按账户类型筛选">
+              <legend>注册状态</legend>
+              <div class="user-admin-filter-options" role="group" aria-label="按注册状态筛选">
                 <label class="user-admin-filter-option"><input type="checkbox" data-admin-user-filter="type" value="guest" checked onchange="renderAdminUsers()">游客</label>
                 <label class="user-admin-filter-option"><input type="checkbox" data-admin-user-filter="type" value="formal" checked onchange="renderAdminUsers()">正式用户</label>
               </div>
             </fieldset>
             <fieldset class="user-admin-filter-section">
-              <legend>账号身份</legend>
-              <div class="user-admin-filter-options" role="group" aria-label="按账号身份筛选">
+              <legend>风控状态</legend>
+              <div class="user-admin-filter-options" role="group" aria-label="按风控状态筛选">
                 <label class="user-admin-filter-option"><input type="checkbox" data-admin-user-filter="identity" value="human" checked onchange="renderAdminUsers()">真人</label>
                 <label class="user-admin-filter-option"><input type="checkbox" data-admin-user-filter="identity" value="bot" checked onchange="renderAdminUsers()">机器人</label>
               </div>
@@ -289,7 +289,7 @@
         <div class="user-detail-heading"><div><h2 id="adminUserDetailTitle">用户详情</h2><p id="adminUserDetailIdentity"></p></div><button class="secondary" type="button" onclick="document.getElementById('adminUserDetailDialog').close()">关闭</button></div>
         <p id="adminUserDetailUsage" class="user-detail-usage"></p>
         <div class="grid">
-          <label class="field">账号身份<select data-admin-user-field="identityType"><option value="human">真人</option><option value="bot">机器人</option></select></label>
+          <label class="field">风控状态<select data-admin-user-field="identityType"><option value="human">真人</option><option value="bot">机器人</option></select></label>
           <label class="field">昵称<input data-admin-user-field="nickname" type="text" required maxlength="24"></label>
           <label class="field">品牌<input data-admin-user-field="brand" type="text" maxlength="80"></label>
           <label class="field">型号<input data-admin-user-field="model" type="text" maxlength="120"></label>
