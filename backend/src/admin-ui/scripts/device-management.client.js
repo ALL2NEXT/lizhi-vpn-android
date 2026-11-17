@@ -125,7 +125,7 @@ function renderAdminDevices() {
   }).join('');
 
   host.innerHTML = '<table class="traffic-detail-table admin-device-table" aria-label="设备管理表">' +
-    '<thead><tr><th scope="col">选择</th><th scope="col">设备</th><th scope="col">设备 ID</th>' +
+    '<thead><tr><th scope="col"><input class="user-admin-checkbox" id="adminDeviceSelectAll" type="checkbox" aria-label="全选当前结果" title="全选当前结果" onchange="toggleAllAdminDevices(this.checked)"></th><th scope="col">设备</th><th scope="col">设备 ID</th>' +
     '<th scope="col">当前账户 UID</th><th scope="col">历史关联账户</th><th scope="col">设备封禁状态</th>' +
     '<th scope="col">Android 版本</th><th scope="col">App 版本</th><th scope="col">首次登记</th>' +
     '<th scope="col">最近活动</th></tr></thead><tbody>' + rows + '</tbody></table>';
@@ -137,6 +137,7 @@ function renderAdminDevices() {
       updateAdminDeviceSelectionControls(adminDeviceList());
     });
   });
+  updateAdminDeviceSelectionControls(devices);
 }
 
 function toggleAllAdminDevices(checked) {

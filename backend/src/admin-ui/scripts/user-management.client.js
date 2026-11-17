@@ -463,7 +463,7 @@ function renderAdminUsers() {
       '</tr>';
   }).join('');
   host.innerHTML = '<table class="traffic-detail-table user-admin-table" aria-label="用户总表">' +
-    '<thead><tr><th>选择</th><th>昵称</th><th>邮箱</th><th>UID</th><th>注册时间</th><th>注册 IP</th><th>封禁状态</th><th>注册状态</th><th>风控状态</th><th>会员状态</th><th>VIP 到期时间</th><th>设备信息</th><th>受限设备数</th><th>今日流量</th><th>本月流量</th><th>累计流量</th><th>最后上报</th><th>关联 IP</th></tr></thead>' +
+    '<thead><tr><th><input class="user-admin-checkbox" id="userAdminSelectAll" type="checkbox" aria-label="全选当前结果" title="全选当前结果" onchange="toggleAllAdminUsers(this.checked)"></th><th>昵称</th><th>邮箱</th><th>UID</th><th>注册时间</th><th>注册 IP</th><th>封禁状态</th><th>注册状态</th><th>风控状态</th><th>会员状态</th><th>VIP 到期时间</th><th>设备信息</th><th>受限设备数</th><th>今日流量</th><th>本月流量</th><th>累计流量</th><th>最后上报</th><th>关联 IP</th></tr></thead>' +
     '<tbody>' + rows + '</tbody></table>';
   applyAdminUserColumnVisibility();
   host.querySelectorAll('[data-admin-user-select]').forEach(function(input) {
@@ -474,6 +474,7 @@ function renderAdminUsers() {
       updateAdminUserSelectionControls(adminUserList());
     });
   });
+  updateAdminUserSelectionControls(filtered);
 }
 
 function clearAdminUserSelection() {

@@ -305,7 +305,6 @@
             </div>
           </div>
           <div class="user-admin-operation-controls">
-            <label><input id="userAdminSelectAll" type="checkbox" onchange="toggleAllAdminUsers(this.checked)">全选当前结果</label>
             <button id="userAdminClearSelection" class="secondary" type="button" disabled onclick="clearAdminUserSelection()">清空选择</button>
             <button id="userAdminBatchBan" class="danger" type="button" disabled onclick="batchSetAdminUserBan(true)">封禁账户</button>
             <button id="userAdminBatchUnban" class="secondary" type="button" disabled onclick="batchSetAdminUserBan(false)">解封账户</button>
@@ -336,7 +335,6 @@
         <input id="adminDeviceSearch" type="search" oninput="renderAdminDevices()" placeholder="输入设备型号、设备 ID 或 UID">
       </label>
       <div class="user-admin-device-actions">
-        <label class="user-admin-device-select-all"><input id="adminDeviceSelectAll" type="checkbox" onchange="toggleAllAdminDevices(this.checked)">全选当前结果</label>
         <button id="adminDeviceClearSelection" class="secondary" type="button" disabled onclick="clearAdminDeviceSelection()">清空选择</button>
         <button id="adminDeviceBatchBan" class="danger" type="button" disabled onclick="batchSetAdminDeviceBan('ban')">封禁设备</button>
         <button id="adminDeviceBatchUnban" class="secondary" type="button" disabled onclick="batchSetAdminDeviceBan('unban')">解封设备</button>

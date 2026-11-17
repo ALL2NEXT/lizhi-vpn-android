@@ -547,8 +547,6 @@
      .user-admin-header-actions button { width: 100%; min-width: 0; margin: 0; }
      .user-admin-operation-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
      .user-admin-operation-controls button { width: 100%; min-width: 0; margin: 0; white-space: normal; }
-     .user-admin-operation-controls label { display: inline-flex; align-items: center; grid-column: 1 / -1; margin: 0; white-space: normal; }
-     .user-admin-operation-controls label input { margin: 0 7px 0 0; }
      .user-admin-operation-controls #userAdminBatchDelete { grid-column: 1 / -1; }
      .user-admin-workspace > .traffic-detail-wrap { min-width: 0; }
      .user-admin-table .user-admin-nickname { width: 150px; }
@@ -792,31 +790,18 @@
     }
     .user-admin-layout { grid-template-columns: minmax(0, 1fr) minmax(300px, 340px); gap: 14px; }
     .user-admin-workspace { container: user-admin-workspace / inline-size; }
-    .user-admin-table { width: 100%; min-width: 0; table-layout: fixed; }
-    .user-admin-table th, .user-admin-table td {
-      padding: 9px 7px;
-      white-space: normal;
-      overflow-wrap: anywhere;
-      word-break: break-word;
+    .user-admin-table { width: max-content; min-width: 100%; table-layout: auto; }
+    .user-admin-table th, .user-admin-table td { width: auto; padding: 9px 7px; }
+    .user-admin-table th {
+      padding-top: 6px;
+      padding-bottom: 6px;
+      line-height: 1.2;
+      white-space: nowrap;
+      overflow-wrap: normal;
+      word-break: normal;
     }
-    .user-admin-table th:nth-child(1), .user-admin-table td:nth-child(1) { width: 3%; }
-    .user-admin-table th:nth-child(2), .user-admin-table td:nth-child(2) { width: 9%; min-width: 0; max-width: none; }
-    .user-admin-table th:nth-child(3), .user-admin-table td:nth-child(3) { width: 7%; }
-    .user-admin-table th:nth-child(4), .user-admin-table td:nth-child(4) { width: 6%; }
-    .user-admin-table th:nth-child(5), .user-admin-table td:nth-child(5) { width: 9%; }
-    .user-admin-table th:nth-child(6), .user-admin-table td:nth-child(6) { width: 7%; }
-    .user-admin-table th:nth-child(7), .user-admin-table td:nth-child(7),
-    .user-admin-table th:nth-child(8), .user-admin-table td:nth-child(8),
-    .user-admin-table th:nth-child(9), .user-admin-table td:nth-child(9) { width: 5%; }
-    .user-admin-table th:nth-child(10), .user-admin-table td:nth-child(10) { width: 6%; }
-    .user-admin-table th:nth-child(11), .user-admin-table td:nth-child(11) { width: 7%; }
-    .user-admin-table th:nth-child(12), .user-admin-table td:nth-child(12) { width: 14%; }
-    .user-admin-table th:nth-child(13), .user-admin-table td:nth-child(13) { width: 5%; }
-    .user-admin-table th:nth-child(14), .user-admin-table td:nth-child(14),
-    .user-admin-table th:nth-child(15), .user-admin-table td:nth-child(15),
-    .user-admin-table th:nth-child(16), .user-admin-table td:nth-child(16) { width: 4%; }
-    .user-admin-table th:nth-child(17), .user-admin-table td:nth-child(17),
-    .user-admin-table th:nth-child(18), .user-admin-table td:nth-child(18) { width: 7%; }
+    .user-admin-table td { white-space: normal; overflow-wrap: anywhere; word-break: break-word; }
+    .user-admin-table th:first-child, .user-admin-table td:first-child { width: 46px; min-width: 46px; max-width: 46px; }
     .user-admin-cell-ellipsis { max-width: 100%; overflow-wrap: anywhere; white-space: normal; }
     .user-admin-operations-panel { margin: 0; }
     .user-admin-summary { color: var(--ink-muted); background: var(--surface-soft); }
