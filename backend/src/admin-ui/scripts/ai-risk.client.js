@@ -110,15 +110,6 @@ async function aiRiskRequest(path, options) {
   return data;
 }
 
-function aiRiskUpdateHeader(settings) {
-  const model = settings && settings.model || value('aiRiskModel') || 'Gemini';
-  el('aiRiskHeaderModel').textContent = model;
-  const configured = Boolean(settings && settings.apiKeyConfigured);
-  const indicator = el('aiRiskConnectionIndicator');
-  indicator.textContent = configured ? (settings.enabled ? 'Key 已配置' : 'Key 已保存') : '未配置';
-  indicator.classList.toggle('connected', configured && settings.enabled === true);
-}
-
 async function loadAiRiskSettings(force) {
   if (aiRiskSettingsLoading || (aiRiskSettingsLoaded && !force)) return;
   aiRiskSettingsLoading = true;
@@ -137,7 +128,6 @@ async function loadAiRiskSettings(force) {
     el('aiRiskClearKeys').checked = false;
     el('aiRiskClearKeys').disabled = settings.apiKeyConfigured !== true;
     aiRiskSetStatus('aiRiskSettingsStatus', settings.apiKeyConfigured ? '已配置 ' + settings.apiKeyCount + ' 个 API Key（密钥不会回显）' : '尚未配置 API Key', false);
-    aiRiskUpdateHeader(settings);
     aiRiskSettingsLoaded = true;
   } catch (error) {
     aiRiskSetStatus('aiRiskSettingsStatus', aiRiskErrorText(error.message), true);
@@ -169,7 +159,6 @@ async function saveAiRiskSettings() {
     el('aiRiskApiKeys').placeholder = settings.apiKeyCount ? '已配置 ' + settings.apiKeyCount + ' 个 Key；留空保留' : '请输入 Google AI API Key';
     el('aiRiskKeyStatus').textContent = settings.apiKeyCount ? '已保存 ' + settings.apiKeyCount + ' 个 Key；密钥不会回显。输入新列表将替换现有 Key。' : '支持最多 20 个 Key，用英文逗号或分号分隔；留空保留当前配置。';
     el('aiRiskClearKeys').disabled = settings.apiKeyConfigured !== true;
-    aiRiskUpdateHeader(settings);
     aiRiskSettingsLoaded = true;
     aiRiskSetStatus('aiRiskSettingsStatus', '配置已保存；' + (settings.apiKeyConfigured ? '已保存 ' + settings.apiKeyCount + ' 个 API Key' : '未配置 API Key'), false);
     return true;
@@ -528,14 +517,6 @@ function aiRiskRenderDashboard() {
   const host = el('aiRiskResults');
   const allRows = aiRiskBuildRows();
   const rows = allRows.filter(function(row) { return row.finding; });
-  if (aiRiskAnalysis && aiRiskAnalysis.analyzedAt) {
-    el('aiRiskLastAnalysis').textContent = aiRiskFormatTime(aiRiskAnalysis.analyzedAt);
-    el('aiRiskAnalysisDuration').textContent = Number.isFinite(aiRiskAnalysis.durationMs) ? Math.max(1, Math.round(aiRiskAnalysis.durationMs / 1000)) + ' 秒' : '—';
-    el('aiRiskHeaderModel').textContent = aiRiskAnalysis.model || value('aiRiskModel') || 'Gemini';
-  } else if (aiRiskDashboard) {
-    el('aiRiskLastAnalysis').textContent = '尚未分析';
-    el('aiRiskAnalysisDuration').textContent = '—';
-  }
   if (aiRiskAnalysis && aiRiskAnalysis.summary) {
     host.innerHTML = '<section class="ai-risk-analysis-summary"><strong>AI 分析结论</strong><p>' + esc(aiRiskAnalysis.summary) + '</p></section>';
   } else {
@@ -728,7 +709,6 @@ function updateAiRiskModelDetails() {
   const details = el('aiRiskModelDetails');
   if (!model) {
     details.textContent = aiRiskModels.length ? '当前模型没有出现在最近一次可用列表中；可以保留手动配置，或选择列表中的模型。' : '';
-    el('aiRiskHeaderModel').textContent = value('aiRiskModel') || 'Gemini';
     return;
   }
   const facts = [
@@ -739,7 +719,6 @@ function updateAiRiskModelDetails() {
     '可被 ' + Number(model.availableKeyCount || 0) + ' 个 Key 访问',
   ].filter(Boolean);
   details.textContent = facts.join(' · ');
-  el('aiRiskHeaderModel').textContent = model.displayName || model.id;
 }
 
 function aiRiskUsageText(usage) {
@@ -752,25 +731,9 @@ function aiRiskUsageText(usage) {
   return parts.length ? ' · ' + parts.join(' / ') + ' tokens' : '';
 }
 
-function aiRiskSetSettingsOpen(open) {
-  const panel = el('aiRiskSettingsPanel');
-  const toggle = el('aiRiskSettingsToggle');
-  if (open && !panel.open && typeof panel.showModal === 'function') panel.showModal();
-  if (!open && panel.open && typeof panel.close === 'function') panel.close();
-  if (toggle.setAttribute) toggle.setAttribute('aria-expanded', String(open));
-}
-
 function aiRiskHandlePageClick(event) {
   const button = event.target && event.target.closest ? event.target.closest('button') : null;
   if (!button) return;
-  if (button.id === 'aiRiskSettingsToggle') {
-    aiRiskSetSettingsOpen(!el('aiRiskSettingsPanel').open);
-    return;
-  }
-  if (button.id === 'aiRiskSettingsClose') {
-    aiRiskSetSettingsOpen(false);
-    return;
-  }
   const action = button.getAttribute && button.getAttribute('data-ai-risk-action');
   if (action) {
     const card = button.closest('.ai-risk-ip-card');
@@ -833,13 +796,6 @@ el('aiRiskSort').addEventListener('change', function() {
   securityRiskRenderRuleHits();
 });
 el('aiRiskPage').addEventListener('click', aiRiskHandlePageClick);
-el('aiRiskSettingsPanel').addEventListener('cancel', function(event) {
-  event.preventDefault();
-  aiRiskSetSettingsOpen(false);
-});
-el('aiRiskSettingsPanel').addEventListener('click', function(event) {
-  if (event.target === el('aiRiskSettingsPanel')) aiRiskSetSettingsOpen(false);
-});
 el('aiRiskClearKeys').addEventListener('change', function() {
   if (el('aiRiskClearKeys').checked) el('aiRiskApiKeys').value = '';
 });

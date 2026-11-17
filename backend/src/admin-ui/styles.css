@@ -903,14 +903,6 @@
     .tab-panel[data-panel="ai-risk"] { padding: 16px; overflow-x: hidden; background: var(--surface-page); }
     .ai-risk-page { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; min-height: calc(100vh - 32px); }
     .ai-risk-main { display: grid; min-width: 0; align-content: start; gap: 14px; }
-    .ai-risk-header { display: flex; min-width: 0; align-items: center; justify-content: flex-end; gap: 16px; padding: 2px 0 13px; border-bottom: 1px solid var(--line); }
-    .ai-risk-header-meta { display: flex; flex: 1 1 auto; min-width: 0; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; color: var(--ink-muted); font-size: 13px; }
-    .ai-risk-header-meta > span:not(.ai-risk-connection) { padding-right: 8px; border-right: 1px solid var(--line); white-space: nowrap; }
-    .ai-risk-header-meta strong { color: var(--ink); font-weight: 600; }
-    .ai-risk-header-meta button { min-height: 36px; padding: 7px 11px; margin: 0; white-space: nowrap; }
-    .ai-risk-connection { display: inline-flex; align-items: center; gap: 5px; color: #b3261e; font-weight: 650; white-space: nowrap; }
-    .ai-risk-connection::before { width: 8px; height: 8px; border-radius: 50%; background: currentColor; content: ""; }
-    .ai-risk-connection.connected { color: #137333; }
     .ai-risk-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
     .ai-risk-date-range { display: flex; min-width: 0; align-items: center; flex-wrap: wrap; gap: 8px; }
     .ai-risk-date-range label { display: flex; min-width: 0; align-items: center; gap: 7px; margin: 0; color: var(--ink); font-size: 13px; font-weight: 600; white-space: nowrap; }
@@ -1053,19 +1045,15 @@
     .ai-risk-empty { text-align: center; }
     .ai-risk-empty strong { color: var(--ink); }
     .ai-risk-empty p { margin: 5px 0 0; font-size: 12px; }
-    .ai-risk-settings-panel { box-sizing: border-box; width: min(680px, calc(100vw - 32px)); max-width: 680px; max-height: calc(100vh - 32px); padding: 0; overflow: hidden; color: var(--ink); background: var(--surface); border: 1px solid #e1e9f2; border-radius: 2px; box-shadow: 0 12px 34px rgb(24 45 74 / 24%); }
-    .ai-risk-settings-panel[open] { display: flex; flex-direction: column; }
-    .ai-risk-settings-panel::backdrop { background: rgb(20 35 55 / 42%); }
-    .ai-risk-settings-heading { display: flex; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: 10px; padding: 16px 15px 11px; border-bottom: 1px solid #edf1f6; }
+    .ai-risk-settings-page { box-sizing: border-box; display: grid; width: min(100%, 900px); gap: 0; overflow: hidden; color: var(--ink); background: var(--surface); border: 1px solid #e1e9f2; border-radius: 2px; }
+    .ai-risk-settings-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 17px 20px 13px; border-bottom: 1px solid #edf1f6; }
     .ai-risk-settings-heading h3 { margin: 0; font-size: 16px; }
-    .ai-risk-icon-button { min-height: 28px; padding: 4px 7px; margin: 0; color: var(--ink-muted); background: transparent; font-size: 12px; font-weight: 500; }
-    .ai-risk-icon-button:hover { color: var(--blue-ink); background: var(--surface-active); box-shadow: none; }
-    .ai-risk-settings-body { display: grid; min-height: 0; flex: 1 1 auto; gap: 14px; padding: 13px 15px 16px; overflow-y: auto; }
+    .ai-risk-settings-body { display: grid; gap: 14px; padding: 17px 20px 20px; }
     .ai-risk-settings-section { display: grid; gap: 11px; }
     .ai-risk-settings-section h4 { margin: 0; color: var(--ink); font-size: 13px; }
-    .ai-risk-settings-panel .field { gap: 5px; margin: 0; color: var(--ink); font-size: 13px; font-weight: 600; }
-    .ai-risk-settings-panel .field input, .ai-risk-settings-panel .field select { min-height: 36px; padding: 7px 9px; font-size: 13px; font-weight: 400; }
-    .ai-risk-settings-panel .field small, .ai-risk-settings-section small { color: var(--ink-muted); font-size: 12px; font-weight: 400; line-height: 1.5; }
+    .ai-risk-settings-page .field { gap: 5px; margin: 0; color: var(--ink); font-size: 13px; font-weight: 600; }
+    .ai-risk-settings-page .field input, .ai-risk-settings-page .field select { min-height: 36px; padding: 7px 9px; font-size: 13px; font-weight: 400; }
+    .ai-risk-settings-page .field small, .ai-risk-settings-section small { color: var(--ink-muted); font-size: 12px; font-weight: 400; line-height: 1.5; }
     .ai-risk-model-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; align-items: center; }
     .ai-risk-model-row button { min-height: 36px; padding: 6px 8px; margin: 0; font-size: 12px; white-space: nowrap; }
     .ai-risk-switch-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--ink); font-size: 13px; }
@@ -1090,9 +1078,6 @@
     .ai-risk-advanced > div { display: grid; gap: 8px; padding-bottom: 3px; }
     .ai-risk-advanced p { margin: 0; color: var(--ink-muted); font-size: 12px; line-height: 1.55; }
     .ai-risk-advanced button { margin: 0; padding: 7px; font-size: 12px; }
-    @media (max-width: 1260px) {
-      .ai-risk-header-meta { justify-content: flex-start; }
-    }
     @media (max-width: 1120px) {
       .ai-risk-page { grid-template-columns: minmax(0, 1fr); }
     }
@@ -1103,8 +1088,8 @@
     }
     @media (max-width: 600px) {
       .tab-panel[data-panel="ai-risk"] { padding: 12px; }
-      .ai-risk-header-meta { gap: 6px; font-size: 12px; }
-      .ai-risk-header-meta button { flex: 1 0 100%; }
+      .tab-panel[data-panel="ai-config"] { padding: 12px; }
+      .ai-risk-settings-heading, .ai-risk-settings-body { padding-right: 14px; padding-left: 14px; }
       .ai-risk-toolbar { align-items: stretch; }
       .ai-risk-date-range { width: 100%; align-items: stretch; flex-direction: column; }
       .ai-risk-date-range label { width: 100%; justify-content: space-between; }
