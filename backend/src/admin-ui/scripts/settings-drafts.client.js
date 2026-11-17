@@ -156,7 +156,7 @@ async function saveAllSettings() {
 }
 
 function hasUnsavedAdminChanges() {
-  return settingsDirtySections.size > 0 || (typeof adminUserDirty !== 'undefined' && adminUserDirty.size > 0);
+  return settingsDirtySections.size > 0;
 }
 
 function initializeSettingsDrafts() {

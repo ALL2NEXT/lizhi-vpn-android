@@ -164,8 +164,7 @@
  };
  function logout() {
    if ((typeof settingsSaveInFlight !== 'undefined' && settingsSaveInFlight) ||
-       (typeof adminUserBatchBusy !== 'undefined' && adminUserBatchBusy) ||
-       (typeof adminUserSaving !== 'undefined' && adminUserSaving.size > 0)) {
+       (typeof adminUserBatchBusy !== 'undefined' && adminUserBatchBusy)) {
      show('正在保存或处理用户，请等待完成后退出', true);
      return;
    }

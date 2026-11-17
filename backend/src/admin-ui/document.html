@@ -291,31 +291,13 @@
           <div class="user-admin-operation-controls">
             <label><input id="userAdminSelectAll" type="checkbox" onchange="toggleAllAdminUsers(this.checked)">全选当前结果</label>
             <button id="userAdminClearSelection" class="secondary" type="button" disabled onclick="clearAdminUserSelection()">清空选择</button>
-            <button id="userAdminSaveSelected" type="button" disabled onclick="saveSelectedAdminUsers()">保存选中修改</button>
             <button id="userAdminBatchBan" class="danger" type="button" disabled onclick="batchSetAdminUserBan(true)">批量封禁</button>
             <button id="userAdminBatchUnban" class="secondary" type="button" disabled onclick="batchSetAdminUserBan(false)">批量解封</button>
             <button id="userAdminBatchDelete" class="danger" type="button" disabled onclick="batchDeleteAdminUsers()">删除用户</button>
-            <span id="userAdminDraftCount" class="user-draft-count" role="status" aria-live="polite">所有修改已保存</span>
           </div>
         </section>
       </aside>
     </div>
-    <dialog id="adminUserDetailDialog" class="user-detail-dialog" aria-labelledby="adminUserDetailTitle">
-      <form id="adminUserDetailForm">
-        <div class="user-detail-heading"><div><h2 id="adminUserDetailTitle">用户详情</h2><p id="adminUserDetailIdentity"></p></div><button class="secondary" type="button" onclick="document.getElementById('adminUserDetailDialog').close()">关闭</button></div>
-        <p id="adminUserDetailUsage" class="user-detail-usage"></p>
-        <div class="grid">
-          <label class="field">风控状态<select data-admin-user-field="identityType"><option value="human">真人</option><option value="bot">机器人</option></select></label>
-          <label class="field">昵称<input data-admin-user-field="nickname" type="text" required maxlength="24"></label>
-          <label class="field">品牌<input data-admin-user-field="brand" type="text" maxlength="80"></label>
-          <label class="field">型号<input data-admin-user-field="model" type="text" maxlength="120"></label>
-          <label class="field">Android 版本<input data-admin-user-field="androidVersion" type="text" maxlength="80"></label>
-          <label class="field">App 版本<input data-admin-user-field="appVersion" type="text" maxlength="40"></label>
-        </div>
-        <section class="user-detail-devices"><h3>历史设备</h3><div id="adminUserDetailDevices"></div></section>
-        <div class="settings-save-bar"><span id="adminUserDetailStatus" role="status" aria-live="polite"></span><button id="adminUserDetailSave" type="submit" disabled>保存用户修改</button></div>
-      </form>
-    </dialog>
   </section>
 
   <section class="card tab-panel" role="tabpanel" data-panel="environment-anomalies">
