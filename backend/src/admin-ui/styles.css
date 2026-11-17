@@ -104,12 +104,20 @@
      .distribution-card { min-width: 0; padding: 18px; background: #ffffff; border: 1px solid #dadce0; border-radius: 14px; }
      .distribution-card h3 { margin: 0 0 4px; color: #202124; font-size: 16px; }
      .distribution-card > small { display: block; min-height: 40px; }
-     .distribution-list { display: grid; gap: 8px; margin-top: 16px; }
+     .distribution-list { display: grid; gap: 12px; margin-top: 16px; }
      .distribution-total { padding-bottom: 8px; color: #202124; border-bottom: 1px solid #dadce0; font-size: 13px; }
-     .distribution-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; min-width: 0; padding: 8px 0; color: #5f6368; font-size: 13px; }
-     .distribution-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-     .distribution-value { color: #5f6368; font-variant-numeric: tabular-nums; white-space: nowrap; }
+     .distribution-content { display: grid; grid-template-columns: minmax(128px, 152px) minmax(0, 1fr); align-items: start; gap: 14px; }
+     .distribution-pie { display: block; width: min(100%, 152px); height: auto; margin: 2px auto 0; }
+     .distribution-legend { display: grid; align-content: start; gap: 5px; min-width: 0; }
+     .distribution-row { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; align-items: center; gap: 7px; min-width: 0; padding: 3px 0; color: #5f6368; font-size: 12px; }
+     .distribution-swatch { display: block; width: 9px; height: 9px; border-radius: 2px; background: var(--distribution-color); }
+     .distribution-label { min-width: 0; color: #5f6368; line-height: 1.3; overflow-wrap: anywhere; }
+     .distribution-value { color: #5f6368; font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
      .distribution-empty { min-height: 120px; border: 1px dashed #dadce0; border-radius: 12px; }
+     @media (max-width: 1400px) {
+       .distribution-content { grid-template-columns: minmax(112px, 128px) minmax(0, 1fr); gap: 10px; }
+       .distribution-pie { width: min(100%, 128px); }
+     }
      .login-gate { max-width: 430px; margin: 12vh auto 0; }
      .login-gate h1 { margin-bottom: 10px; }
      .login-gate .card { margin-top: 18px; }

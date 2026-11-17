@@ -532,23 +532,64 @@ async function loadGrowthChart(period) {
   const trafficSummary = el('trafficSummary');
   if (trafficSummary) trafficSummary.textContent = '';
 }
- function renderDistribution(hostId, groups, total) {
-   const host = el(hostId);
-   if (!host) return;
-   if (!total || groups.length === 0) {
-     host.innerHTML = '<div class="loading-state distribution-empty">暂无可统计的账户数据</div>';
-     return;
-   }
-   const rows = groups.map(function(group) {
-     const percent = Math.round(group.count / total * 1000) / 10;
-     return '<div class="distribution-row" title="' + esc(group.label) + '：' + group.count +
-       ' 个账户，占 ' + percent + '%">' +
-       '<span class="distribution-label">' + esc(group.label) + '</span>' +
-       '<span class="distribution-value">' + group.count + ' 个 · ' + percent + '%</span></div>';
-   }).join('');
-   host.innerHTML = '<div class="distribution-total">共 ' + total + ' 个账户</div>' + rows;
- }
- function renderDashboard(data) {
+const DISTRIBUTION_PALETTE = [
+  '#1a73e8', '#ea4335', '#fbbc04', '#34a853', '#a142f4', '#ff6d01',
+  '#00acc1', '#c5221f', '#5f6368', '#9334e6', '#1e8e3e', '#e37400',
+  '#12b5cb', '#b80672', '#7cb342', '#5e35b1'
+];
+function distributionColor(index) {
+  if (index < DISTRIBUTION_PALETTE.length) return DISTRIBUTION_PALETTE[index];
+  return 'hsl(' + Math.round(index * 137.508 % 360) + ', 62%, 47%)';
+}
+function distributionSlicePath(startAngle, endAngle, center, radius) {
+  const startX = center + radius * Math.cos(startAngle);
+  const startY = center + radius * Math.sin(startAngle);
+  const endX = center + radius * Math.cos(endAngle);
+  const endY = center + radius * Math.sin(endAngle);
+  const largeArc = endAngle - startAngle > Math.PI ? 1 : 0;
+  return 'M ' + center + ' ' + center + ' L ' + startX.toFixed(3) + ' ' + startY.toFixed(3) +
+    ' A ' + radius + ' ' + radius + ' 0 ' + largeArc + ' 1 ' + endX.toFixed(3) + ' ' + endY.toFixed(3) + ' Z';
+}
+function renderDistribution(hostId, groups, total) {
+  const host = el(hostId);
+  if (!host) return;
+  if (!total || groups.length === 0) {
+    host.innerHTML = '<div class="loading-state distribution-empty">暂无可统计的账户数据</div>';
+    return;
+  }
+  let angle = -Math.PI / 2;
+  const slices = groups.map(function(group, index) {
+    const percent = Math.round(group.count / total * 1000) / 10;
+    const color = distributionColor(index);
+    const sweep = group.count / total * Math.PI * 2;
+    const startAngle = angle;
+    angle += sweep;
+    const description = group.label + ' (' + group.count + ', ' + percent + '%)';
+    const title = '<title>' + esc(description) + '</title>';
+    if (groups.length === 1 || sweep >= Math.PI * 2 - 0.000001) {
+      return '<circle cx="90" cy="90" r="88" fill="' + color + '">' + title + '</circle>';
+    }
+    return '<path d="' + distributionSlicePath(startAngle, angle, 90, 88) +
+      '" fill="' + color + '" stroke="#ffffff" stroke-width="1">' + title + '</path>';
+  }).join('');
+  const rows = groups.map(function(group, index) {
+    const percent = Math.round(group.count / total * 1000) / 10;
+    const color = distributionColor(index);
+    const description = group.label + ' (' + group.count + ', ' + percent + '%)';
+    return '<div class="distribution-row" title="' + esc(description) + '">' +
+      '<span class="distribution-swatch" style="--distribution-color:' + color + '" aria-hidden="true"></span>' +
+      '<span class="distribution-label">' + esc(group.label) + '</span>' +
+      '<span class="distribution-value">' + group.count + ' 个 · ' + percent + '%</span></div>';
+  }).join('');
+  const card = host.closest('.distribution-card');
+  const heading = card && card.querySelector('h3');
+  const chartLabel = heading ? heading.textContent.trim() + '占比饼图' : '占比饼图';
+  host.innerHTML = '<div class="distribution-total">共 ' + total + ' 个账户</div>' +
+    '<div class="distribution-content">' +
+    '<svg class="distribution-pie" viewBox="0 0 180 180" role="img" aria-label="' + esc(chartLabel) + '">' +
+    slices + '</svg><div class="distribution-legend">' + rows + '</div></div>';
+}
+function renderDashboard(data) {
    const users = data && Array.isArray(data.users) ? data.users : [];
    renderDistribution('brandDistribution', distributionForUsers(users, function(user) {
      return normalizedBrand(user.brand);
