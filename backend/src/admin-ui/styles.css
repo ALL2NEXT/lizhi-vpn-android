@@ -903,13 +903,8 @@
     .tab-panel[data-panel="ai-risk"] { padding: 16px; overflow-x: hidden; background: var(--surface-page); }
     .ai-risk-page { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; min-height: calc(100vh - 32px); }
     .ai-risk-main { display: grid; min-width: 0; align-content: start; gap: 14px; }
-    .ai-risk-header { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 16px; padding: 2px 0 13px; border-bottom: 1px solid var(--line); }
-    .ai-risk-title-group { display: flex; min-width: 0; align-items: center; gap: 13px; }
-    .ai-risk-brand-mark { display: grid; flex: 0 0 42px; width: 42px; height: 42px; place-items: center; color: #ffffff; background: #1a73e8; border-radius: 12px; }
-    .ai-risk-brand-mark svg { width: 24px; height: 24px; fill: currentColor; }
-    .ai-risk-title-group h2 { margin: 0 0 3px; font-size: 22px; }
-    .ai-risk-title-group p { max-width: 650px; margin: 0; color: var(--ink-muted); font-size: 13px; }
-    .ai-risk-header-meta { display: flex; min-width: 0; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; color: var(--ink-muted); font-size: 13px; }
+    .ai-risk-header { display: flex; min-width: 0; align-items: center; justify-content: flex-end; gap: 16px; padding: 2px 0 13px; border-bottom: 1px solid var(--line); }
+    .ai-risk-header-meta { display: flex; flex: 1 1 auto; min-width: 0; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; color: var(--ink-muted); font-size: 13px; }
     .ai-risk-header-meta > span:not(.ai-risk-connection) { padding-right: 8px; border-right: 1px solid var(--line); white-space: nowrap; }
     .ai-risk-header-meta strong { color: var(--ink); font-weight: 600; }
     .ai-risk-header-meta button { min-height: 36px; padding: 7px 11px; margin: 0; white-space: nowrap; }
@@ -1096,7 +1091,6 @@
     .ai-risk-advanced p { margin: 0; color: var(--ink-muted); font-size: 12px; line-height: 1.55; }
     .ai-risk-advanced button { margin: 0; padding: 7px; font-size: 12px; }
     @media (max-width: 1260px) {
-      .ai-risk-header { align-items: flex-start; flex-direction: column; }
       .ai-risk-header-meta { justify-content: flex-start; }
     }
     @media (max-width: 1120px) {
@@ -1109,9 +1103,6 @@
     }
     @media (max-width: 600px) {
       .tab-panel[data-panel="ai-risk"] { padding: 12px; }
-      .ai-risk-title-group { align-items: flex-start; }
-      .ai-risk-title-group h2 { font-size: 19px; }
-      .ai-risk-title-group p { font-size: 12px; }
       .ai-risk-header-meta { gap: 6px; font-size: 12px; }
       .ai-risk-header-meta button { flex: 1 0 100%; }
       .ai-risk-toolbar { align-items: stretch; }
@@ -2021,7 +2012,6 @@ dialog::backdrop {
 }
 
 /* 将剩余圆角卡片和分组控件调整为 Windows 10 风格。 */
-#dashboard .dashboard-workspace .ai-risk-brand-mark,
 #dashboard .dashboard-workspace .ai-risk-page :is(
   .security-risk-section-heading > span,
   .security-risk-rule-card,

@@ -321,10 +321,7 @@
     </dialog>
   </section>
 
-  <section class="card tab-panel" role="tabpanel" data-panel="device-management">
-    <div class="dashboard-heading">
-      <div><h2>设备管理</h2><p>按设备单独查看、封禁或解除设备封禁。已封禁设备无法登录、注册或注销账户。</p></div>
-    </div>
+  <section class="card tab-panel" role="tabpanel" data-panel="device-management" aria-labelledby="dashboardTitle">
     <div class="user-admin-device-toolbar">
       <label class="user-admin-device-search">
         <span>搜索设备、设备 ID 或关联账户</span>
@@ -343,10 +340,7 @@
     </div>
   </section>
 
-  <section class="card tab-panel" role="tabpanel" data-panel="environment-anomalies">
-    <div class="dashboard-heading">
-      <div><h2>环境异常</h2><p>查看客户端上报的设备环境、应用完整性与网络安全信号，并进行人工审核。</p></div>
-    </div>
+  <section class="card tab-panel" role="tabpanel" data-panel="environment-anomalies" aria-labelledby="dashboardTitle">
     <section class="security-risk-section" aria-labelledby="clientSecurityReportsTitle">
       <div class="security-risk-section-heading"><h3 id="clientSecurityReportsTitle">客户端检测上报</h3></div>
       <p id="clientSecurityReportsSummary" role="status" aria-live="polite">尚未读取客户端上报</p>
@@ -358,12 +352,8 @@
 
   <section class="card tab-panel" role="tabpanel" data-panel="ai-risk">
     <div id="aiRiskPage" class="ai-risk-page">
-      <main class="ai-risk-main" aria-labelledby="aiRiskTitle">
+      <main class="ai-risk-main" aria-labelledby="dashboardTitle">
         <header class="ai-risk-header">
-          <div class="ai-risk-title-group">
-            <span class="ai-risk-brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M12 2 4 5v6c0 5.2 3.4 9.8 8 11 4.6-1.2 8-5.8 8-11V5l-8-3zm0 3.2 5 1.9V11c0 3.7-2.1 7.1-5 8.3-2.9-1.2-5-4.6-5-8.3V7.1l5-1.9zm-1 9.4-2-2-1.4 1.4L11 17l5.4-5.4L15 10.2l-4 4.4z"/></svg></span>
-            <h2 id="aiRiskTitle">行为异常</h2>
-          </div>
           <div class="ai-risk-header-meta">
             <span>最近分析 <strong id="aiRiskLastAnalysis">尚未分析</strong></span>
             <span>耗时 <strong id="aiRiskAnalysisDuration">—</strong></span>
