@@ -42,14 +42,14 @@ function aiRiskErrorText(code) {
   const messages = {
     ai_risk_api_key_required: '请先填写并保存 Google AI API Key。',
     too_many_ai_risk_api_keys: '最多只能保存 20 个 Google AI API Key。',
-    ai_risk_disabled: '请先启用 Gemini 风控分析。',
+    ai_risk_disabled: '请先启用 Gemini 行为异常分析。',
     ai_risk_config_binding_missing: '当前 Worker 未绑定 CONFIG KV。',
     invalid_ai_risk_prompt_template: '提示词模板必须包含且仅包含一次 {{DATASET_JSON}}，且不能超过 12,000 字符。',
     invalid_ai_risk_model: '模型名称格式无效。',
     invalid_ai_risk_thinking_level: '思考强度设置无效。',
     invalid_ai_risk_window: '分析时间窗无效。',
     invalid_ai_risk_date_range: '开始和结束时间无效，或时间范围超过 30 天。',
-    ai_risk_dashboard_data_read_failed: '读取风控统计失败，请检查网络日志和数据库状态。',
+    ai_risk_dashboard_data_read_failed: '读取行为异常统计失败，请检查网络日志和数据库状态。',
     security_rule_hits_read_failed: '读取后台规则命中失败，请检查数据库状态。',
     invalid_security_risk_window: '后台规则查询时间窗无效。',
     invalid_security_risk_date_range: '后台规则查询的开始或结束时间无效，或时间范围超过 30 天。',
@@ -387,11 +387,11 @@ function aiRiskRenderOverviewFinding(row) {
   const score = Number.isSafeInteger(finding.riskScore) && finding.riskScore >= 0 && finding.riskScore <= 100
     ? finding.riskScore : null;
   return '<div class="ai-risk-overview-analysis"><section class="ai-risk-overview-conclusion"><h4>AI 分析结论</h4>' +
-    '<strong>' + esc(finding.title || '风控线索') + '</strong><p>' + esc(finding.rationale || 'Gemini 未提供详细理由。') + '</p>' +
+    '<strong>' + esc(finding.title || '行为异常线索') + '</strong><p>' + esc(finding.rationale || 'Gemini 未提供详细理由。') + '</p>' +
     (evidence.length ? '<ul>' + evidence.slice(0, 4).map(function(item) { return '<li>' + esc(item) + '</li>'; }).join('') + '</ul>' : '') +
     '</section><aside class="ai-risk-overview-advice"><h4>建议人工复核</h4><p>' + esc(finding.recommendation || '由管理员进一步核验。') + '</p>' +
     aiRiskClassificationMarkup(finding) +
-    (score !== null ? '<span>风控排查优先级 ' + score + '/100</span>' : '') +
+    (score !== null ? '<span>行为排查优先级 ' + score + '/100</span>' : '') +
     '<small>AI 结论仅供辅助判断，系统不会自动封禁。</small></aside></div>';
 }
 
@@ -406,7 +406,7 @@ function aiRiskRenderReasoning(row) {
   const finding = row.finding;
   if (!finding) return '<div class="ai-risk-empty-note">尚无 AI 研判。运行分析后会在这里显示理由、证据和建议。</div>';
   const evidence = finding.evidence || [];
-  return '<div class="ai-risk-reasoning"><h4>' + esc(finding.title || '风控线索') + '</h4><p>' + esc(finding.rationale || 'Gemini 未提供详细理由。') + '</p>' +
+  return '<div class="ai-risk-reasoning"><h4>' + esc(finding.title || '行为异常线索') + '</h4><p>' + esc(finding.rationale || 'Gemini 未提供详细理由。') + '</p>' +
     (evidence.length ? '<h5>支持证据</h5><ul>' + evidence.map(function(item) { return '<li>' + esc(item) + '</li>'; }).join('') + '</ul>' : '') +
     '<div class="ai-risk-recommendation"><strong>建议</strong><p>' + esc(finding.recommendation || '由管理员进一步核验。') + '</p>' +
     aiRiskClassificationMarkup(finding) + '</div><small>AI 输出是辅助线索，仍需结合日志人工复核；系统没有执行封禁。</small></div>';
@@ -446,7 +446,7 @@ function aiRiskRenderCard(row, index) {
   const riskScore = finding && Number.isSafeInteger(finding.riskScore) && finding.riskScore >= 0 && finding.riskScore <= 100
     ? finding.riskScore : null;
   const accountLabel = row.accounts.length ? '关联 ' + row.accounts.length + ' 个账户' : '未识别账户';
-  const title = finding && finding.title || '风控线索';
+  const title = finding && finding.title || '行为异常线索';
   const threatClass = aiRiskThreatClass(finding);
   const blockTarget = aiRiskBlockTarget(finding);
   const actionLabel = row.processed ? '撤销已处理' : '标记为已处理';
@@ -455,7 +455,7 @@ function aiRiskRenderCard(row, index) {
       '<button class="ai-risk-expand" type="button" data-ai-risk-action="expand" aria-expanded="' + expanded + '" aria-label="' + (expanded ? '收起' : '展开') + ' IP 详情">' + (expanded ? '−' : '+') + '</button>' +
       '<span class="ai-risk-badge risk-' + level + '">' + labels[level] + '</span>' +
       '<div class="ai-risk-ip-identity"><div><strong><code>' + esc(row.ip) + '</code></strong><button class="ai-risk-copy" type="button" data-ai-risk-action="copy" aria-label="复制 IP">复制</button></div><p><span>' + accountLabel + '</span><span class="ai-risk-threat-tag threat-' + threatClass + '">' + esc(aiRiskThreatLabel(finding)) + '</span><span class="ai-risk-target-tag target-' + blockTarget + '">建议范围：' + esc(aiRiskBlockTargetLabel(finding)) + '</span><span>首次 ' + esc(aiRiskFormatTime(row.firstSeenAt)) + '</span><span>最近 ' + esc(aiRiskFormatTime(row.lastSeenAt)) + '</span></p></div>' +
-      '<div class="ai-risk-confidence"><span>' + (riskScore !== null ? '风险分' : '风险级别') + '</span><strong>' + (riskScore !== null ? riskScore + '/100' : labels[level]) + '</strong>' + (riskScore !== null ? '<div class="ai-risk-confidence-track" role="img" aria-label="风控排查优先级 ' + riskScore + ' 分"><i class="' + level + '" style="--risk-width:' + riskScore + '%"></i></div>' : '<div class="ai-risk-confidence-track" aria-hidden="true"><i class="' + level + '" style="--risk-width:0%"></i></div>') + '</div>' +
+      '<div class="ai-risk-confidence"><span>' + (riskScore !== null ? '风险分' : '风险级别') + '</span><strong>' + (riskScore !== null ? riskScore + '/100' : labels[level]) + '</strong>' + (riskScore !== null ? '<div class="ai-risk-confidence-track" role="img" aria-label="行为排查优先级 ' + riskScore + ' 分"><i class="' + level + '" style="--risk-width:' + riskScore + '%"></i></div>' : '<div class="ai-risk-confidence-track" aria-hidden="true"><i class="' + level + '" style="--risk-width:0%"></i></div>') + '</div>' +
       '<button class="ai-risk-review-button secondary" type="button" data-ai-risk-action="review">' + actionLabel + '</button>' +
     '</div>' +
     (expanded ? '<div class="ai-risk-detail" id="ai-risk-detail-' + index + '">' + aiRiskRenderDetail(row) + '</div>' : '') +
@@ -618,7 +618,7 @@ async function runAiRiskAnalysis() {
   }
   if (!aiRiskSettingsLoaded) await loadAiRiskSettings(true);
   if (!el('aiRiskEnabled').checked) {
-    aiRiskSetStatus('aiRiskAnalysisStatus', '请先启用并保存 Gemini 风控分析。', true);
+    aiRiskSetStatus('aiRiskAnalysisStatus', '请先启用并保存 Gemini 行为异常分析。', true);
     return;
   }
   aiRiskOperationInFlight = true;

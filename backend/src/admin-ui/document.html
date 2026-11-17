@@ -75,7 +75,8 @@
               <span class="nav-label"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M19.4 13a7.8 7.8 0 0 0 0-2l2-1.6-2-3.4-2.4 1a8 8 0 0 0-1.7-1L15 3h-4l-.4 3a8 8 0 0 0-1.7 1l-2.4-1-2 3.4 2 1.6a7.8 7.8 0 0 0 0 2l-2 1.6 2 3.4 2.4-1a8 8 0 0 0 1.7 1l.4 3h4l.4-3a8 8 0 0 0 1.7-1l2.4 1 2-3.4-2.1-1.6zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>安全中心</span><span class="nav-chevron" aria-hidden="true">⌄</span>
             </button>
             <div id="backend-settings-subnav" class="nav-submenu" role="group" aria-label="安全中心子菜单">
-              <button class="tab-button" role="tab" type="button" data-tab="ai-risk"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 2 4 5v6c0 5.2 3.4 9.8 8 11 4.6-1.2 8-5.8 8-11V5l-8-3zm0 3.2 5 1.9V11c0 3.7-2.1 7.1-5 8.3-2.9-1.2-5-4.6-5-8.3V7.1l5-1.9zm-1 9.4-2-2-1.4 1.4L11 17l5.4-5.4L15 10.2l-4 4.4z"/></svg><span>安全风控</span></button>
+              <button class="tab-button" role="tab" type="button" data-tab="environment-anomalies"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 2 4 5v6c0 5.2 3.4 9.8 8 11 4.6-1.2 8-5.8 8-11V5l-8-3zm0 3.2 5 1.9V11c0 3.7-2.1 7.1-5 8.3-2.9-1.2-5-4.6-5-8.3V7.1l5-1.9z"/></svg><span>环境异常</span></button>
+              <button class="tab-button" role="tab" type="button" data-tab="ai-risk"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 3h2v16h16v2H3V3zm5 8h3v6H8v-6zm5-5h3v11h-3V6zm5 8h3v3h-3v-3z"/></svg><span>行为异常</span></button>
               <button class="tab-button" role="tab" type="button" data-tab="ip-relations"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 2a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM3 14h7v7H3v-7zm11 0h7v7h-7v-7zm-3-3h2v2h5v2h-2v-1H8v1H6v-2h5v-2z"/></svg><span>IP 与用户</span></button>
               <button class="tab-button" role="tab" type="button" data-tab="system-logs"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M13 3a9 9 0 1 0 8.9 10h-2a7 7 0 1 1-2-6L15 10h7V3l-2.7 2.7A8.9 8.9 0 0 0 13 3zm-1 5v5l4 2.4 1-1.6-3-1.8V8h-2z"/></svg><span>网络日志</span></button>
             </div>
@@ -302,13 +303,27 @@
     </dialog>
   </section>
 
+  <section class="card tab-panel" role="tabpanel" data-panel="environment-anomalies">
+    <div class="dashboard-heading">
+      <div><h2>环境异常</h2><p>查看客户端上报的设备环境、应用完整性与网络安全信号，并进行人工审核。</p></div>
+      <button class="secondary" type="button" onclick="loadClientSecurityReports(true)">刷新</button>
+    </div>
+    <section class="security-risk-section" aria-labelledby="clientSecurityReportsTitle">
+      <div class="security-risk-section-heading"><h3 id="clientSecurityReportsTitle">客户端检测上报</h3></div>
+      <p id="clientSecurityReportsSummary" role="status" aria-live="polite">尚未读取客户端上报</p>
+      <div id="clientSecurityReports" class="traffic-detail-wrap">
+        <div class="loading-state">进入环境异常页后读取待审核上报</div>
+      </div>
+    </section>
+  </section>
+
   <section class="card tab-panel" role="tabpanel" data-panel="ai-risk">
     <div id="aiRiskPage" class="ai-risk-page">
       <main class="ai-risk-main" aria-labelledby="aiRiskTitle">
         <header class="ai-risk-header">
           <div class="ai-risk-title-group">
             <span class="ai-risk-brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M12 2 4 5v6c0 5.2 3.4 9.8 8 11 4.6-1.2 8-5.8 8-11V5l-8-3zm0 3.2 5 1.9V11c0 3.7-2.1 7.1-5 8.3-2.9-1.2-5-4.6-5-8.3V7.1l5-1.9zm-1 9.4-2-2-1.4 1.4L11 17l5.4-5.4L15 10.2l-4 4.4z"/></svg></span>
-            <h2 id="aiRiskTitle">安全风控</h2>
+            <h2 id="aiRiskTitle">行为异常</h2>
           </div>
           <div class="ai-risk-header-meta">
             <span>最近分析 <strong id="aiRiskLastAnalysis">尚未分析</strong></span>
@@ -338,17 +353,6 @@
           </div>
         </div>
 
-        <section class="security-risk-section" aria-labelledby="clientSecurityReportsTitle">
-          <div class="security-risk-section-heading">
-            <h3 id="clientSecurityReportsTitle">客户端安全上报</h3>
-            <button class="secondary" type="button" onclick="loadClientSecurityReports(true)">刷新</button>
-          </div>
-          <p id="clientSecurityReportsSummary" role="status" aria-live="polite">尚未读取客户端上报</p>
-          <div id="clientSecurityReports" class="traffic-detail-wrap">
-            <div class="loading-state">打开安全风控页后读取待审核上报</div>
-          </div>
-        </section>
-
         <section class="security-risk-section" aria-labelledby="securityRuleHitsTitle">
           <div class="security-risk-section-heading"><h3 id="securityRuleHitsTitle">后台规则命中</h3><span id="securityRuleHitCount">读取中</span></div>
           <div id="securityRuleHitResults" class="security-risk-rule-results" aria-live="polite"><div class="loading-state">正在读取后台规则命中…</div></div>
@@ -366,7 +370,7 @@
         <div class="ai-risk-settings-body">
           <section class="ai-risk-settings-section">
             <h4>基础配置</h4>
-            <label class="ai-risk-switch-row"><span>启用 Gemini 风控分析</span><input id="aiRiskEnabled" type="checkbox" role="switch"></label>
+            <label class="ai-risk-switch-row"><span>启用 Gemini 行为异常分析</span><input id="aiRiskEnabled" type="checkbox" role="switch"></label>
             <label class="field ai-risk-model-field"><span>模型名称</span><span class="ai-risk-model-row"><input id="aiRiskModel" type="text" maxlength="100" list="aiRiskModelOptions" value="gemini-3.8-flash" autocomplete="off"><button id="aiRiskLoadModels" class="secondary" type="button">获取模型</button></span><datalist id="aiRiskModelOptions"></datalist><small id="aiRiskModelStatus">可手动填写，也可获取已配置 Key 可用的 Gemini 模型。</small><small id="aiRiskModelDetails"></small></label>
             <label class="field">Google AI API Key<input id="aiRiskApiKeys" type="password" maxlength="10000" autocomplete="new-password" placeholder="未设置"><small id="aiRiskKeyStatus">支持最多 20 个 Key，用英文逗号或分号分隔；留空保留当前配置。</small></label>
             <div class="ai-risk-key-actions"><p id="aiRiskSettingsStatus" class="ai-risk-status" role="status" aria-live="polite"></p><button id="aiRiskTest" class="secondary" type="button">测试连接</button></div>

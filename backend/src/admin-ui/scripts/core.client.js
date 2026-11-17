@@ -239,10 +239,12 @@
    if (name === 'ip-relations' && !ipRelationsData && !ipRelationsLoading) {
      loadIpRelations();
    }
+   if (name === 'environment-anomalies' && typeof loadClientSecurityReports === 'function') {
+     loadClientSecurityReports();
+   }
    if (name === 'ai-risk' && typeof loadAiRiskSettings === 'function') {
      loadAiRiskSettings();
      if (typeof loadAiRiskDashboard === 'function') loadAiRiskDashboard(false);
-     if (typeof loadClientSecurityReports === 'function') loadClientSecurityReports();
    }
    if (name === 'system-logs') {
      loadSystemLogRecordingSettings();
