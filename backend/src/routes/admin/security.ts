@@ -10,7 +10,6 @@ interface SecurityDevice {
   appVersion: string;
   current: boolean;
   blocked: boolean;
-  blockedByAccount: boolean;
   firstBoundAt: string;
   lastBoundAt: string;
   lastSeenAt: string;
@@ -252,14 +251,7 @@ export function createAdminSecurityRoutes(deps: Pick<
            EXISTS (
              SELECT 1 FROM device_bans_mb b
              WHERE b.device_row_id = d.id AND b.lifted_at IS NULL
-           ) AS blocked,
-           EXISTS (
-             SELECT 1 FROM device_bans_mb b
-             WHERE b.device_row_id = d.id
-               AND b.source_uid = l.user_uid
-               AND b.reason = 'account_banned'
-               AND b.lifted_at IS NULL
-           ) AS blocked_by_account
+           ) AS blocked
          FROM device_account_links_mb l
          JOIN user_devices_mb d ON d.id = l.device_row_id
          LEFT JOIN users_mb u ON u.id = l.user_id
@@ -280,7 +272,6 @@ export function createAdminSecurityRoutes(deps: Pick<
           appVersion: cleanText(row.app_version),
           current: Number(row.is_current) === 1,
           blocked: Number(row.blocked) === 1,
-          blockedByAccount: Number(row.blocked_by_account) === 1,
           firstBoundAt: cleanText(row.first_bound_at),
           lastBoundAt: cleanText(row.last_bound_at),
           lastSeenAt: cleanText(row.last_seen_at),
@@ -443,14 +434,7 @@ export function createAdminSecurityRoutes(deps: Pick<
              EXISTS (
                SELECT 1 FROM device_bans_mb b
                WHERE b.device_row_id = d.id AND b.lifted_at IS NULL
-             ) AS blocked,
-             EXISTS (
-               SELECT 1 FROM device_bans_mb b
-               WHERE b.device_row_id = d.id
-                 AND b.source_uid = l.user_uid
-                 AND b.reason = 'account_banned'
-                 AND b.lifted_at IS NULL
-             ) AS blocked_by_account
+             ) AS blocked
            FROM device_account_links_mb l
            JOIN user_devices_mb d ON d.id = l.device_row_id
            WHERE l.user_id IS NOT NULL
@@ -472,7 +456,6 @@ export function createAdminSecurityRoutes(deps: Pick<
           appVersion: cleanText(row.app_version),
           current: Number(row.is_current) === 1,
           blocked: Number(row.blocked) === 1,
-          blockedByAccount: Number(row.blocked_by_account) === 1,
           firstBoundAt: cleanText(row.first_bound_at),
           lastBoundAt: cleanText(row.last_bound_at),
           lastSeenAt: cleanText(row.last_seen_at),

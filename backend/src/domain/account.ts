@@ -48,12 +48,12 @@ export function canAccessAccountType(accountType: AccountType, minimumAccountTyp
   return accountTypeRank(accountType) >= accountTypeRank(minimumAccountType);
 }
 
-export function isFormalAccount(user: { email?: unknown; status?: unknown; deviceBlocked?: unknown } | null | undefined) {
+export function isFormalAccount(user: { email?: unknown } | null | undefined) {
   return Boolean(user && cleanText(user.email));
 }
 
-export function accountTypeForUser(user: { email?: unknown; status?: unknown; deviceBlocked?: unknown } | null | undefined) {
-  if (cleanText(user && user.status) === "banned" || Boolean(user && user.deviceBlocked)) {
+export function accountTypeForUser(user: { email?: unknown; status?: unknown } | null | undefined) {
+  if (cleanText(user && user.status) === "banned") {
     return ACCOUNT_TYPE_BANNED;
   }
   return isFormalAccount(user) ? ACCOUNT_TYPE_FORMAL : ACCOUNT_TYPE_GUEST;

@@ -162,7 +162,7 @@ const CLIENT_SECURITY_REPORTS_SCHEMA = `CREATE TABLE IF NOT EXISTS client_securi
 const CLIENT_SECURITY_REPORTS_INDEX = `CREATE INDEX IF NOT EXISTS idx_client_security_reports_pending_mb
   ON client_security_reports_mb(status, last_reported_at DESC, id DESC)`;
 
-export const USER_SCHEMA_VERSION = 26;
+export const USER_SCHEMA_VERSION = 27;
 export const USER_SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS app_schema_mb (
     component TEXT PRIMARY KEY,
@@ -252,34 +252,6 @@ export const USER_SCHEMA_STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS idx_device_bans_mb_active
     ON device_bans_mb(device_row_id)
     WHERE lifted_at IS NULL`,
-  `CREATE TRIGGER IF NOT EXISTS trg_users_ban_devices_mb
-  AFTER UPDATE OF status ON users_mb
-  WHEN NEW.status = 'banned'
-  BEGIN
-    INSERT INTO device_bans_mb
-      (device_row_id, source_uid, reason, banned_at, lifted_at)
-    SELECT
-      device_row_id,
-      NEW.uid,
-      'account_banned',
-      strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
-      NULL
-    FROM device_account_links_mb
-    WHERE user_id = NEW.id
-    ON CONFLICT(device_row_id, source_uid, reason) DO UPDATE SET
-      banned_at = excluded.banned_at,
-      lifted_at = NULL;
-  END`,
-  `CREATE TRIGGER IF NOT EXISTS trg_users_unban_devices_mb
-  AFTER UPDATE OF status ON users_mb
-  WHEN NEW.status = 'active'
-  BEGIN
-    UPDATE device_bans_mb
-    SET lifted_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-    WHERE source_uid = NEW.uid
-      AND reason = 'account_banned'
-      AND lifted_at IS NULL;
-  END`,
   `CREATE TABLE IF NOT EXISTS user_usage_mb (
     user_id INTEGER,
     session_id TEXT NOT NULL CHECK (length(session_id) BETWEEN 1 AND 128),
@@ -447,34 +419,6 @@ export const USER_SCHEMA_MIGRATIONS: Record<number, string[]> = {
     `CREATE UNIQUE INDEX IF NOT EXISTS idx_users_mb_email
       ON users_mb(email)
       WHERE email IS NOT NULL AND email <> ''`,
-    `CREATE TRIGGER IF NOT EXISTS trg_users_ban_devices_mb
-    AFTER UPDATE OF status ON users_mb
-    WHEN NEW.status = 'banned'
-    BEGIN
-      INSERT INTO device_bans_mb
-        (device_row_id, source_uid, reason, banned_at, lifted_at)
-      SELECT
-        device_row_id,
-        NEW.uid,
-        'account_banned',
-        strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
-        NULL
-      FROM device_account_links_mb
-      WHERE user_id = NEW.id
-      ON CONFLICT(device_row_id, source_uid, reason) DO UPDATE SET
-        banned_at = excluded.banned_at,
-        lifted_at = NULL;
-    END`,
-    `CREATE TRIGGER IF NOT EXISTS trg_users_unban_devices_mb
-    AFTER UPDATE OF status ON users_mb
-    WHEN NEW.status = 'active'
-    BEGIN
-      UPDATE device_bans_mb
-      SET lifted_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-      WHERE source_uid = NEW.uid
-        AND reason = 'account_banned'
-        AND lifted_at IS NULL;
-    END`,
     `PRAGMA defer_foreign_keys = OFF`,
   ],
   13: [
@@ -573,6 +517,13 @@ export const USER_SCHEMA_MIGRATIONS: Record<number, string[]> = {
   25: [CLIENT_SECURITY_REPORTS_SCHEMA, CLIENT_SECURITY_REPORTS_INDEX],
   26: [
     `ALTER TABLE users_mb ADD COLUMN registration_ip TEXT NOT NULL DEFAULT ''`,
+  ],
+  27: [
+    `DROP TRIGGER IF EXISTS trg_users_ban_devices_mb`,
+    `DROP TRIGGER IF EXISTS trg_users_unban_devices_mb`,
+    `UPDATE device_bans_mb
+       SET lifted_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+     WHERE reason = 'account_banned' AND lifted_at IS NULL`,
   ],
 };
 export function resolveAdminBasePath(value: unknown): string | null {

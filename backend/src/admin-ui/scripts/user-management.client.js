@@ -334,7 +334,7 @@ function adminUserDeviceCell(user) {
   const detailRows = displayDevices.map(function(device) {
     const name = [device.brand, device.model].filter(Boolean).join(' ') || '未登记设备';
     const relation = device.current ? '当前设备' : '历史设备';
-    const blocked = device.blocked ? ' · ' + (device.blockedByAccount ? '账户封禁' : '其他来源封禁') : '';
+    const blocked = device.blocked ? ' · 设备封禁' : '';
     const software = [
       device.androidVersion ? 'Android ' + device.androidVersion : '',
       Number(device.androidSdk) > 0 ? 'SDK ' + device.androidSdk : '',

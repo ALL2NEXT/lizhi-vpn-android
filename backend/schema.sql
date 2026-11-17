@@ -159,36 +159,6 @@ CREATE TABLE client_security_reports_mb (
 CREATE INDEX idx_client_security_reports_pending_mb
 ON client_security_reports_mb(status, last_reported_at DESC, id DESC);
 
-CREATE TRIGGER trg_users_ban_devices_mb
-AFTER UPDATE OF status ON users_mb
-WHEN NEW.status = 'banned'
-BEGIN
-  INSERT INTO device_bans_mb
-    (device_row_id, source_uid, reason, banned_at, lifted_at)
-  SELECT
-    device_row_id,
-    NEW.uid,
-    'account_banned',
-    strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
-    NULL
-  FROM device_account_links_mb
-  WHERE user_id = NEW.id
-  ON CONFLICT(device_row_id, source_uid, reason) DO UPDATE SET
-    banned_at = excluded.banned_at,
-    lifted_at = NULL;
-END;
-
-CREATE TRIGGER trg_users_unban_devices_mb
-AFTER UPDATE OF status ON users_mb
-WHEN NEW.status = 'active'
-BEGIN
-  UPDATE device_bans_mb
-  SET lifted_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-  WHERE source_uid = NEW.uid
-    AND reason = 'account_banned'
-    AND lifted_at IS NULL;
-END;
-
 CREATE TABLE user_usage_mb (
   user_id INTEGER,
   session_id TEXT NOT NULL CHECK (length(session_id) BETWEEN 1 AND 128),

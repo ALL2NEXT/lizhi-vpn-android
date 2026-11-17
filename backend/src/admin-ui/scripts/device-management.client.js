@@ -39,7 +39,6 @@ function adminDeviceBanLabels(device) {
     const parts = String(value || '').split(':');
     const reason = parts.slice(1).join(':');
     if (reason === 'admin_device_ban') return '设备管理封禁';
-    if (reason === 'account_banned') return '账户封禁';
     if (reason === 'client_security_report') return '安全上报封禁';
     return reason || parts[0] || '未知来源';
   });
@@ -170,7 +169,7 @@ async function batchSetAdminDeviceBan(action) {
   const banning = action === 'ban';
   const confirmMessage = banning
     ? '确定批量封禁 ' + deviceIds.length + ' 台设备吗？这些设备将无法登录、注册或注销账户。'
-    : '确定解除所选设备的设备管理封禁吗？账户封禁或安全审核产生的其他封禁仍会生效。';
+    : '确定解除所选设备的设备管理封禁吗？安全审核产生的其他封禁仍会生效。';
   if (!confirm(confirmMessage)) return false;
 
   adminDeviceBatchBusy = true;

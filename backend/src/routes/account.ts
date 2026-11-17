@@ -287,8 +287,7 @@ export function createAccountRoutes(deps: Pick<
 
       const db = await ensureUserSchema(env);
       const currentDevice = await readDeviceContextFromDb(db, deviceId);
-      if (currentDevice &&
-          (currentDevice.deviceBanned || currentDevice.userStatus === "banned")) {
+      if (currentDevice && currentDevice.deviceBanned) {
         return json({ ok: false, error: "device_banned" }, 403);
       }
       const row = await db.prepare(

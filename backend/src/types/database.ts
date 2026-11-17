@@ -60,7 +60,6 @@ export interface DeviceLinkRow extends DeviceFields {
   last_seen_at: string;
   is_current: number;
   blocked: number;
-  blocked_by_account: number;
 }
 
 export interface DeviceRelationRow extends Omit<DeviceLinkRow, "user_uid"> {

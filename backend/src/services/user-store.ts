@@ -262,7 +262,7 @@ export async function resolveAccountAccess(env: Env, deviceId: string): Promise<
   }
   observeRequestUser(env, identity);
   return {
-    accountStatus: row.status === "banned" || identity.deviceBanned ? "banned" : "normal",
+    accountStatus: row.status === "banned" ? "banned" : "normal",
     accountType: cleanText(row.email) ? "formal" : "guest",
     identityType: normalizeUserIdentityType(row.identity_type),
     vipActive: Date.parse(cleanText(row.vip_expires_at)) > Date.now(),
@@ -373,9 +373,7 @@ export function rowToUser(row: AccountRow, settings?: Settings): User {
 
 export function publicAccount(user: User | null): PublicAccount {
   if (!user) throw new Error("account_not_found");
-  const accountType: AccountType = user.deviceBlocked
-    ? "banned"
-    : ["banned", "guest", "formal"].includes(cleanText(user.accountType))
+  const accountType: AccountType = ["banned", "guest", "formal"].includes(cleanText(user.accountType))
     ? user.accountType
     : accountTypeForUser(user);
   const account: PublicAccount = {

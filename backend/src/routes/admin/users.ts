@@ -171,33 +171,7 @@ export function createAdminUserRoutes(deps: Pick<
       if (!result.meta || Number(result.meta.changes) < 1) {
         return json({ ok: false, error: "account_not_found" }, 404);
       }
-      const deviceStats = await db.prepare(
-        `SELECT
-           COUNT(DISTINCT l.device_row_id) AS historical_device_count,
-           COUNT(DISTINCT CASE WHEN own_ban.device_row_id IS NOT NULL
-             THEN l.device_row_id END) AS account_banned_device_count,
-           COUNT(DISTINCT CASE WHEN active_ban.device_row_id IS NOT NULL
-             THEN l.device_row_id END) AS blocked_device_count
-         FROM device_account_links_mb l
-         LEFT JOIN device_bans_mb own_ban
-           ON own_ban.device_row_id = l.device_row_id
-          AND own_ban.source_uid = ?
-          AND own_ban.reason = 'account_banned'
-          AND own_ban.lifted_at IS NULL
-         LEFT JOIN device_bans_mb active_ban
-           ON active_ban.device_row_id = l.device_row_id
-          AND active_ban.lifted_at IS NULL
-         WHERE l.user_id = ?`,
-      ).bind(identity.uid, identity.userId).first<{ historical_device_count: number; account_banned_device_count: number; blocked_device_count: number }>();
-      return json({
-        ok: true,
-        uid: identity.uid,
-        status,
-        historicalDeviceCount: Number(deviceStats && deviceStats.historical_device_count) || 0,
-        accountBannedDeviceCount:
-          Number(deviceStats && deviceStats.account_banned_device_count) || 0,
-        blockedDeviceCount: Number(deviceStats && deviceStats.blocked_device_count) || 0,
-      });
+      return json({ ok: true, uid: identity.uid, status });
     }
 
     const userMatch = path.match(/^\/api\/users\/([^/]+)$/);

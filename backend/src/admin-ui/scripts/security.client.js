@@ -367,10 +367,9 @@ async function setAccountBan(uid, shouldBan) {
   const accounts = accountSecurityData && accountSecurityData.accounts || [];
   const account = accounts.find(function(item) { return item.uid === uid; });
   const name = account && account.nickname ? account.nickname : uid;
-  const deviceCount = Number(account && account.historicalDeviceCount || 0);
   const prompt = shouldBan
-    ? '确定封禁账户“' + name + '”及其登录过的 ' + deviceCount + ' 台设备吗？'
-    : '确定解除账户“' + name + '”产生的账户及设备封禁吗？其他账户产生的设备封禁不会被解除。';
+    ? '确定封禁账户“' + name + '”吗？'
+    : '确定解除账户“' + name + '”的封禁吗？';
   if (!confirm(prompt)) return;
   try {
     const response = await fetch(
@@ -381,12 +380,7 @@ async function setAccountBan(uid, shouldBan) {
     const data = parseResponseJson(responseText);
     if (!response.ok) throw new Error(data.error || ('HTTP ' + response.status));
     await loadAccountSecurity(true);
-    if (shouldBan) {
-      show('账户已封禁，同时封禁 ' + Number(data.accountBannedDeviceCount || 0) + ' 台历史设备');
-    } else {
-      show('账户已解除封禁；当前仍被其他来源封禁的设备有 ' +
-        Number(data.blockedDeviceCount || 0) + ' 台');
-    }
+    show(shouldBan ? '账户已封禁' : '账户已解除封禁');
   } catch (error) {
     show((shouldBan ? '封禁失败：' : '解除封禁失败：') + (error.message || error), true);
   }
@@ -485,8 +479,7 @@ function openDeviceRelationDetail(index) {
   const accountStatus = relation.accountStatus === 'banned'
     ? '账户已封禁' : relation.accountStatus === 'deleted' ? '账户已删除' : '正常';
   const relationStatus = relation.current ? '当前关联' : '历史关联';
-  const blockStatus = relation.blocked
-    ? (relation.blockedByAccount ? '本账户封禁' : '其他来源封禁') : '正常';
+  const blockStatus = relation.blocked ? '设备已封禁' : '正常';
   const deviceName = [relation.brand, relation.model].filter(Boolean).join(' ') || '未登记设备';
   const fields = [
     ['账户 UID', relation.accountUid || '-'],
