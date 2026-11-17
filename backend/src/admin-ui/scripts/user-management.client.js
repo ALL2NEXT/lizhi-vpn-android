@@ -6,6 +6,58 @@ let adminUserSecuritySource = null;
 let adminUserSecurityIndex = new Map();
 const adminUserSelection = new Set();
 const adminUserZeroFilters = {today: false, month: false, total: false};
+const ADMIN_USER_COLUMN_VISIBILITY_STORAGE_KEY = 'chimera.admin-user-table-column-visibility.v1';
+const ADMIN_USER_COLUMN_GROUPS = [
+  {key: 'account', label: '账户信息', columns: [
+    {key: 'nickname', label: '昵称'},
+    {key: 'email', label: '邮箱'},
+    {key: 'uid', label: 'UID'},
+    {key: 'registrationTime', label: '注册时间'},
+    {key: 'registrationIp', label: '注册 IP'},
+  ]},
+  {key: 'status', label: '状态信息', columns: [
+    {key: 'accountStatus', label: '封禁状态'},
+    {key: 'registrationStatus', label: '注册状态'},
+    {key: 'riskStatus', label: '风控状态'},
+    {key: 'membershipStatus', label: '会员状态'},
+    {key: 'vipExpiresAt', label: 'VIP 到期时间'},
+  ]},
+  {key: 'device', label: '设备信息', columns: [
+    {key: 'devices', label: '设备信息'},
+    {key: 'restrictedDevices', label: '受限设备数'},
+  ]},
+  {key: 'traffic', label: '流量与活跃', columns: [
+    {key: 'todayTraffic', label: '今日流量'},
+    {key: 'monthTraffic', label: '本月流量'},
+    {key: 'totalTraffic', label: '累计流量'},
+    {key: 'lastReport', label: '最后上报'},
+  ]},
+  {key: 'network', label: '网络信息', columns: [
+    {key: 'associatedIps', label: '关联 IP'},
+  ]},
+];
+
+function loadAdminUserColumnVisibility() {
+  try {
+    const stored = window.localStorage.getItem(ADMIN_USER_COLUMN_VISIBILITY_STORAGE_KEY);
+    if (stored === null) return {};
+    const parsed = JSON.parse(stored);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    const visibility = {};
+    ADMIN_USER_COLUMN_GROUPS.forEach(function(group) {
+      group.columns.forEach(function(column) {
+        if (typeof parsed[column.key] === 'boolean') visibility[column.key] = parsed[column.key];
+      });
+    });
+    return visibility;
+  } catch (_) {
+    return {};
+  }
+}
+
+let adminUserColumnVisibility = loadAdminUserColumnVisibility();
+let adminUserColumnControlsInitialized = false;
+
 const ADMIN_USER_SORTS = {
   created_desc: {valueKey: 'createdAt', direction: -1, label: '注册时间（新到旧）'},
   created_asc: {valueKey: 'createdAt', direction: 1, label: '注册时间（旧到新）'},
@@ -36,6 +88,124 @@ function resetAdminUsers() {
 function toggleAdminUserUidVisibility() {
   adminUserUidHidden = !adminUserUidHidden;
   renderAdminUsers();
+}
+
+function saveAdminUserColumnVisibility() {
+  try {
+    window.localStorage.setItem(ADMIN_USER_COLUMN_VISIBILITY_STORAGE_KEY, JSON.stringify(adminUserColumnVisibility));
+  } catch (_) {
+    // Keep the current view working when browser storage is unavailable.
+  }
+}
+
+function adminUserColumnIsVisible(key) {
+  return adminUserColumnVisibility[key] !== false;
+}
+
+function applyAdminUserColumnVisibility() {
+  const host = el('userAdminTable');
+  if (!host) return;
+  const columnKeys = [];
+  ADMIN_USER_COLUMN_GROUPS.forEach(function(group) {
+    group.columns.forEach(function(column) { columnKeys.push(column.key); });
+  });
+  host.querySelectorAll('.user-admin-table tr').forEach(function(row) {
+    Array.prototype.forEach.call(row.cells, function(cell, index) {
+      const key = index > 0 ? columnKeys[index - 1] : null;
+      if (!key) return;
+      cell.dataset.adminUserColumn = key;
+      cell.hidden = !adminUserColumnIsVisible(key);
+    });
+  });
+}
+
+function initializeAdminUserColumnControls() {
+  if (adminUserColumnControlsInitialized) return;
+  const host = el('userAdminColumnOptions');
+  if (!host || typeof host.replaceChildren !== 'function') return;
+  host.replaceChildren();
+
+  ADMIN_USER_COLUMN_GROUPS.forEach(function(group) {
+    const fieldset = document.createElement('fieldset');
+    fieldset.className = 'user-admin-column-group';
+    const legend = document.createElement('legend');
+    legend.textContent = group.label;
+
+    const masterLabel = document.createElement('label');
+    masterLabel.className = 'user-admin-column-master-option';
+    const masterText = document.createElement('span');
+    masterText.textContent = '全部显示';
+    const masterInput = document.createElement('input');
+    masterInput.type = 'checkbox';
+    masterInput.setAttribute('aria-label', '显示全部' + group.label + '列');
+    masterLabel.append(masterText, masterInput);
+
+    const options = document.createElement('div');
+    options.className = 'user-admin-column-options';
+    const optionInputs = group.columns.map(function(column) {
+      const label = document.createElement('label');
+      label.className = 'user-admin-column-option';
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.checked = adminUserColumnIsVisible(column.key);
+      input.dataset.adminUserColumn = column.key;
+      const name = document.createElement('span');
+      name.textContent = column.label;
+      label.append(input, name);
+      options.append(label);
+      input.addEventListener('change', function() {
+        adminUserColumnVisibility[column.key] = input.checked;
+        syncMaster();
+        saveAdminUserColumnVisibility();
+        applyAdminUserColumnVisibility();
+      });
+      return input;
+    });
+
+    function syncMaster() {
+      const visibleCount = optionInputs.filter(function(input) { return input.checked; }).length;
+      masterInput.checked = visibleCount === optionInputs.length;
+      masterInput.indeterminate = visibleCount > 0 && visibleCount < optionInputs.length;
+    }
+
+    masterInput.addEventListener('change', function() {
+      optionInputs.forEach(function(input, index) {
+        input.checked = masterInput.checked;
+        adminUserColumnVisibility[group.columns[index].key] = input.checked;
+      });
+      masterInput.indeterminate = false;
+      saveAdminUserColumnVisibility();
+      applyAdminUserColumnVisibility();
+    });
+    syncMaster();
+    fieldset.append(legend, masterLabel, options);
+    host.append(fieldset);
+  });
+
+  adminUserColumnControlsInitialized = true;
+}
+
+function openAdminUserColumnDialog() {
+  const dialog = el('userAdminColumnDialog');
+  if (!dialog) return;
+  initializeAdminUserColumnControls();
+  if (typeof dialog.showModal === 'function') dialog.showModal();
+  else dialog.setAttribute('open', '');
+}
+
+function closeAdminUserColumnDialog() {
+  const dialog = el('userAdminColumnDialog');
+  if (!dialog) return;
+  if (typeof dialog.close === 'function') dialog.close();
+  else dialog.removeAttribute('open');
+}
+
+function resetAdminUserColumnVisibility() {
+  adminUserColumnVisibility = {};
+  saveAdminUserColumnVisibility();
+  adminUserColumnControlsInitialized = false;
+  initializeAdminUserColumnControls();
+  applyAdminUserColumnVisibility();
 }
 
 function adminUserIdentityLabel(identityType) {
@@ -307,6 +477,7 @@ function renderAdminUsers() {
   host.innerHTML = '<table class="traffic-detail-table user-admin-table' + (adminUserUidHidden ? ' user-admin-hide-uid' : '') + '" aria-label="用户总表">' +
     '<thead><tr><th>选择</th><th>昵称</th><th>邮箱</th><th>UID</th><th>注册时间</th><th>注册 IP</th><th>封禁状态</th><th>注册状态</th><th>风控状态</th><th>会员状态</th><th>VIP 到期时间</th><th>设备信息</th><th>受限设备数</th><th>今日流量</th><th>本月流量</th><th>累计流量</th><th>最后上报</th><th>关联 IP</th></tr></thead>' +
     '<tbody>' + rows + '</tbody></table>';
+  applyAdminUserColumnVisibility();
   host.querySelectorAll('[data-admin-user-select]').forEach(function(input) {
     input.addEventListener('change', function() {
       const uid = input.dataset.adminUserSelect;

@@ -283,6 +283,7 @@
               <span id="userAdminSelectionCount" class="security-selection-count">已选择 0 个用户</span>
             </div>
             <div class="user-admin-header-actions">
+              <button class="secondary" type="button" onclick="openAdminUserColumnDialog()">列显示</button>
               <button id="userAdminUidToggle" class="secondary" type="button" aria-pressed="true" onclick="toggleAdminUserUidVisibility()">显示 UID</button>
               <button class="secondary" type="button" onclick="loadAdminUsers(true)">刷新用户</button>
               <button class="secondary" type="button" onclick="exportAdminUsersCsv()">导出当前结果</button>
@@ -298,6 +299,18 @@
         </section>
       </aside>
     </div>
+    <dialog id="userAdminColumnDialog" class="user-admin-column-dialog" aria-labelledby="userAdminColumnDialogTitle">
+      <div class="user-admin-column-dialog-header">
+        <h3 id="userAdminColumnDialogTitle">列显示设置</h3>
+        <button class="secondary" type="button" onclick="closeAdminUserColumnDialog()">关闭</button>
+      </div>
+      <p class="user-admin-column-dialog-description">选择需要显示的用户总表列，设置保存在当前浏览器。</p>
+      <div id="userAdminColumnOptions" class="user-admin-column-groups"></div>
+      <div class="user-admin-column-dialog-actions">
+        <button class="secondary" type="button" onclick="resetAdminUserColumnVisibility()">恢复默认</button>
+        <button type="button" onclick="closeAdminUserColumnDialog()">完成</button>
+      </div>
+    </dialog>
   </section>
 
   <section class="card tab-panel" role="tabpanel" data-panel="environment-anomalies">
