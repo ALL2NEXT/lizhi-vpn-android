@@ -14,8 +14,8 @@ export function createAdminUserRoutes(deps: Pick<
   | "cleanText"
   | "ensureUserSchema"
   | "json"
-  | "normalizeBatchUserReferences"
   | "normalizeNickname"
+  | "normalizeUid"
   | "normalizeUserIdentityType"
   | "publicAccount"
   | "publicAdminUser"
@@ -29,8 +29,8 @@ export function createAdminUserRoutes(deps: Pick<
     cleanText,
     ensureUserSchema,
     json,
-    normalizeBatchUserReferences,
     normalizeNickname,
+    normalizeUid,
     normalizeUserIdentityType,
     publicAccount,
     publicAdminUser,
@@ -118,7 +118,10 @@ export function createAdminUserRoutes(deps: Pick<
 
     if (path === "/api/users/batch" && request.method === "PATCH") {
       const body = await readJsonObject(request);
-      const accountIds = normalizeBatchUserReferences(body && (body.uids || body.accountIds));
+      const rawAccountIds = body && (body.uids || body.accountIds);
+      const accountIds = Array.isArray(rawAccountIds)
+        ? Array.from(new Set(rawAccountIds.map((value: unknown) => normalizeUid(value)).filter((uid: string) => uid)))
+        : [];
       const accountType = cleanText(body && body.accountType);
       if (
         accountIds.length === 0 ||
@@ -130,22 +133,18 @@ export function createAdminUserRoutes(deps: Pick<
 
       const db = await ensureUserSchema(env);
       const result = await db.prepare(
-        `WITH refs(value) AS (SELECT value FROM json_each(?)),
-         target_users(user_id) AS (
-           SELECT id FROM users_mb WHERE uid IN (SELECT value FROM refs)
-           UNION
-           SELECT user_id FROM user_devices_mb WHERE device_id IN (SELECT value FROM refs)
-         )
-         UPDATE users_mb SET status = ?
-         WHERE id IN (SELECT user_id FROM target_users)`,
-      ).bind(JSON.stringify(accountIds), accountType).run();
+        `UPDATE users_mb SET status = ? WHERE uid IN (SELECT value FROM json_each(?))`,
+      ).bind(accountType, JSON.stringify(accountIds)).run();
       const changed = Number(result.meta && result.meta.changes) || 0;
       return json({ ok: true, accountIds, accountType, changed });
     }
 
     if (path === "/api/users/batch" && request.method === "DELETE") {
       const body = await readJsonObject(request);
-      const accountIds = normalizeBatchUserReferences(body && (body.uids || body.accountIds));
+      const rawAccountIds = body && (body.uids || body.accountIds);
+      const accountIds = Array.isArray(rawAccountIds)
+        ? Array.from(new Set(rawAccountIds.map((value: unknown) => normalizeUid(value)).filter((uid: string) => uid)))
+        : [];
       if (accountIds.length === 0 || accountIds.length > MAX_BATCH_USER_COUNT) {
         return json({ ok: false, error: "invalid_batch_user_delete" }, 400);
       }
@@ -153,13 +152,7 @@ export function createAdminUserRoutes(deps: Pick<
       const db = await ensureUserSchema(env);
       const references = JSON.stringify(accountIds);
       const result = await db.prepare(
-        `WITH refs(value) AS (SELECT value FROM json_each(?)),
-         target_users(user_id) AS (
-           SELECT id FROM users_mb WHERE uid IN (SELECT value FROM refs)
-           UNION
-           SELECT user_id FROM user_devices_mb WHERE device_id IN (SELECT value FROM refs)
-         )
-         DELETE FROM users_mb WHERE id IN (SELECT user_id FROM target_users)`,
+        `DELETE FROM users_mb WHERE uid IN (SELECT value FROM json_each(?))`,
       ).bind(references).run();
       const changed = Number(result.meta && result.meta.changes) || 0;
       return json({ ok: true, accountIds, changed });

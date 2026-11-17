@@ -556,7 +556,7 @@ async function batchSetAdminUserBan(banned) {
     return false;
   }
   const action = banned ? '封禁' : '解封';
-  if (!confirm('确定要' + action + '选中的 ' + uids.length + ' 个用户吗？选择范围包括当前筛选隐藏的用户。')) return false;
+  if (!confirm('确定要' + action + '选中的 ' + uids.length + ' 个账户吗？选择范围包括当前筛选隐藏的账户。')) return false;
   adminUserBatchBusy = true;
   updateAdminUserSelectionControls(adminUserList());
   try {
@@ -571,7 +571,7 @@ async function batchSetAdminUserBan(banned) {
       return false;
     }
     adminUserSelection.clear();
-    show('已' + action + ' ' + (Number(data.changed) || uids.length) + ' 个用户');
+    show('已' + action + ' ' + (Number(data.changed) || uids.length) + ' 个账户');
     await loadAdminUsers(true);
     return true;
   } catch (_) {
@@ -594,7 +594,7 @@ async function batchDeleteAdminUsers() {
     show('单次最多选择 100 个用户', true);
     return false;
   }
-  if (!confirm('确定永久删除选中的 ' + uids.length + ' 个用户及其全部流量统计吗？包括当前筛选隐藏的已选用户，此操作不可恢复。')) {
+  if (!confirm('确定永久删除选中的 ' + uids.length + ' 个账户及其全部流量统计吗？包括当前筛选隐藏的已选账户，此操作不可恢复。')) {
     return false;
   }
   adminUserBatchBusy = true;
@@ -615,8 +615,8 @@ async function batchDeleteAdminUsers() {
     });
     const refreshed = await loadAdminUsers(true);
     show(refreshed
-      ? '已删除 ' + (Number(data.changed) || 0) + ' 个用户及其流量统计'
-      : '用户删除成功，但用户列表刷新失败', !refreshed);
+      ? '已删除 ' + (Number(data.changed) || 0) + ' 个账户及其流量统计'
+      : '账户删除成功，但用户列表刷新失败', !refreshed);
     return true;
   } catch (_) {
     show('删除用户失败，请检查网络', true);

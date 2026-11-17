@@ -230,6 +230,7 @@ export async function resolveAccountAccess(env: Env, deviceId: string): Promise<
   vipActive: boolean;
   appVersion: string;
   registered: boolean;
+  deviceBlocked: boolean;
 }> {
   // 读取原始设备状态，封禁账号仍需根据邮箱类型参与分组的 AND 权限判断。
   const identity = await readDeviceContext(env, deviceId);
@@ -241,6 +242,7 @@ export async function resolveAccountAccess(env: Env, deviceId: string): Promise<
       vipActive: false,
       appVersion: "",
       registered: false,
+      deviceBlocked: Boolean(identity && identity.deviceBanned),
     };
   }
   const db = await ensureUserSchema(env);
@@ -255,6 +257,7 @@ export async function resolveAccountAccess(env: Env, deviceId: string): Promise<
       vipActive: false,
       appVersion: "",
       registered: false,
+      deviceBlocked: identity.deviceBanned,
     };
   }
   observeRequestUser(env, identity);
@@ -265,6 +268,7 @@ export async function resolveAccountAccess(env: Env, deviceId: string): Promise<
     vipActive: Date.parse(cleanText(row.vip_expires_at)) > Date.now(),
     appVersion: cleanText(identity.appVersion),
     registered: true,
+    deviceBlocked: identity.deviceBanned,
   };
 }
 

@@ -289,6 +289,50 @@ export function createAdminSecurityRoutes(deps: Pick<
       });
     }
 
+  if (path === "/api/devices/batch" && request.method === "PATCH") {
+      const body = await readJsonObject(request);
+      const rawDeviceIds = body && body.deviceIds;
+      const action = cleanText(body && body.action);
+      if (!Array.isArray(rawDeviceIds) || rawDeviceIds.length === 0 || rawDeviceIds.length > 100 ||
+          (action !== "ban" && action !== "unban")) {
+        return json({ ok: false, error: "invalid_batch_device_update" }, 400);
+      }
+      const normalizedDeviceIds = rawDeviceIds.map((value: unknown) => normalizeAccountId(value));
+      if (normalizedDeviceIds.some((deviceId: string) => !deviceId)) {
+        return json({ ok: false, error: "invalid_batch_device_update" }, 400);
+      }
+      const deviceIds = Array.from(new Set(normalizedDeviceIds));
+      const db = await ensureUserSchema(env);
+      const changedAt = beijingTimestamp();
+      let changedDeviceCount = 0;
+      if (action === "ban") {
+        const results = await db.batch(deviceIds.map((deviceId) => db.prepare(
+          `INSERT INTO device_bans_mb
+             (device_row_id, source_uid, reason, banned_at, lifted_at)
+           SELECT id, 'admin_device_management', 'admin_device_ban', ?, NULL
+           FROM user_devices_mb WHERE device_id = ?
+           ON CONFLICT(device_row_id, source_uid, reason) DO UPDATE SET
+             banned_at = excluded.banned_at,
+             lifted_at = NULL`,
+        ).bind(changedAt, deviceId)));
+        changedDeviceCount = results.reduce((count, result) =>
+          count + Number(result.meta && result.meta.changes || 0), 0);
+      } else {
+        const result = await db.prepare(
+          `UPDATE device_bans_mb SET lifted_at = ?
+           WHERE source_uid = 'admin_device_management'
+             AND reason = 'admin_device_ban'
+             AND lifted_at IS NULL
+             AND device_row_id IN (
+               SELECT id FROM user_devices_mb
+               WHERE device_id IN (SELECT value FROM json_each(?))
+             )`,
+        ).bind(changedAt, JSON.stringify(deviceIds)).run();
+        changedDeviceCount = Number(result.meta && result.meta.changes || 0);
+      }
+      return json({ ok: true, action, requestedDeviceCount: deviceIds.length, changedDeviceCount });
+    }
+
   if (path === "/api/devices" && request.method === "GET") {
       const requestUrl = new URL(request.url);
       const requestedLimit = Number(requestUrl.searchParams.get("limit"));
@@ -378,8 +422,7 @@ export function createAdminSecurityRoutes(deps: Pick<
            LEFT JOIN device_account_links_mb l ON l.user_id = u.id
            LEFT JOIN device_bans_mb b
              ON b.device_row_id = l.device_row_id
-            AND b.source_uid = u.uid
-            AND b.reason = 'account_banned'
+            AND b.lifted_at IS NULL
            GROUP BY u.id
            ORDER BY u.created_at DESC`,
         ),

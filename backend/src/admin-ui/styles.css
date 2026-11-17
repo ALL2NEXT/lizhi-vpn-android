@@ -528,6 +528,21 @@
      .user-admin-filter-section .traffic-zero-filters { display: grid; gap: 7px; }
      .user-admin-zero-filter { width: 100%; min-height: 36px; padding: 7px 9px; text-align: left; }
      .user-admin-summary { margin: 0; padding: 10px 11px; border-radius: 9px; color: #526078; background: #f1f5fa; font-size: 13px; line-height: 1.55; }
+     .user-admin-separation-note { margin: 9px 0 0; color: #718099; font-size: 12px; line-height: 1.45; }
+     .user-admin-device-toolbar { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(0, auto); align-items: end; gap: 12px; margin: 14px 0 12px; padding: 14px; border: 1px solid #dfe6ee; border-radius: 10px; background: #f8fafd; }
+     .user-admin-device-search { display: grid; gap: 6px; min-width: 0; color: #5f6368; font-size: 13px; font-weight: 600; }
+     .user-admin-device-search input { width: 100%; min-width: 0; }
+     .user-admin-device-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+     .user-admin-device-actions button { margin: 0; white-space: nowrap; }
+     .user-admin-device-select-all { display: inline-flex; align-items: center; gap: 6px; margin: 0; color: #526078; font-size: 13px; white-space: nowrap; }
+     .user-admin-device-select-all input { margin: 0; }
+     .user-admin-device-toolbar .user-admin-summary { grid-column: 1 / -1; }
+     .admin-device-table { width: max-content; min-width: 100%; }
+     .admin-device-table th:first-child, .admin-device-table td:first-child { width: 38px; min-width: 38px; text-align: center; }
+     .admin-device-table .user-admin-checkbox { width: auto; min-width: 0; margin: 0; padding: 0; }
+     .admin-device-id { max-width: 320px; white-space: normal !important; overflow-wrap: anywhere; }
+     .admin-device-id code, .admin-device-linked-uids { white-space: normal; overflow-wrap: anywhere; word-break: break-all; }
+     .admin-device-account-status { color: #718099; font-size: 12px; }
      .user-admin-operations-panel { margin: 0; }
      .user-admin-operations-heading { display: grid; gap: 10px; margin-bottom: 12px; }
      .user-admin-operations-heading > div:first-child { display: grid; gap: 4px; }
@@ -1161,6 +1176,9 @@
     .user-admin-column-group legend, .user-admin-column-master-option,
     .user-admin-column-option, .user-admin-column-dialog-description { color: var(--ink-muted); }
     .user-admin-column-master-option { border-bottom-color: var(--line); }
+    .user-admin-device-toolbar { border-color: var(--line); background: var(--surface-soft); }
+    .user-admin-device-search, .user-admin-device-select-all,
+    .user-admin-separation-note, .admin-device-account-status { color: var(--ink-muted); }
     button.device-relation-chip:hover:not(:disabled), button.device-relation-chip:focus-visible {
       color: var(--blue-ink);
       background: var(--surface-active);
@@ -1645,6 +1663,10 @@
       .dashboard-title-row h2 { flex: 1 1 100%; }
       .settings-save-toolbar { flex: 1 1 100%; gap: 8px 14px; }
       .user-admin-filter-panel { padding: 14px; }
+      .user-admin-device-toolbar { grid-template-columns: minmax(0, 1fr); align-items: stretch; padding: 12px; }
+      .user-admin-device-actions { justify-content: flex-start; }
+      .user-admin-device-actions button { flex: 1 1 130px; }
+      .user-admin-device-toolbar .user-admin-summary { grid-column: auto; }
       .user-admin-column-dialog { width: calc(100vw - 24px); max-height: calc(100vh - 24px); padding: 16px; }
       .user-admin-column-groups, .user-admin-column-options { grid-template-columns: minmax(0, 1fr); }
       .registration-code-issue-row { grid-template-columns: repeat(2, minmax(110px, 150px)); }

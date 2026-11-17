@@ -148,13 +148,16 @@ export function createAccountRoutes(deps: Pick<
         now,
         request.headers.get("CF-Connecting-IP") || "",
       );
+      if (identity && identity.userStatus === "banned") {
+        return json({ ok: false, error: "account_banned" }, 403);
+      }
+      if (identity && identity.deviceBanned) {
+        return json({ ok: false, error: "device_banned", deviceBlocked: true }, 403);
+      }
       const user = identity && identity.userId > 0
         ? await readUserWithTraffic(env, identity.userId, undefined, now)
         : null;
       if (!user || !identity) {
-        if (identity && identity.deviceBanned) {
-          return json({ ok: false, error: "device_banned", deviceBlocked: true }, 403);
-        }
         throw new Error("account_create_failed");
       }
       user.deviceBlocked = Boolean(identity.deviceBanned);
@@ -183,6 +186,13 @@ export function createAccountRoutes(deps: Pick<
       }
 
       const db = await ensureUserSchema(env);
+      const currentDevice = await readDeviceContextFromDb(db, deviceId);
+      if (currentDevice && currentDevice.userStatus === "banned") {
+        return json({ ok: false, error: "account_banned" }, 403);
+      }
+      if (currentDevice && currentDevice.deviceBanned) {
+        return json({ ok: false, error: "device_banned" }, 403);
+      }
       const identity = await resolveDeviceIdentity(env, deviceId);
       if (!identity || (requestedUid && requestedUid !== identity.uid)) {
         return json({ ok: false, error: "account_not_found" }, 404);
@@ -306,11 +316,18 @@ export function createAccountRoutes(deps: Pick<
       const code = normalizeVipActivationCode(body && body.code);
       if (!deviceId || !code) return json({ ok: false, error: "invalid_vip_activation_request" }, 400);
 
+      const db = await ensureUserSchema(env);
+      const currentDevice = await readDeviceContextFromDb(db, deviceId);
+      if (!currentDevice || currentDevice.userId <= 0) {
+        return json({ ok: false, error: "account_not_found" }, 404);
+      }
+      if (currentDevice.userStatus === "banned") {
+        return json({ ok: false, error: "account_banned" }, 403);
+      }
+      if (currentDevice.deviceBanned) return json({ ok: false, error: "device_banned" }, 403);
       const identity = await resolveDeviceIdentity(env, deviceId);
       if (!identity) return json({ ok: false, error: "account_not_found" }, 404);
-      if (identity.deviceBanned) return json({ ok: false, error: "account_banned" }, 403);
 
-      const db = await ensureUserSchema(env);
       const user = await db.prepare(
         "SELECT status FROM users_mb WHERE id = ?",
       ).bind(identity.userId).first<{ status: string }>();
@@ -365,9 +382,15 @@ export function createAccountRoutes(deps: Pick<
       if (!deviceId) return json({ ok: false, error: "invalid_delete_request" }, 400);
 
       const db = await ensureUserSchema(env);
-      const identity = await resolveDeviceIdentity(env, deviceId);
+      const identity = await readDeviceContextFromDb(db, deviceId);
       if (!identity || (requestedUid && requestedUid !== identity.uid)) {
         return json({ ok: false, error: "account_not_found" }, 404);
+      }
+      if (identity.userStatus === "banned") {
+        return json({ ok: false, error: "account_banned" }, 403);
+      }
+      if (identity.deviceBanned) {
+        return json({ ok: false, error: "device_banned" }, 403);
       }
       const user = await readUser(env, identity.userId);
       if (!user) return json({ ok: false, error: "account_not_found" }, 404);

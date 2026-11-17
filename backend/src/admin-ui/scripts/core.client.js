@@ -93,6 +93,8 @@
    if (error === 'formal_registration_closed') return '正式用户注册暂未开放';
    if (error === 'account_not_found') return '用户不存在，请检查 UID';
    if (error === 'account_banned') return '账户已被封禁';
+   if (error === 'device_banned') return '设备已被封禁';
+   if (error === 'invalid_batch_device_update') return '设备批量封禁参数无效，单次最多选择 100 台设备';
      if (error === 'invalid_batch_user_delete') return '批量删除参数无效，最多选择 100 个用户';
     if (error === 'subscription_must_be_plaintext_nodes') return '订阅没有可用节点，支持 URI、Base64、Clash、sing-box 和 Xray 格式';
     if (error === 'subscription_import_no_nodes') return '未识别到可用节点或订阅地址，请检查输入内容';
@@ -164,7 +166,8 @@
  };
  function logout() {
    if ((typeof settingsSaveInFlight !== 'undefined' && settingsSaveInFlight) ||
-       (typeof adminUserBatchBusy !== 'undefined' && adminUserBatchBusy)) {
+       (typeof adminUserBatchBusy !== 'undefined' && adminUserBatchBusy) ||
+       (typeof adminDeviceBatchBusy !== 'undefined' && adminDeviceBatchBusy)) {
      show('正在保存或处理用户，请等待完成后退出', true);
      return;
    }
@@ -174,6 +177,7 @@
    currentState = null;
    if (typeof resetSettingsDrafts === 'function') resetSettingsDrafts();
    if (typeof resetAdminUsers === 'function') resetAdminUsers();
+   if (typeof resetAdminDeviceManagement === 'function') resetAdminDeviceManagement();
    if (typeof resetAdminNotifications === 'function') resetAdminNotifications();
    accountSecurityData = null;
    accountSecuritySelection.clear();
@@ -226,8 +230,9 @@
    if (name === 'users' && typeof loadAdminUsers === 'function' && !adminUserData && !adminUserLoading) {
      loadAdminUsers();
    }
-   if (name === 'device-relations' && !deviceRelationsData && !deviceRelationsLoading) {
-     loadDeviceRelations();
+   if (name === 'device-management' && typeof loadAdminDevices === 'function' &&
+       !adminDeviceData && !adminDeviceLoading) {
+     loadAdminDevices();
    }
    if (name === 'traffic-query' && !trafficDetailsData && !trafficDetailsLoading) {
      loadTrafficDetails();

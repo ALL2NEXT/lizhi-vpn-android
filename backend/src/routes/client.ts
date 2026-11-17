@@ -71,6 +71,9 @@ async function handleClient(request: Request, env: Env) {
     return json({ ok: false, error: "device_id_required" }, 401);
   }
   const access = await resolveAccountAccess(env, deviceId);
+  if (access.deviceBlocked) {
+    return json({ ok: false, error: "device_banned" }, 403);
+  }
   if (!access.registered) {
     return json({ ok: false, error: "account_access_denied" }, 403);
   }
@@ -169,6 +172,7 @@ async function handleClientNotifications(path: string, request: Request, env: En
   if (!deviceId) return json({ ok: false, error: "device_id_required" }, 401);
 
   const access = await resolveAccountAccess(env, deviceId);
+  if (access.deviceBlocked) return json({ ok: false, error: "device_banned" }, 403);
   if (!access.registered) return json({ ok: false, error: "account_access_denied" }, 403);
   const identity = await resolveDeviceIdentity(env, deviceId);
   if (!identity || identity.userId <= 0) {
@@ -292,6 +296,7 @@ async function handleManagedSubscription(path: string, request: Request, env: En
     return json({ ok: false, error: "device_id_required" }, 401);
   }
   const access = await resolveAccountAccess(env, deviceId);
+  if (access.deviceBlocked) return json({ ok: false, error: "device_banned" }, 403);
   const accessError = subscriptionGroupAccessError(group, access, isAppVersionAtLeast);
   if (accessError === "account_access_denied") {
     return json({
