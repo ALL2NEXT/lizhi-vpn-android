@@ -501,8 +501,9 @@
      .user-admin-table th:first-child, .user-admin-table td:first-child { width: 34px; min-width: 34px; max-width: 34px; padding-left: 6px; padding-right: 6px; text-align: center; }
      .user-admin-table .user-admin-checkbox { width: auto; min-width: 0; padding: 0; margin: 0; }
      .user-admin-table.user-admin-hide-uid th:nth-child(4), .user-admin-table.user-admin-hide-uid td:nth-child(4) { display: none; }
-     .user-admin-layout { display: grid; grid-template-columns: 252px minmax(0, 1fr); align-items: start; gap: 14px; margin-top: 12px; }
+     .user-admin-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 340px); align-items: start; gap: 14px; margin-top: 12px; }
      .user-admin-sidebar, .user-admin-workspace { min-width: 0; }
+     .user-admin-sidebar { display: grid; align-content: start; gap: 12px; }
      .user-admin-control-panel { min-width: 0; padding: 14px; background: #f8fafd; border: 1px solid #dadce0; border-radius: 10px; }
      .user-admin-control-panel h3 { margin: 0 0 10px; color: #202124; font-size: 15px; }
      .user-admin-filter-controls { display: grid; gap: 14px; }
@@ -517,17 +518,19 @@
      .user-admin-filter-section .traffic-zero-filters { display: grid; gap: 7px; }
      .user-admin-zero-filter { width: 100%; min-height: 36px; padding: 7px 9px; text-align: left; }
      .user-admin-summary { margin: 0; padding: 10px 11px; border-radius: 9px; color: #526078; background: #f1f5fa; font-size: 13px; line-height: 1.55; }
-     .user-admin-operations-panel { margin-bottom: 12px; }
-     .user-admin-operations-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
-     .user-admin-operations-heading > div:first-child { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px 12px; }
+     .user-admin-operations-panel { margin: 0; }
+     .user-admin-operations-heading { display: grid; gap: 10px; margin-bottom: 12px; }
+     .user-admin-operations-heading > div:first-child { display: grid; gap: 4px; }
      .user-admin-operations-heading h3 { margin: 0; }
-     .user-admin-header-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-     .user-admin-header-actions button { margin: 0; }
-     .user-admin-operation-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-     .user-admin-operation-controls button { margin: 0; }
-     .user-admin-operation-controls label { display: inline-flex; align-items: center; margin: 0; white-space: nowrap; }
+     .user-admin-header-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+     .user-admin-header-actions button { width: 100%; min-width: 0; margin: 0; }
+     .user-admin-header-actions button:last-child { grid-column: 1 / -1; }
+     .user-admin-operation-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+     .user-admin-operation-controls button { width: 100%; min-width: 0; margin: 0; white-space: normal; }
+     .user-admin-operation-controls label { display: inline-flex; align-items: center; grid-column: 1 / -1; margin: 0; white-space: normal; }
      .user-admin-operation-controls label input { margin: 0 7px 0 0; }
-     .user-admin-operation-controls .user-draft-count { flex: 1 0 100%; }
+     .user-admin-operation-controls #userAdminBatchDelete,
+     .user-admin-operation-controls .user-draft-count { grid-column: 1 / -1; }
      .user-admin-workspace > .traffic-detail-wrap { min-width: 0; }
      .user-admin-table .user-admin-nickname { width: 150px; }
      .user-admin-table .user-admin-actions { display: flex; gap: 6px; align-items: center; }
@@ -767,7 +770,7 @@
       border-radius: 14px;
       box-shadow: none;
     }
-    .user-admin-layout { grid-template-columns: minmax(220px, 252px) minmax(0, 1fr); gap: 14px; }
+    .user-admin-layout { grid-template-columns: minmax(0, 1fr) minmax(300px, 340px); gap: 14px; }
     .user-admin-workspace { container: user-admin-workspace / inline-size; }
     .user-admin-table { width: 100%; min-width: 0; table-layout: fixed; }
     .user-admin-table th, .user-admin-table td {
@@ -799,7 +802,7 @@
     .user-admin-identity { min-width: 0; }
     .user-admin-cell-ellipsis { max-width: 100%; overflow-wrap: anywhere; white-space: normal; }
     .user-detail-link { width: 100%; max-width: 100%; white-space: nowrap; }
-    .user-admin-operations-panel { margin-bottom: 12px; }
+    .user-admin-operations-panel { margin: 0; }
     .user-admin-summary { color: var(--ink-muted); background: var(--surface-soft); }
     .user-admin-filter-section { border-color: var(--line); background: var(--surface); }
     .user-admin-filter-option { color: var(--ink); }
@@ -1624,21 +1627,19 @@
       .subscription-manager-layout { grid-template-columns: 250px minmax(0, 1fr); }
       .subscription-list-toolbar > select { flex: 1 1 115px; }
       .source-list-header, .source-row { grid-template-columns: 15px 18px 27px minmax(80px, 1fr) minmax(68px, .7fr) minmax(85px, .9fr) 42px 64px; }
-      .user-admin-layout { grid-template-columns: 220px minmax(0, 1fr); gap: 12px; }
+      .user-admin-layout { grid-template-columns: minmax(0, 1fr) minmax(250px, 290px); gap: 12px; }
+    }
+    @media (max-width: 900px) {
+      .user-admin-layout { grid-template-columns: minmax(0, 1fr); }
+      .user-admin-workspace { order: 0; }
+      .user-admin-sidebar { order: 1; }
     }
     @media (max-width: 700px) {
       :root { --dashboard-title-row-height: 96px; }
       .dashboard-title-row { flex-wrap: wrap; gap: 8px 14px; padding: 8px 12px; }
       .dashboard-title-row h2 { flex: 1 1 100%; }
       .settings-save-toolbar { flex: 1 1 100%; gap: 8px 14px; }
-      .user-admin-layout { grid-template-columns: minmax(0, 1fr); }
-      .user-admin-sidebar { order: 0; }
-      .user-admin-workspace { order: 1; }
       .user-admin-filter-panel { padding: 14px; }
-      .user-admin-operations-heading { align-items: flex-start; flex-direction: column; }
-      .user-admin-header-actions { width: 100%; }
-      .user-admin-header-actions button { flex: 1 1 auto; }
-      .user-admin-operation-controls > button { flex: 1 1 auto; }
       .registration-code-issue-row { grid-template-columns: repeat(2, minmax(110px, 150px)); }
       .registration-code-issue-row > button { grid-column: 1 / -1; justify-self: start; }
       .registration-code-usages-dialog { width: calc(100% - 24px); padding: 16px; }

@@ -191,7 +191,12 @@
 
   <section class="card tab-panel" role="tabpanel" data-panel="users">
     <div class="user-admin-layout">
-      <aside class="user-admin-sidebar" aria-label="用户筛选条件">
+      <section class="user-admin-workspace" aria-label="用户总表">
+        <div id="userAdminTable" class="traffic-detail-wrap">
+          <div class="loading-state">打开此模块后读取用户数据</div>
+        </div>
+      </section>
+      <aside class="user-admin-sidebar" aria-label="用户筛选和操作">
         <section class="user-admin-control-panel user-admin-filter-panel">
           <h3>筛选条件</h3>
           <div class="user-admin-filter-controls">
@@ -255,12 +260,10 @@
             <p id="userAdminSummary" class="user-admin-summary" role="status" aria-live="polite"></p>
           </div>
         </section>
-      </aside>
-      <section class="user-admin-workspace" aria-label="用户总表">
         <section class="user-admin-control-panel user-admin-operations-panel">
           <div class="user-admin-operations-heading">
             <div>
-              <h3>用户列表</h3>
+              <h3>用户操作</h3>
               <span id="userAdminSelectionCount" class="security-selection-count">已选择 0 个用户</span>
             </div>
             <div class="user-admin-header-actions">
@@ -279,10 +282,7 @@
             <span id="userAdminDraftCount" class="user-draft-count" role="status" aria-live="polite">所有修改已保存</span>
           </div>
         </section>
-        <div id="userAdminTable" class="traffic-detail-wrap">
-          <div class="loading-state">打开此模块后读取用户数据</div>
-        </div>
-      </section>
+      </aside>
     </div>
     <dialog id="adminUserDetailDialog" class="user-detail-dialog" aria-labelledby="adminUserDetailTitle">
       <form id="adminUserDetailForm">
