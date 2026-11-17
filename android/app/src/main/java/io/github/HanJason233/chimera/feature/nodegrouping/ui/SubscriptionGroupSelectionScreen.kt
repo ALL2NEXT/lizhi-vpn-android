@@ -26,6 +26,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.FilterList
@@ -218,6 +219,21 @@ private fun SubscriptionGroupSelectionScreen(
     var countryDialogVisible by rememberSaveable { mutableStateOf(false) }
     var officialGroupsExpanded by rememberSaveable { mutableStateOf(true) }
     var personalGroupsExpanded by rememberSaveable { mutableStateOf(true) }
+    var isSearchActive by rememberSaveable { mutableStateOf(false) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    val normalizedSearchQuery = searchQuery.trim()
+    val visibleSubscriptionGroups = remember(subscriptionGroups, normalizedSearchQuery) {
+        if (normalizedSearchQuery.isEmpty()) subscriptionGroups else subscriptionGroups.filter { group ->
+            group.name.contains(normalizedSearchQuery, ignoreCase = true) ||
+                group.sourceId.contains(normalizedSearchQuery, ignoreCase = true)
+        }
+    }
+    val visibleUserGroups = remember(userGroups, normalizedSearchQuery) {
+        if (normalizedSearchQuery.isEmpty()) userGroups else userGroups.filter { group ->
+            group.name.contains(normalizedSearchQuery, ignoreCase = true) ||
+                group.id.contains(normalizedSearchQuery, ignoreCase = true)
+        }
+    }
     var draftCountryCodes by remember { mutableStateOf(emptySet<String>()) }
     var editingUserGroup by remember { mutableStateOf<NodeGroupSummary?>(null) }
     var editingAutoRefreshOnStartup by rememberSaveable { mutableStateOf(false) }
@@ -433,7 +449,23 @@ private fun SubscriptionGroupSelectionScreen(
         title = "仓库源",
         onBack = onBack,
         showBackNavigation = false,
+        isSearchActive = isSearchActive,
+        searchQuery = searchQuery,
+        searchPlaceholder = "搜索仓库源名称",
+        onSearchQueryChange = { searchQuery = it },
+        onSearchClose = {
+            isSearchActive = false
+            searchQuery = ""
+        },
         actions = {
+            if (!isSearchActive) {
+                IconButton(onClick = { isSearchActive = true }) {
+                    Icon(
+                        imageVector = Icons.Outlined.Search,
+                        contentDescription = "搜索仓库源"
+                    )
+                }
+            }
             IconButton(
                 onClick = {
                     draftCountryCodes = selectedCountryCodes
@@ -463,25 +495,26 @@ private fun SubscriptionGroupSelectionScreen(
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             when {
-                subscriptionGroups.isNotEmpty() || userGroups.isNotEmpty() ->
+                visibleSubscriptionGroups.isNotEmpty() || visibleUserGroups.isNotEmpty() ->
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(bottom = bottomContentPadding + 72.dp),
                         verticalArrangement = Arrangement.spacedBy(0.dp)
                     ) {
-                        if (subscriptionGroups.isNotEmpty()) {
+                        if (visibleSubscriptionGroups.isNotEmpty()) {
                             item(key = "official-groups-header") {
                                 GroupTypeHeader(
                                     title = "官方源",
-                                    expanded = officialGroupsExpanded,
+                                    expanded = normalizedSearchQuery.isNotEmpty() || officialGroupsExpanded,
+                                    enabled = normalizedSearchQuery.isEmpty(),
                                     onToggle = {
                                         officialGroupsExpanded = !officialGroupsExpanded
                                     }
                                 )
                             }
-                            if (officialGroupsExpanded) {
+                            if (normalizedSearchQuery.isNotEmpty() || officialGroupsExpanded) {
                                 items(
-                                    items = subscriptionGroups,
+                                    items = visibleSubscriptionGroups,
                                     key = { "subscription:${it.sourceId}" }
                                 ) { group ->
                                     val swipeKey = "subscription:${group.sourceId}"
@@ -541,19 +574,20 @@ private fun SubscriptionGroupSelectionScreen(
                                 }
                             }
                         }
-                        if (userGroups.isNotEmpty()) {
+                        if (visibleUserGroups.isNotEmpty()) {
                             item(key = "personal-groups-header") {
                                 GroupTypeHeader(
                                     title = "私人源",
-                                    expanded = personalGroupsExpanded,
+                                    expanded = normalizedSearchQuery.isNotEmpty() || personalGroupsExpanded,
+                                    enabled = normalizedSearchQuery.isEmpty(),
                                     onToggle = {
                                         personalGroupsExpanded = !personalGroupsExpanded
                                     }
                                 )
                             }
-                            if (personalGroupsExpanded) {
+                            if (normalizedSearchQuery.isNotEmpty() || personalGroupsExpanded) {
                                 items(
-                                    items = userGroups,
+                                    items = visibleUserGroups,
                                     key = NodeGroupSummary::id
                                 ) { group ->
                                     val swipeKey = group.id
@@ -646,7 +680,11 @@ private fun SubscriptionGroupSelectionScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "暂无仓库源",
+                        text = if (normalizedSearchQuery.isNotEmpty()) {
+                            "没有匹配的仓库源"
+                        } else {
+                            "暂无仓库源"
+                        },
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 14.sp,
                         textAlign = TextAlign.Center

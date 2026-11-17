@@ -228,12 +228,13 @@ internal fun UserSubscriptionGroupCard(
 internal fun GroupTypeHeader(
     title: String,
     expanded: Boolean,
+    enabled: Boolean = true,
     onToggle: () -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(role = Role.Button, onClick = onToggle)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onToggle)
             .padding(horizontal = 20.dp)
             .padding(top = 8.dp, bottom = 2.dp),
         verticalAlignment = Alignment.CenterVertically

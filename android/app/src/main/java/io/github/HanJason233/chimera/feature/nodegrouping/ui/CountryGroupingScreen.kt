@@ -18,6 +18,7 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.FilterList
 import androidx.compose.material3.Checkbox
@@ -131,20 +132,50 @@ private fun CountryGroupingScreen(
     var sourceDialogVisible by rememberSaveable { mutableStateOf(false) }
     var collapsedContinentMask by rememberSaveable { mutableIntStateOf(0) }
     var draftSourceIds by remember { mutableStateOf(emptySet<String>()) }
+    var isSearchActive by rememberSaveable { mutableStateOf(false) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    val normalizedSearchQuery = searchQuery.trim()
     val availableSourceIds = remember(sourceOptions) {
         sourceOptions.mapTo(mutableSetOf()) { it.id }
     }
     val isAllSourcesSelected = selectedSourceIds == null ||
         selectedSourceIds.containsAll(availableSourceIds)
-    val countriesByContinent = remember(countries) {
-        countries.groupBy(CountryOption::continent)
+    val visibleCountries = remember(countries, normalizedSearchQuery) {
+        if (normalizedSearchQuery.isEmpty()) {
+            countries
+        } else {
+            countries.filter { country ->
+                country.name.contains(normalizedSearchQuery, ignoreCase = true) ||
+                    country.code.contains(normalizedSearchQuery, ignoreCase = true) ||
+                    country.continent.title.contains(normalizedSearchQuery, ignoreCase = true)
+            }
+        }
+    }
+    val countriesByContinent = remember(visibleCountries) {
+        visibleCountries.groupBy(CountryOption::continent)
     }
 
     AppScreenScaffold(
         title = "地区组",
         onBack = onBack,
         showBackNavigation = false,
+        isSearchActive = isSearchActive,
+        searchQuery = searchQuery,
+        searchPlaceholder = "搜索地区名称或代码",
+        onSearchQueryChange = { searchQuery = it },
+        onSearchClose = {
+            isSearchActive = false
+            searchQuery = ""
+        },
         actions = {
+            if (!isSearchActive) {
+                IconButton(onClick = { isSearchActive = true }) {
+                    Icon(
+                        imageVector = Icons.Outlined.Search,
+                        contentDescription = "搜索地区组"
+                    )
+                }
+            }
             IconButton(
                 onClick = {
                     draftSourceIds = selectedSourceIds
@@ -173,7 +204,7 @@ private fun CountryGroupingScreen(
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) {
         when {
-            countries.isNotEmpty() -> LazyColumn(
+            visibleCountries.isNotEmpty() -> LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = bottomContentPadding),
                 verticalArrangement = Arrangement.spacedBy(0.dp)
@@ -182,12 +213,16 @@ private fun CountryGroupingScreen(
                     val sectionCountries = countriesByContinent[continent].orEmpty()
                     if (sectionCountries.isNotEmpty()) {
                         val continentCollapseBit = 1 shl continent.ordinal
-                        val expanded = (collapsedContinentMask and continentCollapseBit) == 0
+                        val expanded = normalizedSearchQuery.isNotEmpty() ||
+                            (collapsedContinentMask and continentCollapseBit) == 0
                         item(key = "continent:${continent.name}") {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable(role = Role.Button) {
+                                    .clickable(
+                                        enabled = normalizedSearchQuery.isEmpty(),
+                                        role = Role.Button
+                                    ) {
                                         collapsedContinentMask =
                                             collapsedContinentMask xor continentCollapseBit
                                     }
@@ -251,10 +286,11 @@ private fun CountryGroupingScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = if (sourceOptions.isNotEmpty() && selectedSourceIds?.isEmpty() == true) {
-                        "尚未选择仓库源，请点击右上角选择"
-                    } else {
-                        "暂无可选择的地区组"
+                    text = when {
+                        normalizedSearchQuery.isNotEmpty() -> "没有匹配的地区组"
+                        sourceOptions.isNotEmpty() && selectedSourceIds?.isEmpty() == true ->
+                            "尚未选择仓库源，请点击右上角选择"
+                        else -> "暂无可选择的地区组"
                     },
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 14.sp,

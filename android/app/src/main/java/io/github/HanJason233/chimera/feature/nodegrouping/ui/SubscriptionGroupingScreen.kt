@@ -24,6 +24,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -99,6 +100,8 @@ internal fun SubscriptionGroupingScreen(
     var manualTestDialogHidden by rememberSaveable { mutableStateOf(false) }
     var clearTestDataDialogVisible by rememberSaveable { mutableStateOf(false) }
     var isClearingTestData by rememberSaveable { mutableStateOf(false) }
+    var isSearchActive by rememberSaveable { mutableStateOf(false) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
 
     LaunchedEffect(testProgress?.isManualGroupTest) {
         if (testProgress?.isManualGroupTest == true) {
@@ -126,7 +129,23 @@ internal fun SubscriptionGroupingScreen(
         onBack = handleBack,
         backEnabled = !isClosing,
         showBackNavigation = showBackNavigation,
+        isSearchActive = isSearchActive,
+        searchQuery = searchQuery,
+        searchPlaceholder = "搜索节点名称或服务器地址",
+        onSearchQueryChange = { searchQuery = it },
+        onSearchClose = {
+            isSearchActive = false
+            searchQuery = ""
+        },
         actions = {
+            if (!isSearchActive) {
+                IconButton(onClick = { isSearchActive = true }) {
+                    Icon(
+                        imageVector = Icons.Outlined.Search,
+                        contentDescription = "搜索节点"
+                    )
+                }
+            }
             Box {
                 IconButton(
                     onClick = { manualTestMenuExpanded = true },
@@ -232,6 +251,7 @@ internal fun SubscriptionGroupingScreen(
         Box(modifier = Modifier.fillMaxSize()) {
             NodeListContent(
                 nodes = nodes,
+                searchQuery = searchQuery,
                 testResults = testResults,
                 testStage = displayedTestStage,
                 testingNodeIds = testingNodeIds,
@@ -495,6 +515,7 @@ internal fun SubscriptionGroupingScreen(
 @Composable
 private fun NodeListContent(
     nodes: List<Node>,
+    searchQuery: String,
     testResults: Map<String, HomeNodeTestResultsEntity>,
     testStage: ManualGroupTestStage,
     testingNodeIds: Set<String>,
@@ -536,10 +557,25 @@ private fun NodeListContent(
             frozenNodes + newNodes
         }
     }
+    val normalizedSearchQuery = searchQuery.trim()
+    val visibleNodes = remember(displayNodes, normalizedSearchQuery) {
+        if (normalizedSearchQuery.isEmpty()) {
+            displayNodes
+        } else {
+            displayNodes.filter { node ->
+                node.name.contains(normalizedSearchQuery, ignoreCase = true) ||
+                    node.getDisplayName().contains(normalizedSearchQuery, ignoreCase = true) ||
+                    node.server.contains(normalizedSearchQuery, ignoreCase = true) ||
+                    node.type.protocol.contains(normalizedSearchQuery, ignoreCase = true) ||
+                    node.subscriptionSourceName.orEmpty()
+                        .contains(normalizedSearchQuery, ignoreCase = true)
+            }
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         when {
-            displayNodes.isEmpty() -> {
+            visibleNodes.isEmpty() -> {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -547,7 +583,11 @@ private fun NodeListContent(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "暂无可用节点",
+                        text = if (normalizedSearchQuery.isNotEmpty()) {
+                            "没有匹配的节点"
+                        } else {
+                            "暂无可用节点"
+                        },
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 16.sp
                     )
@@ -568,7 +608,7 @@ private fun NodeListContent(
                         verticalArrangement = Arrangement.spacedBy(0.dp)
                     ) {
                         items(
-                            items = displayNodes,
+                            items = visibleNodes,
                             key = { it.id }
                         ) { node ->
                             NodeListItem(
