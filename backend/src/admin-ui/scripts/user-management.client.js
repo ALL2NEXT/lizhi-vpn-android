@@ -1,6 +1,5 @@
 let adminUserData = null;
 let adminUserLoading = false;
-let adminUserUidHidden = true;
 let adminUserBatchBusy = false;
 let adminUserSecuritySource = null;
 let adminUserSecurityIndex = new Map();
@@ -75,7 +74,6 @@ const ADMIN_USER_SORTS = {
 function resetAdminUsers() {
   adminUserData = null;
   adminUserLoading = false;
-  adminUserUidHidden = true;
   adminUserBatchBusy = false;
   adminUserSecuritySource = null;
   adminUserSecurityIndex.clear();
@@ -83,11 +81,6 @@ function resetAdminUsers() {
   adminUserZeroFilters.today = false;
   adminUserZeroFilters.month = false;
   adminUserZeroFilters.total = false;
-}
-
-function toggleAdminUserUidVisibility() {
-  adminUserUidHidden = !adminUserUidHidden;
-  renderAdminUsers();
 }
 
 function saveAdminUserColumnVisibility() {
@@ -421,11 +414,6 @@ function renderAdminUsers() {
   const summary = el('userAdminSummary');
   if (!host || !summary) return;
   syncAdminUserFilterControls();
-  const uidToggle = el('userAdminUidToggle');
-  if (uidToggle) {
-    uidToggle.textContent = adminUserUidHidden ? '显示 UID' : '隐藏 UID';
-    uidToggle.setAttribute('aria-pressed', adminUserUidHidden ? 'true' : 'false');
-  }
   const users = adminUserData && Array.isArray(adminUserData.users)
     ? adminUserData.users : [];
   const filtered = adminUserList();
@@ -457,7 +445,7 @@ function renderAdminUsers() {
       '<td><input class="user-admin-checkbox" type="checkbox" data-admin-user-select="' + esc(uid) + '"' + (adminUserSelection.has(uid) ? ' checked' : '') + ' aria-label="选择用户 ' + esc(nickname) + '"></td>' +
       '<td class="user-admin-nickname">' + esc(nickname) + '</td>' +
       '<td><span class="user-admin-cell-ellipsis">' + esc(user.email || '—') + '</span></td>' +
-      '<td><span class="user-admin-cell-ellipsis user-admin-uid-value">' + (adminUserUidHidden ? '••••••••' : esc(uid)) + '</span></td>' +
+      '<td><span class="user-admin-cell-ellipsis user-admin-uid-value">' + esc(uid) + '</span></td>' +
       '<td><span class="user-admin-cell-ellipsis user-admin-registration-time" title="' + esc(registrationTime) + '">' + esc(registrationTime || '—') + '</span></td>' +
       '<td class="user-admin-registration-ip">' + adminUserRegistrationIpCell(user) + '</td>' +
       '<td>' + (banned ? '封禁' : '正常') + '</td>' +
@@ -474,7 +462,7 @@ function renderAdminUsers() {
       '<td class="user-admin-ip-cell">' + adminUserAssociatedIpCell(user) + '</td>' +
       '</tr>';
   }).join('');
-  host.innerHTML = '<table class="traffic-detail-table user-admin-table' + (adminUserUidHidden ? ' user-admin-hide-uid' : '') + '" aria-label="用户总表">' +
+  host.innerHTML = '<table class="traffic-detail-table user-admin-table" aria-label="用户总表">' +
     '<thead><tr><th>选择</th><th>昵称</th><th>邮箱</th><th>UID</th><th>注册时间</th><th>注册 IP</th><th>封禁状态</th><th>注册状态</th><th>风控状态</th><th>会员状态</th><th>VIP 到期时间</th><th>设备信息</th><th>受限设备数</th><th>今日流量</th><th>本月流量</th><th>累计流量</th><th>最后上报</th><th>关联 IP</th></tr></thead>' +
     '<tbody>' + rows + '</tbody></table>';
   applyAdminUserColumnVisibility();

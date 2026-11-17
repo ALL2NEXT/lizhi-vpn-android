@@ -500,7 +500,6 @@
      .user-admin-table input:not(.user-admin-checkbox) { width: 130px; min-width: 110px; padding: 7px 8px; }
      .user-admin-table th:first-child, .user-admin-table td:first-child { width: 34px; min-width: 34px; max-width: 34px; padding-left: 6px; padding-right: 6px; text-align: center; }
      .user-admin-table .user-admin-checkbox { width: auto; min-width: 0; padding: 0; margin: 0; }
-     .user-admin-table.user-admin-hide-uid th:nth-child(4), .user-admin-table.user-admin-hide-uid td:nth-child(4) { display: none; }
      .user-admin-table [data-admin-user-column][hidden] { display: none !important; }
      .user-admin-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 340px); align-items: start; gap: 14px; margin-top: 12px; }
      .user-admin-sidebar, .user-admin-workspace { min-width: 0; }
@@ -549,6 +548,7 @@
      .user-admin-operations-heading h3 { margin: 0; }
      .user-admin-header-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
      .user-admin-header-actions button { width: 100%; min-width: 0; margin: 0; }
+     .user-admin-header-actions button:last-child { grid-column: 1 / -1; }
      .user-admin-operation-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
      .user-admin-operation-controls button { width: 100%; min-width: 0; margin: 0; white-space: normal; }
      .user-admin-operation-controls label { display: inline-flex; align-items: center; grid-column: 1 / -1; margin: 0; white-space: normal; }
