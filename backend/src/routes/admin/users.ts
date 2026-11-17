@@ -43,7 +43,8 @@ export function createAdminUserRoutes(deps: Pick<
   if (path === "/api/users" && request.method === "GET") {
       const db = await ensureUserSchema(env);
       const { day, month } = usagePeriodKeys(new Date());
-      const query = await db.prepare(`WITH usage_stats AS (
+      const [query, ipQuery] = await Promise.all([
+        db.prepare(`WITH usage_stats AS (
         SELECT
           user_id,
           SUM(CASE WHEN usage_day = ? THEN upload_bytes ELSE 0 END) AS today_upload_bytes,
@@ -80,9 +81,30 @@ export function createAdminUserRoutes(deps: Pick<
           ORDER BY last_seen_at DESC, id DESC LIMIT 1
         )
         LEFT JOIN usage_stats s ON s.user_id = u.id
-        ORDER BY u.created_at DESC`).bind(day, day, day, month, month, month).all<UserRow>();
-      const publicUsers = (query.results || []).map((row) =>
-        publicAdminUser(row));
+        ORDER BY u.created_at DESC`).bind(day, day, day, month, month, month).all<UserRow>(),
+        db.prepare(
+          `SELECT user_id, ip FROM user_ip_links_mb
+           WHERE user_id IS NOT NULL
+           ORDER BY user_id ASC, last_seen_at DESC, ip ASC`,
+        ).all<{ user_id: number; ip: string }>(),
+      ]);
+      const ipsByUser = new Map<number, string[]>();
+      for (const row of ipQuery.results || []) {
+        const userId = Number(row.user_id);
+        const ip = cleanText(row.ip);
+        if (!Number.isSafeInteger(userId) || userId < 1 || !ip) continue;
+        const ips = ipsByUser.get(userId) || [];
+        ips.push(ip);
+        ipsByUser.set(userId, ips);
+      }
+      const publicUsers = (query.results || []).map((row) => {
+        const associatedIps = ipsByUser.get(Number(row.id)) || [];
+        return {
+          ...publicAdminUser(row),
+          associatedIps,
+          associatedIpCount: associatedIps.length,
+        };
+      });
 
       return json({
         ok: true,

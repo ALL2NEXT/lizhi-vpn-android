@@ -81,6 +81,7 @@ import {
 } from "./services/user-store.ts";
 import { handleHoneypotRoute, isHoneypotPath } from "./services/honeypot.ts";
 import { pruneSecurityRuleHits, recordHoneypotRuleHit } from "./services/security-risk.ts";
+import { writeUserIpLink } from "./services/user-ip-links.ts";
 import type {
   SystemLogDraft,
   SystemLogDetailSettings,
@@ -441,6 +442,13 @@ async function fetchObservedBackend(
       }
       await Promise.all([
         writeSystemLogs(env, entries, recordingSettings),
+        // 用户 IP 关联独立记录，不受系统网络日志开关和保留期影响。
+        writeUserIpLink(env, requestContext.user, {
+          ip: requestIp(request),
+          path,
+          status: response.status,
+          occurredAt,
+        }),
         isHoneypotRequest
           ? recordHoneypotRuleHit(env, {
               method: request.method,

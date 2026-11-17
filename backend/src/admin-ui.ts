@@ -3,7 +3,6 @@ import adminStyles from "./admin-ui/styles.css";
 import coreScript from "./admin-ui/scripts/core.client.js";
 import notificationsScript from "./admin-ui/scripts/notifications.client.js";
 import systemLogsScript from "./admin-ui/scripts/system-logs.client.js";
-import ipRelationsScript from "./admin-ui/scripts/ip-relations.client.js";
 import aiRiskScript from "./admin-ui/scripts/ai-risk.client.js";
 import securityScript from "./admin-ui/scripts/security.client.js";
 import userTableScript from "./admin-ui/scripts/user-table.client.js";
@@ -19,7 +18,6 @@ const adminScript = [
   coreScript,
   notificationsScript,
   systemLogsScript,
-  ipRelationsScript,
   aiRiskScript,
   securityScript,
   userTableScript,

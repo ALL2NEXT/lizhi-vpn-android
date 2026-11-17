@@ -114,7 +114,8 @@ function adminUserList() {
       return [device.deviceId, device.brand, device.model, device.androidVersion, device.appVersion].join(' ');
     }).join(' ');
     const searchable = [user.uid, user.nickname, user.email, user.brand, user.model,
-      user.androidVersion, user.appVersion, user.accountType, identityType, deviceSearch].join(' ').toLowerCase();
+      user.androidVersion, user.appVersion, user.accountType, identityType, deviceSearch,
+      Array.isArray(user.associatedIps) ? user.associatedIps.join(' ') : ''].join(' ').toLowerCase();
     const todayTotal = Number(user.today && user.today.totalMb || 0);
     const monthTotal = Number(user.month && user.month.totalMb || 0);
     const total = Number(user.totalMb || 0);
@@ -166,6 +167,16 @@ function adminUserDeviceCell(user) {
       '<br><span>' + esc([device.deviceId, device.androidVersion, device.appVersion].filter(Boolean).join(' / ') || '暂无设备版本信息') + '</span></div>';
   }).join('');
   return '<details><summary>' + deviceCount + ' 台设备' + (bannedCount ? ' · ' + bannedCount + ' 台封禁' : '') + '</summary>' + detailRows + '</details>';
+}
+
+function adminUserAssociatedIpCell(user) {
+  const ips = Array.isArray(user.associatedIps)
+    ? user.associatedIps.filter(function(ip) { return typeof ip === 'string' && ip; }) : [];
+  if (ips.length === 0) return '<span class="user-admin-ip-empty">暂无</span>';
+  if (ips.length === 1) return '<code class="user-admin-ip-single">' + esc(ips[0]) + '</code>';
+  return '<details class="user-admin-ip-details"><summary><code>' + esc(ips[0]) +
+    '</code><span> +' + (ips.length - 1) + '</span></summary><div class="user-admin-ip-list">' +
+    ips.map(function(ip) { return '<code>' + esc(ip) + '</code>'; }).join('') + '</div></details>';
 }
 
 function updateAdminUserSelectionControls(filtered) {
@@ -271,10 +282,11 @@ function renderAdminUsers() {
       '<td>' + formatMegabytes(month.totalMb) + '</td>' +
       '<td>' + formatMegabytes(user.totalMb) + '</td>' +
       '<td>' + esc(user.lastReportAt || '暂无') + '</td>' +
+      '<td class="user-admin-ip-cell">' + adminUserAssociatedIpCell(user) + '</td>' +
       '</tr>';
   }).join('');
   host.innerHTML = '<table class="traffic-detail-table user-admin-table' + (adminUserUidHidden ? ' user-admin-hide-uid' : '') + '" aria-label="用户总表">' +
-    '<thead><tr><th>选择</th><th>昵称</th><th>邮箱</th><th>UID</th><th>账号状态</th><th>账户类型</th><th>账号身份</th><th>会员状态</th><th>VIP 到期时间</th><th>品牌</th><th>型号</th><th>Android 版本</th><th>App 版本</th><th>设备数</th><th>受限设备数</th><th>今日流量</th><th>本月流量</th><th>累计流量</th><th>最后上报</th></tr></thead>' +
+    '<thead><tr><th>选择</th><th>昵称</th><th>邮箱</th><th>UID</th><th>账号状态</th><th>账户类型</th><th>账号身份</th><th>会员状态</th><th>VIP 到期时间</th><th>品牌</th><th>型号</th><th>Android 版本</th><th>App 版本</th><th>设备数</th><th>受限设备数</th><th>今日流量</th><th>本月流量</th><th>累计流量</th><th>最后上报</th><th>关联 IP</th></tr></thead>' +
     '<tbody>' + rows + '</tbody></table>';
   host.querySelectorAll('[data-admin-user-select]').forEach(function(input) {
     input.addEventListener('change', function() {
@@ -612,13 +624,14 @@ function exportAdminUsersCsv() {
     show('当前没有可导出的用户', true);
     return;
   }
-  const lines = [['UID', '昵称', '邮箱', '状态', '账号身份', '历史设备数', '封禁设备数', '品牌', '型号', 'Android', 'App版本', '今日流量MB', '本月流量MB', '累计流量MB', '最后上报']];
+  const lines = [['UID', '昵称', '邮箱', '状态', '账号身份', '历史设备数', '封禁设备数', '品牌', '型号', 'Android', 'App版本', '今日流量MB', '本月流量MB', '累计流量MB', '最后上报', '关联IP']];
   users.forEach(function(user) {
     const security = adminUserSecurity(user);
     lines.push([user.uid, user.nickname, user.email, user.accountType === 'banned' ? '封禁' : '正常', adminUserIdentityLabel(user.identityType),
       security.historicalDeviceCount, security.bannedDeviceCount,
       user.brand, user.model, user.androidVersion, user.appVersion,
-      user.today && user.today.totalMb, user.month && user.month.totalMb, user.totalMb, user.lastReportAt]);
+      user.today && user.today.totalMb, user.month && user.month.totalMb, user.totalMb, user.lastReportAt,
+      Array.isArray(user.associatedIps) ? user.associatedIps.join('；') : '']);
   });
   const blob = new Blob(['\ufeff' + lines.map(function(line) { return line.map(csvAdminCell).join(','); }).join('\n')], {type: 'text/csv;charset=utf-8'});
   const url = URL.createObjectURL(blob);

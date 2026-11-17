@@ -538,6 +538,13 @@
      .user-admin-device-detail { margin-top: 6px; padding: 6px 8px; color: #5f6368; background: #f8fafd; border-radius: 6px; line-height: 1.45; }
      .user-admin-device-detail span { color: #5f6368; font-size: 12px; }
      .user-admin-device-empty { color: #5f6368; }
+     .user-admin-table .user-admin-ip-cell { min-width: 180px; white-space: normal; }
+     .user-admin-ip-details { min-width: 130px; }
+     .user-admin-ip-details summary { display: flex; align-items: center; gap: 6px; color: #5f6368; cursor: pointer; white-space: nowrap; }
+     .user-admin-ip-details summary code, .user-admin-ip-single { color: #174ea6; font-size: 12px; }
+     .user-admin-ip-details summary span, .user-admin-ip-empty { color: #5f6368; font-size: 12px; }
+     .user-admin-ip-list { display: grid; gap: 5px; margin-top: 6px; padding: 7px 8px; border-radius: 6px; background: #f8fafd; }
+     .user-admin-ip-list code { overflow-wrap: anywhere; color: #174ea6; font-size: 12px; }
      .user-admin-zero-filter { margin: 0; }
      .user-admin-zero-filter.active { color: #174ea6; border-color: #1a73e8; background: #e6f4ea; }
      .device-relation-devices { min-width: 440px; max-width: 860px; white-space: normal !important; vertical-align: top !important; }
@@ -605,7 +612,7 @@
      .settings-save-bar > span.error { color: #b3261e; }
      .settings-save-bar > div { display: flex; flex-wrap: wrap; gap: 8px; }
      .settings-save-bar button { margin: 0; }
-     .user-admin-table { width: 100%; min-width: 1760px; }
+     .user-admin-table { width: 100%; min-width: 1940px; }
      .user-admin-table th:first-child, .user-admin-table td:first-child { box-sizing: border-box; width: 46px; min-width: 46px; max-width: 46px; }
      .user-admin-table th:nth-child(2), .user-admin-table td:nth-child(2) { min-width: 200px; max-width: 320px; }
      .user-admin-table tr.dirty td { background: #fef7e0; }
@@ -796,6 +803,8 @@
     .user-admin-table th:nth-child(16), .user-admin-table td:nth-child(16),
     .user-admin-table th:nth-child(17), .user-admin-table td:nth-child(17) { width: 5%; }
     .user-admin-table th:nth-child(18), .user-admin-table td:nth-child(18) { width: 8%; }
+    .user-admin-table th:nth-child(19), .user-admin-table td:nth-child(19) { width: 8%; }
+    .user-admin-table th:nth-child(20), .user-admin-table td:nth-child(20) { width: 11%; }
     .user-admin-identity { min-width: 0; }
     .user-admin-cell-ellipsis { max-width: 100%; overflow-wrap: anywhere; white-space: normal; }
     .user-detail-link { width: 100%; max-width: 100%; white-space: nowrap; }
@@ -880,53 +889,6 @@
     .traffic-upload i { background: #34a853; }
     .traffic-download i { background: #a142f4; }
     .traffic-total i { background: #f9ab00; }
-    .ip-relations-filters { display: grid; grid-template-columns: auto minmax(240px, 1fr) auto; align-items: center; gap: 14px; margin: 18px 0 14px; }
-    .ip-relations-view-toggle { display: inline-flex; padding: 4px; border-radius: 10px; background: var(--surface-soft); }
-    .ip-relations-view-toggle button { min-width: 82px; margin: 0; padding: 8px 15px; border: 0; border-radius: 7px; color: var(--ink); background: transparent; font-size: 13px; font-weight: 600; cursor: pointer; }
-    .ip-relations-view-toggle button.active { color: #ffffff; background: var(--blue); box-shadow: 0 1px 3px rgb(26 115 232 / 24%); }
-    .ip-relations-search { display: flex; min-width: 0; height: 40px; align-items: center; gap: 9px; padding: 0 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
-    .ip-relations-search:focus-within { border-color: var(--blue); box-shadow: 0 0 0 2px rgb(26 115 232 / 12%); }
-    .ip-relations-search svg { flex: 0 0 17px; width: 17px; height: 17px; fill: none; stroke: var(--ink-muted); stroke-width: 1.8; stroke-linecap: round; }
-    .ip-relations-search input { width: 100%; min-width: 0; padding: 0; border: 0; outline: 0; color: var(--ink); background: transparent; font: inherit; }
-    .ip-relations-filters #ipRelationsSummary { margin: 0; color: var(--ink-muted); font-size: 13px; text-align: right; white-space: nowrap; }
-    .ip-relations-pagination { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
-    .ip-relations-pagination span { flex: 1; color: var(--ink-muted); font-size: 13px; }
-    .ip-relation-table-wrap { overflow: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
-    .ip-relation-table { width: 100%; min-width: 900px; border-collapse: collapse; font-size: 13px; }
-    .ip-relation-table th, .ip-relation-table td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
-    .ip-relation-table th { color: #334155; background: #f1f5f9; font-size: 13px; font-weight: 650; }
-    .ip-relation-table tbody tr:last-child > td { border-bottom: 0; }
-    .ip-relation-parent-row.expanded > td { background: #edf5ff; }
-    .ip-relation-row-identity { display: flex; min-width: 0; align-items: center; gap: 9px; }
-    .ip-relation-expand { display: grid; flex: 0 0 22px; width: 22px; height: 26px; place-items: center; margin: 0; padding: 0; border: 0; color: var(--blue-ink); background: transparent; font-size: 23px; line-height: 1; cursor: pointer; }
-    .ip-relation-expand:hover { background: transparent; }
-    .ip-relation-row-identity > div { min-width: 0; }
-    .ip-relation-row-identity code { color: var(--blue-ink); font-size: 13px; overflow-wrap: anywhere; }
-    .ip-relation-main-account { display: grid; gap: 2px; }
-    .ip-relation-main-account small, .ip-relation-account small { color: var(--ink-muted); font-size: 12px; }
-    .ip-relation-account-list { display: grid; gap: 3px; }
-    .ip-relation-account-preview { display: flex; align-items: baseline; gap: 7px; }
-    .ip-relation-account-preview small { color: var(--ink-muted); font-size: 12px; }
-    .ip-relation-more { color: var(--ink-muted); font-size: 12px; }
-    .ip-relation-account { display: grid; grid-template-columns: auto auto; justify-content: start; align-items: baseline; gap: 2px 8px; }
-    .ip-relation-account small { grid-column: 1 / -1; overflow-wrap: anywhere; }
-    .ip-relation-status { color: var(--ink-muted); font-size: 12px; }
-    .ip-relation-status.status-banned { color: var(--red); }
-    .ip-relation-status.status-active { color: var(--green); }
-    .ip-relation-copy { display: inline-flex; align-items: center; justify-content: center; gap: 5px; margin: 0; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; color: #334155; background: var(--surface); font-size: 12px; white-space: nowrap; cursor: pointer; }
-    .ip-relation-copy:hover { background: #f8fafc; }
-    .ip-relation-copy svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-    .ip-relation-expanded-row > td { padding: 0 10px 10px; background: #edf5ff; }
-    .ip-relation-expanded-content { padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 8px; background: var(--surface); }
-    .ip-relation-expanded-content h3 { margin: 0 0 8px; font-size: 13px; }
-    .ip-relation-expanded-table-wrap { overflow-x: auto; }
-    .ip-relation-detail-table { width: 100%; min-width: 760px; border-collapse: collapse; font-size: 13px; }
-    .ip-relation-detail-table th, .ip-relation-detail-table td { padding: 8px 10px; border: 1px solid #e2e8f0; text-align: left; vertical-align: middle; }
-    .ip-relation-detail-table th { color: #334155; background: #f1f5f9; font-weight: 650; }
-    @media (max-width: 1000px) {
-      .ip-relations-filters { grid-template-columns: auto minmax(180px, 1fr); }
-      .ip-relations-filters #ipRelationsSummary { grid-column: 1 / -1; text-align: left; }
-    }
     .tab-panel[data-panel="ai-risk"] { padding: 16px; overflow-x: hidden; background: var(--surface-page); }
     .ai-risk-page { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; min-height: calc(100vh - 32px); }
     .ai-risk-main { display: grid; min-width: 0; align-content: start; gap: 14px; }
@@ -2111,8 +2073,6 @@ dialog::backdrop {
   .subscription-group-add-row button,
   .subscription-pagination > span:nth-child(3),
   .subscription-editor,
-  .ip-relations-view-toggle,
-  .ip-relations-search,
   .security-device-empty,
   .system-log-method,
   .system-log-status

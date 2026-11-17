@@ -236,9 +236,6 @@
    if (name === 'system-logs' && !systemLogsData && !systemLogsLoading) {
      loadSystemLogs();
    }
-   if (name === 'ip-relations' && !ipRelationsData && !ipRelationsLoading) {
-     loadIpRelations();
-   }
    if (name === 'environment-anomalies' && typeof loadClientSecurityReports === 'function') {
      loadClientSecurityReports();
    }
