@@ -100,6 +100,20 @@ function selectedAdminUserFilters(category) {
     .map(function(control) { return control.value; }));
 }
 
+function adminUserFilterEnabled(category) {
+  const toggle = document.querySelector('[data-admin-user-filter-toggle="' + category + '"]');
+  return Boolean(toggle && toggle.checked);
+}
+
+function syncAdminUserFilterControls() {
+  document.querySelectorAll('[data-admin-user-filter-toggle]').forEach(function(toggle) {
+    const category = toggle.dataset.adminUserFilterToggle;
+    document.querySelectorAll('[data-admin-user-filter="' + category + '"]').forEach(function(option) {
+      option.disabled = !toggle.checked;
+    });
+  });
+}
+
 function adminUserList() {
   const users = adminUserData && Array.isArray(adminUserData.users)
     ? adminUserData.users : [];
@@ -108,6 +122,10 @@ function adminUserList() {
   const typeFilters = selectedAdminUserFilters('type');
   const identityFilters = selectedAdminUserFilters('identity');
   const membershipFilters = selectedAdminUserFilters('membership');
+  const filterStatus = adminUserFilterEnabled('status');
+  const filterType = adminUserFilterEnabled('type');
+  const filterIdentity = adminUserFilterEnabled('identity');
+  const filterMembership = adminUserFilterEnabled('membership');
   const filtered = users.filter(function(user) {
     const identityType = user.identityType === 'bot' ? 'bot' : 'human';
     const deviceSearch = adminUserDevices(user).map(function(device) {
@@ -123,10 +141,10 @@ function adminUserList() {
     const accountStatus = user.accountType === 'banned' ? 'banned' : 'active';
     const membership = user.vipActive === true ? 'member' : 'non_member';
     if (search && searchable.indexOf(search) < 0) return false;
-    if (!statusFilters.has(accountStatus)) return false;
-    if (!typeFilters.has(accountLevel)) return false;
-    if (!identityFilters.has(identityType)) return false;
-    if (!membershipFilters.has(membership)) return false;
+    if (filterStatus && !statusFilters.has(accountStatus)) return false;
+    if (filterType && !typeFilters.has(accountLevel)) return false;
+    if (filterIdentity && !identityFilters.has(identityType)) return false;
+    if (filterMembership && !membershipFilters.has(membership)) return false;
     if (adminUserZeroFilters.today && todayTotal === 0) return false;
     if (adminUserZeroFilters.month && monthTotal === 0) return false;
     if (adminUserZeroFilters.total && total === 0) return false;
@@ -230,6 +248,7 @@ function renderAdminUsers() {
   const host = el('userAdminTable');
   const summary = el('userAdminSummary');
   if (!host || !summary) return;
+  syncAdminUserFilterControls();
   const uidToggle = el('userAdminUidToggle');
   if (uidToggle) {
     uidToggle.textContent = adminUserUidHidden ? '显示 UID' : '隐藏 UID';

@@ -206,30 +206,46 @@
             </label>
             <fieldset class="user-admin-filter-section">
               <legend>封禁状态</legend>
-              <div class="user-admin-filter-options" role="group" aria-label="按封禁状态筛选">
-                <label class="user-admin-filter-option"><input type="checkbox" data-admin-user-filter="status" value="active" checked onchange="renderAdminUsers()">正常</label>
-                <label class="user-admin-filter-option"><input type="checkbox" data-admin-user-filter="status" value="banned" checked onchange="renderAdminUsers()">封禁</label>
+              <label class="user-admin-filter-toggle">
+                <span>启用筛选</span>
+                <span class="user-admin-filter-switch"><input type="checkbox" data-admin-user-filter-toggle="status" aria-label="启用封禁状态筛选" onchange="renderAdminUsers()"><span aria-hidden="true"></span></span>
+              </label>
+              <div class="user-admin-filter-options" role="radiogroup" aria-label="按封禁状态筛选">
+                <label class="user-admin-filter-option"><input type="radio" name="userAdminStatusFilter" data-admin-user-filter="status" value="active" checked disabled onchange="renderAdminUsers()">正常</label>
+                <label class="user-admin-filter-option"><input type="radio" name="userAdminStatusFilter" data-admin-user-filter="status" value="banned" disabled onchange="renderAdminUsers()">封禁</label>
               </div>
             </fieldset>
             <fieldset class="user-admin-filter-section">
               <legend>注册状态</legend>
-              <div class="user-admin-filter-options" role="group" aria-label="按注册状态筛选">
-                <label class="user-admin-filter-option"><input type="checkbox" data-admin-user-filter="type" value="guest" checked onchange="renderAdminUsers()">游客</label>
-                <label class="user-admin-filter-option"><input type="checkbox" data-admin-user-filter="type" value="formal" checked onchange="renderAdminUsers()">正式用户</label>
+              <label class="user-admin-filter-toggle">
+                <span>启用筛选</span>
+                <span class="user-admin-filter-switch"><input type="checkbox" data-admin-user-filter-toggle="type" aria-label="启用注册状态筛选" onchange="renderAdminUsers()"><span aria-hidden="true"></span></span>
+              </label>
+              <div class="user-admin-filter-options" role="radiogroup" aria-label="按注册状态筛选">
+                <label class="user-admin-filter-option"><input type="radio" name="userAdminRegistrationFilter" data-admin-user-filter="type" value="guest" checked disabled onchange="renderAdminUsers()">游客</label>
+                <label class="user-admin-filter-option"><input type="radio" name="userAdminRegistrationFilter" data-admin-user-filter="type" value="formal" disabled onchange="renderAdminUsers()">正式用户</label>
               </div>
             </fieldset>
             <fieldset class="user-admin-filter-section">
               <legend>风控状态</legend>
-              <div class="user-admin-filter-options" role="group" aria-label="按风控状态筛选">
-                <label class="user-admin-filter-option"><input type="checkbox" data-admin-user-filter="identity" value="human" checked onchange="renderAdminUsers()">真人</label>
-                <label class="user-admin-filter-option"><input type="checkbox" data-admin-user-filter="identity" value="bot" checked onchange="renderAdminUsers()">机器人</label>
+              <label class="user-admin-filter-toggle">
+                <span>启用筛选</span>
+                <span class="user-admin-filter-switch"><input type="checkbox" data-admin-user-filter-toggle="identity" aria-label="启用风控状态筛选" onchange="renderAdminUsers()"><span aria-hidden="true"></span></span>
+              </label>
+              <div class="user-admin-filter-options" role="radiogroup" aria-label="按风控状态筛选">
+                <label class="user-admin-filter-option"><input type="radio" name="userAdminRiskFilter" data-admin-user-filter="identity" value="human" checked disabled onchange="renderAdminUsers()">真人</label>
+                <label class="user-admin-filter-option"><input type="radio" name="userAdminRiskFilter" data-admin-user-filter="identity" value="bot" disabled onchange="renderAdminUsers()">机器人</label>
               </div>
             </fieldset>
             <fieldset class="user-admin-filter-section">
               <legend>会员状态</legend>
-              <div class="user-admin-filter-options" role="group" aria-label="按会员状态筛选">
-                <label class="user-admin-filter-option"><input type="checkbox" data-admin-user-filter="membership" value="member" checked onchange="renderAdminUsers()">会员</label>
-                <label class="user-admin-filter-option"><input type="checkbox" data-admin-user-filter="membership" value="non_member" checked onchange="renderAdminUsers()">非会员</label>
+              <label class="user-admin-filter-toggle">
+                <span>启用筛选</span>
+                <span class="user-admin-filter-switch"><input type="checkbox" data-admin-user-filter-toggle="membership" aria-label="启用会员状态筛选" onchange="renderAdminUsers()"><span aria-hidden="true"></span></span>
+              </label>
+              <div class="user-admin-filter-options" role="radiogroup" aria-label="按会员状态筛选">
+                <label class="user-admin-filter-option"><input type="radio" name="userAdminMembershipFilter" data-admin-user-filter="membership" value="member" checked disabled onchange="renderAdminUsers()">会员</label>
+                <label class="user-admin-filter-option"><input type="radio" name="userAdminMembershipFilter" data-admin-user-filter="membership" value="non_member" disabled onchange="renderAdminUsers()">非会员</label>
               </div>
               <small class="user-admin-filter-note">会员状态根据账户 VIP 有效期判断。</small>
             </fieldset>
