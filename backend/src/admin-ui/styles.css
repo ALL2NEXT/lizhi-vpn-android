@@ -52,6 +52,12 @@
      }
      .settings-save-status { flex: 1 1 auto; min-width: 0; overflow: hidden; color: var(--ink-muted, #5f6368); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
      .settings-save-status.error { color: var(--red, #b3261e); }
+     .dashboard-refresh-button { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; gap: 6px; min-height: 38px; margin: 0; white-space: nowrap; }
+     .dashboard-refresh-button .subscription-icon { flex-basis: 16px; width: 16px; height: 16px; }
+     .dashboard-refresh-button[aria-busy="true"] .subscription-icon { animation: dashboard-refresh-spin .8s linear infinite; }
+     @keyframes dashboard-refresh-spin { to { transform: rotate(360deg); } }
+     .dashboard-auto-refresh-toggle { gap: 7px; }
+     .dashboard-auto-refresh-interval { color: var(--ink-muted, #5f6368); font-size: 11px; }
      .settings-autosave-toggle { position: relative; display: inline-flex; flex: 0 0 auto; align-items: center; gap: 10px; color: var(--ink, #202124); font-size: 13px; cursor: pointer; user-select: none; }
      .settings-autosave-toggle input { position: absolute; width: 1px; height: 1px; margin: 0; opacity: 0; }
      .settings-autosave-track { position: relative; box-sizing: border-box; width: 38px; height: 22px; border: 1px solid #aeb7c4; border-radius: 999px; background: #aeb7c4; transition: background-color .15s ease, border-color .15s ease; }
@@ -267,15 +273,6 @@
      .system-logs-title { display: flex; align-items: center; gap: 10px; }
      .system-logs-settings-button { display: grid; place-items: center; width: 34px; min-width: 34px; min-height: 34px; margin: 0; padding: 6px; }
      .system-logs-settings-button svg { width: 19px; height: 19px; fill: currentColor; }
-     .system-logs-heading-actions { display: flex; align-items: center; gap: 14px; }
-     .system-logs-heading-actions > button { margin: 0; }
-     .system-logs-auto-refresh { position: relative; display: inline-flex; align-items: center; gap: 8px; margin: 0; color: #526078; font-size: 13px; cursor: pointer; }
-     .system-logs-auto-refresh input { position: absolute; width: 1px; height: 1px; opacity: 0; }
-     .system-logs-auto-refresh i { position: relative; display: inline-block; width: 38px; height: 22px; border-radius: 99px; background: #c6cfdb; transition: background .15s ease; }
-     .system-logs-auto-refresh i::after { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; content: ''; transition: transform .15s ease; box-shadow: 0 1px 2px #0002; }
-     .system-logs-auto-refresh input:checked + i { background: #1a73e8; }
-     .system-logs-auto-refresh input:checked + i::after { transform: translateX(16px); }
-     .system-logs-auto-refresh input:focus-visible + i { outline: 2px solid #1a73e8; outline-offset: 2px; }
      .tab-panel[data-panel="system-logs"] .system-logs-manager-layout { grid-template-columns: 310px minmax(0, 1fr); gap: 10px; min-height: 540px; }
      .system-logs-sidebar { display: flex; flex-direction: column; align-self: stretch; gap: 10px; min-width: 0; min-height: 0; overflow: visible; }
      .system-logs-endpoint-panel { box-sizing: border-box; min-width: 0; padding: 12px; border: 1px solid #e1e8f0; border-radius: 12px; background: #fff; box-shadow: 0 2px 8px rgb(40 62 92 / 3%); }
@@ -548,7 +545,6 @@
      .user-admin-operations-heading h3 { margin: 0; }
      .user-admin-header-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
      .user-admin-header-actions button { width: 100%; min-width: 0; margin: 0; }
-     .user-admin-header-actions button:last-child { grid-column: 1 / -1; }
      .user-admin-operation-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
      .user-admin-operation-controls button { width: 100%; min-width: 0; margin: 0; white-space: normal; }
      .user-admin-operation-controls label { display: inline-flex; align-items: center; grid-column: 1 / -1; margin: 0; white-space: normal; }

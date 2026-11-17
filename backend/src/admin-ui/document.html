@@ -88,8 +88,16 @@
      <div class="dashboard-workspace">
        <div class="dashboard-title-row">
          <h2 id="dashboardTitle">用户趋势</h2>
-         <div id="settingsSaveToolbar" class="settings-save-toolbar" role="region" aria-label="配置保存">
+         <div id="settingsSaveToolbar" class="settings-save-toolbar" role="region" aria-label="页面操作与配置保存">
            <span id="settingsSaveStatus" class="settings-save-status" role="status" aria-live="polite">所有修改已保存</span>
+           <button id="dashboardRefreshButton" class="secondary dashboard-refresh-button" type="button" title="刷新当前页面数据" aria-label="刷新当前页面数据">
+             <svg class="subscription-icon subscription-icon-small" aria-hidden="true"><use href="#subscription-icon-refresh"></use></svg><span data-dashboard-refresh-label>刷新</span>
+           </button>
+           <label class="settings-autosave-toggle dashboard-auto-refresh-toggle">
+             <span>自动刷新</span><span class="dashboard-auto-refresh-interval">30s</span>
+             <input id="dashboardAutoRefreshToggle" type="checkbox" role="switch" aria-label="每 30 秒自动刷新当前页面数据">
+             <span class="settings-autosave-track" aria-hidden="true"></span>
+           </label>
            <label class="settings-autosave-toggle">
              <span>自动保存</span>
              <input id="settingsAutoSaveToggle" type="checkbox" role="switch" checked>
@@ -285,7 +293,6 @@
             </div>
             <div class="user-admin-header-actions">
               <button class="secondary" type="button" onclick="openAdminUserColumnDialog()">列显示</button>
-              <button class="secondary" type="button" onclick="loadAdminUsers(true)">刷新用户</button>
               <button class="secondary" type="button" onclick="exportAdminUsersCsv()">导出当前结果</button>
             </div>
           </div>
@@ -317,7 +324,6 @@
   <section class="card tab-panel" role="tabpanel" data-panel="device-management">
     <div class="dashboard-heading">
       <div><h2>设备管理</h2><p>按设备单独查看、封禁或解除设备封禁。已封禁设备无法登录、注册或注销账户。</p></div>
-      <button class="secondary" type="button" onclick="loadAdminDevices(true)">刷新设备</button>
     </div>
     <div class="user-admin-device-toolbar">
       <label class="user-admin-device-search">
@@ -340,7 +346,6 @@
   <section class="card tab-panel" role="tabpanel" data-panel="environment-anomalies">
     <div class="dashboard-heading">
       <div><h2>环境异常</h2><p>查看客户端上报的设备环境、应用完整性与网络安全信号，并进行人工审核。</p></div>
-      <button class="secondary" type="button" onclick="loadClientSecurityReports(true)">刷新</button>
     </div>
     <section class="security-risk-section" aria-labelledby="clientSecurityReportsTitle">
       <div class="security-risk-section-heading"><h3 id="clientSecurityReportsTitle">客户端检测上报</h3></div>
@@ -376,7 +381,6 @@
           </div>
           <div class="ai-risk-toolbar-actions">
             <button id="aiRiskAnalyze" type="button">运行 AI 分析</button>
-            <button id="aiRiskRefresh" class="secondary" type="button">刷新数据</button>
           </div>
         </div>
 
@@ -638,10 +642,6 @@
     <div class="dashboard-heading system-logs-heading">
       <div class="system-logs-title">
         <button id="systemLogsSettingsButton" class="system-logs-settings-button secondary" type="button" aria-label="网络日志设置" title="网络日志设置"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.14 12.94a7.7 7.7 0 0 0 .05-.94 7.7 7.7 0 0 0-.05-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7.3 7.3 0 0 0-1.63-.94l-.36-2.54A.49.49 0 0 0 13.89 2h-3.78a.49.49 0 0 0-.49.42L9.26 4.96a7.3 7.3 0 0 0-1.63.94l-2.39-.96a.5.5 0 0 0-.61.22L2.71 8.48a.5.5 0 0 0 .12.64l2.03 1.58a7.7 7.7 0 0 0-.05.94c0 .32.02.63.05.94l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32c.13.22.39.31.61.22l2.39-.96c.5.39 1.05.71 1.63.94l.36 2.54c.04.24.25.42.49.42h3.78c.24 0 .45-.18.49-.42l.36-2.54c.58-.23 1.13-.55 1.63-.94l2.39.96c.22.09.48 0 .61-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58ZM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z"/></svg></button>
-      </div>
-      <div class="system-logs-heading-actions">
-        <button class="secondary" type="button" onclick="loadSystemLogs(true)">⟳ 刷新</button>
-        <label class="system-logs-auto-refresh"><span>自动刷新</span><span>10s</span><input id="systemLogsAutoRefreshToggle" type="checkbox" aria-label="每 10 秒自动刷新网络日志"><i aria-hidden="true"></i></label>
       </div>
     </div>
     <div class="subscription-manager-layout system-logs-manager-layout">

@@ -1,5 +1,4 @@
 let systemLogsReloadQueued = false;
-let systemLogsAutoRefreshTimer = null;
 let systemLogsSearchTimer = null;
 let systemLogsRangeTimer = null;
 let systemLogsFilterRevision = 0;
@@ -938,24 +937,6 @@ async function copySystemLogText(value) {
   }
 }
 
-function setSystemLogAutoRefresh(enabled) {
-  if (systemLogsAutoRefreshTimer) clearInterval(systemLogsAutoRefreshTimer);
-  systemLogsAutoRefreshTimer = null;
-  if (!enabled) return;
-  systemLogsAutoRefreshTimer = setInterval(function() {
-    const panel = document.querySelector('[data-panel="system-logs"]');
-    if (!adminToken || !panel || !panel.classList.contains('active')) return;
-    loadSystemLogs(true);
-  }, 10000);
-}
-
-function stopSystemLogAutoRefresh() {
-  if (systemLogsAutoRefreshTimer) clearInterval(systemLogsAutoRefreshTimer);
-  systemLogsAutoRefreshTimer = null;
-  const toggle = el('systemLogsAutoRefreshToggle');
-  if (toggle) toggle.checked = false;
-}
-
 el('systemLogEndpointGroups').addEventListener('click', function(event) {
   const folderToggle = event.target.closest('[data-system-log-tree-toggle]');
   if (folderToggle) {
@@ -1055,10 +1036,6 @@ function scheduleSystemLogRangeUpdate() {
 el('systemLogsPageSize').addEventListener('change', function() {
   systemLogsOffset = 0;
   applySystemLogFilters();
-});
-
-el('systemLogsAutoRefreshToggle').addEventListener('change', function(event) {
-  setSystemLogAutoRefresh(event.target.checked);
 });
 
 document.addEventListener('keydown', function(event) {

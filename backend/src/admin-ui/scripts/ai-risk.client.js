@@ -570,7 +570,6 @@ async function loadAiRiskDashboard(clearAnalysis) {
     return;
   }
   aiRiskOperationInFlight = true;
-  el('aiRiskRefresh').disabled = true;
   if (clearAnalysis) aiRiskAnalysis = null;
   aiRiskSetStatus('aiRiskAnalysisStatus', '正在读取风险数据…', false);
   try {
@@ -605,7 +604,6 @@ async function loadAiRiskDashboard(clearAnalysis) {
     aiRiskSetStatus('aiRiskAnalysisStatus', aiRiskErrorText(error.message), true);
   } finally {
     aiRiskOperationInFlight = false;
-    el('aiRiskRefresh').disabled = false;
   }
 }
 
@@ -819,7 +817,6 @@ el('aiRiskPromptReset').addEventListener('click', function() {
 el('aiRiskTest').addEventListener('click', testAiRiskGemini);
 el('aiRiskLoadModels').addEventListener('click', loadAiRiskModels);
 el('aiRiskAnalyze').addEventListener('click', runAiRiskAnalysis);
-el('aiRiskRefresh').addEventListener('click', function() { loadAiRiskDashboard(true); });
 el('aiRiskPreview').addEventListener('click', previewAiRiskData);
 ['aiRiskStartDate', 'aiRiskEndDate'].forEach(function(id) {
   el(id).addEventListener('input', scheduleAiRiskDateRangeUpdate);

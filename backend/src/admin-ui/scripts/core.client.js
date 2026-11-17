@@ -56,6 +56,11 @@
  ];
  let userColumnWidths = loadUserColumnWidths();
  const ADMIN_API_BASE = "__ADMIN_BASE_PATH__/api";
+ const ADMIN_PANEL_AUTO_REFRESH_STORAGE_KEY = 'chimera.admin.panel-auto-refresh.v1';
+ const ADMIN_PANEL_AUTO_REFRESH_INTERVAL_MS = 30000;
+ let adminPanelAutoRefreshPreferences = readAdminPanelAutoRefreshPreferences();
+ let adminPanelAutoRefreshTimer = null;
+ let adminPanelRefreshInFlight = false;
  const loginGate = document.getElementById('loginGate');
  const loginForm = document.getElementById('loginForm');
  const passwordInput = document.getElementById('adminPassword');
@@ -82,6 +87,145 @@
  }
  function adminApiUrl(path) {
    return new URL(ADMIN_API_BASE + path, window.location.origin).toString();
+ }
+ function readAdminPanelAutoRefreshPreferences() {
+   try {
+     const saved = JSON.parse(window.localStorage.getItem(ADMIN_PANEL_AUTO_REFRESH_STORAGE_KEY) || '{}');
+     return saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : {};
+   } catch (_) {
+     return {};
+   }
+ }
+ function currentAdminPanelName() {
+   const panel = document.querySelector('.tab-panel.active[data-panel]');
+   return panel ? panel.dataset.panel : '';
+ }
+ function settingsSectionHasUnsavedChanges(section) {
+   return typeof settingsDirtySections !== 'undefined'
+     ? settingsDirtySections.has(section)
+     : typeof hasUnsavedAdminChanges === 'function' && hasUnsavedAdminChanges();
+ }
+ function adminPanelRefreshBlockReason(panelName) {
+   const settingsSection = ['subscriptions', 'about-page', 'update-management', 'registration-control'].includes(panelName)
+     ? panelName : '';
+   if (settingsSection && (settingsSectionHasUnsavedChanges(settingsSection) ||
+       (typeof settingsSaveInFlight !== 'undefined' && (settingsSaveInFlight === settingsSection || settingsManualSaveRun)))) {
+     return '当前模块有未保存修改或正在保存，请稍后刷新';
+   }
+   if ((panelName === 'user-trends' || panelName === 'profile-ratio') &&
+       typeof dirtyUserIds !== 'undefined' && dirtyUserIds.size > 0) {
+     return '用户信息有未保存修改，请先保存后刷新';
+   }
+   if (panelName === 'users' && typeof adminUserBatchBusy !== 'undefined' && adminUserBatchBusy) {
+     return '账户批量操作进行中，请稍后再刷新';
+   }
+   if (panelName === 'device-management' && typeof adminDeviceBatchBusy !== 'undefined' && adminDeviceBatchBusy) {
+     return '设备批量操作进行中，请稍后再刷新';
+   }
+   if (panelName === 'ai-risk' && typeof aiRiskOperationInFlight !== 'undefined' && aiRiskOperationInFlight) {
+     return '行为异常分析操作进行中，请稍后再刷新';
+   }
+   const notificationEditor = document.getElementById('notificationEditor');
+   if (panelName === 'notifications' && notificationEditor && !notificationEditor.hidden) {
+     return '通知编辑窗口打开时暂停刷新';
+   }
+   if (panelName === 'subscriptions' && typeof subscriptionRefreshInFlight !== 'undefined' && subscriptionRefreshInFlight) {
+     return '订阅更新进行中，请稍后再刷新';
+   }
+   return '';
+ }
+ async function refreshAdminSettingsPanel(section) {
+   const response = await fetch(ADMIN_API_BASE + '/state', {
+     headers: headers(),
+     cache: 'no-store'
+   });
+   const data = parseResponseJson(await response.text());
+   if (!response.ok) {
+     show(data.error || ('配置读取失败（HTTP ' + response.status + '）'), true);
+     return false;
+   }
+   currentState = data;
+   fillState(data, section);
+   return true;
+ }
+ async function refreshCurrentAdminPanel(automatic) {
+   const panelName = currentAdminPanelName();
+   const button = document.getElementById('dashboardRefreshButton');
+   const refreshLabel = button && button.querySelector('[data-dashboard-refresh-label]');
+   const refreshers = {
+     'user-trends': function() { return loadUsers(true); },
+     'traffic-trends': function() { return loadTrafficChart(trafficPeriod); },
+     'profile-ratio': function() { return loadUsers(true); },
+     'users': function() { return loadAdminUsers(true); },
+     'device-management': function() { return loadAdminDevices(true); },
+     'registration-control': function() { return refreshAdminSettingsPanel('registration-control'); },
+     'subscriptions': function() { return refreshAdminSettingsPanel('subscriptions'); },
+     'about-page': function() { return refreshAdminSettingsPanel('about-page'); },
+     'update-management': function() { return refreshAdminSettingsPanel('update-management'); },
+     'notifications': function() { return loadAdminNotifications(); },
+     'environment-anomalies': function() { return loadClientSecurityReports(true); },
+     'ai-risk': function() { return loadAiRiskDashboard(false); },
+     'system-logs': function() { return loadSystemLogs(true); }
+   };
+   if (!adminToken || adminPanelRefreshInFlight) return false;
+   const refresh = refreshers[panelName];
+   if (!refresh) {
+     if (!automatic) show('当前页面没有可刷新的数据');
+     return false;
+   }
+   const blockReason = adminPanelRefreshBlockReason(panelName);
+   if (blockReason) {
+     if (!automatic) show(blockReason, true);
+     return false;
+   }
+
+   adminPanelRefreshInFlight = true;
+   if (button) {
+     button.disabled = true;
+     button.setAttribute('aria-busy', 'true');
+     if (refreshLabel) refreshLabel.textContent = '刷新中…';
+   }
+   try {
+     const refreshed = await refresh();
+     if (refreshed === false) return false;
+     return true;
+   } catch (error) {
+     if (!automatic) show('当前页面刷新失败：' + ((error && error.message) || '请检查网络'), true);
+     return false;
+   } finally {
+     adminPanelRefreshInFlight = false;
+     if (button) {
+       button.disabled = false;
+       button.removeAttribute('aria-busy');
+       if (refreshLabel) refreshLabel.textContent = '刷新';
+     }
+   }
+ }
+ function syncAdminPanelAutoRefresh(panelName) {
+   if (adminPanelAutoRefreshTimer) clearInterval(adminPanelAutoRefreshTimer);
+   adminPanelAutoRefreshTimer = null;
+   const activePanel = panelName || currentAdminPanelName();
+   const toggle = document.getElementById('dashboardAutoRefreshToggle');
+   const enabled = adminPanelAutoRefreshPreferences[activePanel] === true;
+   if (toggle) toggle.checked = enabled;
+   if (!enabled || !activePanel) return;
+   adminPanelAutoRefreshTimer = setInterval(function() {
+     if (!adminToken || document.hidden || currentAdminPanelName() !== activePanel) return;
+     void refreshCurrentAdminPanel(true);
+   }, ADMIN_PANEL_AUTO_REFRESH_INTERVAL_MS);
+ }
+ function setAdminPanelAutoRefresh(enabled) {
+   const panelName = currentAdminPanelName();
+   if (!panelName) return;
+   adminPanelAutoRefreshPreferences[panelName] = Boolean(enabled);
+   try {
+     window.localStorage.setItem(ADMIN_PANEL_AUTO_REFRESH_STORAGE_KEY, JSON.stringify(adminPanelAutoRefreshPreferences));
+   } catch (_) {}
+   syncAdminPanelAutoRefresh(panelName);
+ }
+ function stopAdminPanelAutoRefresh() {
+   if (adminPanelAutoRefreshTimer) clearInterval(adminPanelAutoRefreshTimer);
+   adminPanelAutoRefreshTimer = null;
  }
  function adminErrorMessage(error, fallback) {
    if (error === 'invalid_latest_app_version') return '最新应用版本格式无效，请使用类似 1.2.3 的数字版本号';
@@ -186,7 +330,7 @@
    if (typeof resetIpRelations === 'function') resetIpRelations();
    trafficDetailsData = null;
    closeDeviceRelationDetail();
-   if (typeof stopSystemLogAutoRefresh === 'function') stopSystemLogAutoRefresh();
+   stopAdminPanelAutoRefresh();
    if (typeof closeSystemLogDetails === 'function') closeSystemLogDetails();
    systemLogsData = null;
    systemLogsLoading = false;
@@ -224,6 +368,7 @@
    document.querySelectorAll('.tab-panel').forEach(function(panel) {
      panel.classList.toggle('active', panel.dataset.panel === name);
    });
+   syncAdminPanelAutoRefresh(name);
    if (name === 'account-security' && !accountSecurityData && !accountSecurityLoading) {
      loadAccountSecurity();
    }
@@ -251,6 +396,12 @@
      loadSystemLogRecordingSettings();
    }
  }
+ document.getElementById('dashboardRefreshButton').addEventListener('click', function() {
+   void refreshCurrentAdminPanel(false);
+ });
+ document.getElementById('dashboardAutoRefreshToggle').addEventListener('change', function(event) {
+   setAdminPanelAutoRefresh(event.target.checked);
+ });
    document.querySelectorAll('.tab-button[data-tab]').forEach(function(button) {
    button.onclick = function() {
      activateTab(button.dataset.tab);
