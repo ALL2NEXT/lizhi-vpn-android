@@ -307,9 +307,9 @@
           <div class="user-admin-operation-controls">
             <label><input id="userAdminSelectAll" type="checkbox" onchange="toggleAllAdminUsers(this.checked)">全选当前结果</label>
             <button id="userAdminClearSelection" class="secondary" type="button" disabled onclick="clearAdminUserSelection()">清空选择</button>
-            <button id="userAdminBatchBan" class="danger" type="button" disabled onclick="batchSetAdminUserBan(true)">批量封禁账户</button>
-            <button id="userAdminBatchUnban" class="secondary" type="button" disabled onclick="batchSetAdminUserBan(false)">批量解封账户</button>
-            <button id="userAdminBatchDelete" class="danger" type="button" disabled onclick="batchDeleteAdminUsers()">批量删除账户</button>
+            <button id="userAdminBatchBan" class="danger" type="button" disabled onclick="batchSetAdminUserBan(true)">封禁账户</button>
+            <button id="userAdminBatchUnban" class="secondary" type="button" disabled onclick="batchSetAdminUserBan(false)">解封账户</button>
+            <button id="userAdminBatchDelete" class="danger" type="button" disabled onclick="batchDeleteAdminUsers()">删除账户</button>
           </div>
           <p class="user-admin-separation-note">设备封禁请前往“设备管理”单独操作。</p>
         </section>
@@ -338,8 +338,8 @@
       <div class="user-admin-device-actions">
         <label class="user-admin-device-select-all"><input id="adminDeviceSelectAll" type="checkbox" onchange="toggleAllAdminDevices(this.checked)">全选当前结果</label>
         <button id="adminDeviceClearSelection" class="secondary" type="button" disabled onclick="clearAdminDeviceSelection()">清空选择</button>
-        <button id="adminDeviceBatchBan" class="danger" type="button" disabled onclick="batchSetAdminDeviceBan('ban')">批量封禁设备</button>
-        <button id="adminDeviceBatchUnban" class="secondary" type="button" disabled onclick="batchSetAdminDeviceBan('unban')">批量解封设备</button>
+        <button id="adminDeviceBatchBan" class="danger" type="button" disabled onclick="batchSetAdminDeviceBan('ban')">封禁设备</button>
+        <button id="adminDeviceBatchUnban" class="secondary" type="button" disabled onclick="batchSetAdminDeviceBan('unban')">解封设备</button>
       </div>
       <p id="adminDeviceSummary" class="user-admin-summary" role="status" aria-live="polite"></p>
     </div>
