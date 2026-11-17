@@ -1412,25 +1412,6 @@
       background: #eef2f8;
     }
     .subscription-manager { display: flex; flex: 1 1 auto; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; }
-    .subscription-manager-header {
-      display: grid;
-      flex: 0 0 auto;
-      grid-template-columns: minmax(220px, 1fr) auto;
-      grid-template-areas: "title status";
-      align-items: center;
-      gap: 0 16px;
-      min-height: 90px;
-      padding: 12px 18px;
-      background: #fff;
-      border: 1px solid #e1e7ef;
-      border-radius: 12px;
-      box-shadow: 0 2px 8px rgb(32 33 36 / 4%);
-    }
-    .subscription-manager-title { grid-area: title; min-width: 0; }
-    .subscription-manager-title h2 { margin: 0 0 2px; color: #141b28; font-size: 28px; line-height: 1.2; }
-    .subscription-manager-title p { margin: 0; color: #64748b; font-size: 14px; }
-    .subscription-manager-save { grid-area: status; justify-self: end; gap: 4px; }
-    .subscription-manager-save-status { min-height: 14px; font-size: 12px; text-align: right; }
     .subscription-list-search {
       box-sizing: border-box;
       display: flex;
@@ -1623,7 +1604,6 @@
     .subscription-editor-check { margin: 0; color: #29374b; font-size: 13px; }
     .subscription-editor-section > button { justify-self: start; margin: 0; color: #1a5fbd; background: #edf4ff; }
     @media (max-width: 1280px) {
-      .subscription-manager-header { grid-template-columns: minmax(180px, 1fr) minmax(0, auto); }
       .subscription-manager-layout { grid-template-columns: 250px minmax(0, 1fr); }
       .subscription-list-toolbar { flex-wrap: wrap; }
       .subscription-list-search { flex-basis: 100%; }
@@ -1689,9 +1669,6 @@
       body.subscriptions-fullscreen #dashboard, body.subscriptions-fullscreen .dashboard-workspace { height: auto; min-height: 100vh; overflow: visible; }
       body.subscriptions-fullscreen .tab-panel[data-panel="subscriptions"].active { min-height: 100vh; height: auto; overflow: visible; padding: 8px; }
       .subscription-manager { min-height: calc(100vh - 16px); }
-      .subscription-manager-header { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "title status"; gap: 12px; padding: 14px; }
-      .subscription-manager-title h2 { font-size: 24px; }
-      .subscription-manager-save { align-self: start; }
       .subscription-manager-layout { grid-template-columns: minmax(0, 1fr); min-height: 0; }
       .subscription-group-sidebar { min-height: 138px; max-height: 180px; }
       .subscription-group-navigation { grid-template-columns: minmax(0, 1fr); overflow-y: auto; }
@@ -1847,7 +1824,6 @@ dialog :is(p, small, label),
 #dashboard .dashboard-workspace .settings-section,
 #dashboard .dashboard-workspace .source-section,
 #dashboard .dashboard-workspace .subscription-group,
-#dashboard .dashboard-workspace .subscription-manager-header,
 .login-gate .card,
 dialog,
 [role="dialog"] {
@@ -1861,7 +1837,6 @@ dialog,
 #dashboard .dashboard-workspace .settings-section,
 #dashboard .dashboard-workspace .source-section,
 #dashboard .dashboard-workspace .subscription-group,
-#dashboard .dashboard-workspace .subscription-manager-header,
 .login-gate .card,
 dialog,
 [role="dialog"] {

@@ -562,11 +562,6 @@ function updateSourceRowsMeta() {
       if (orderInput) orderInput.value = String(sourceOrder(row));
     });
   });
-  const groups = getSubscriptionGroupRows();
-  const allRows = getSourceRows();
-  const enabledCount = allRows.filter(function(row) { return row.querySelector('[data-field="enabled"]').checked; }).length;
-  const summary = el('subscriptionSummary');
-  if (summary) summary.textContent = groups.length + ' 个分组 · ' + allRows.length + ' 条订阅 · ' + enabledCount + ' 条启用';
   updateSubscriptionGroupNavigation();
   applySubscriptionFilters();
 }
