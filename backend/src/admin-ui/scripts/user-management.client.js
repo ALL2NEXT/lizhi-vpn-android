@@ -116,7 +116,7 @@ function adminUserList() {
       return [device.deviceId, device.brand, device.model, device.androidVersion, device.androidSdk, device.appVersion].join(' ');
     }).join(' ');
     const searchable = [user.uid, user.nickname, user.email, user.brand, user.model,
-      user.androidVersion, user.appVersion, user.accountType, identityType, deviceSearch,
+      user.androidVersion, user.appVersion, user.registrationIp, user.accountType, identityType, deviceSearch,
       Array.isArray(user.associatedIps) ? user.associatedIps.join(' ') : ''].join(' ').toLowerCase();
     const todayTotal = Number(user.today && user.today.totalMb || 0);
     const monthTotal = Number(user.month && user.month.totalMb || 0);
@@ -203,6 +203,13 @@ function adminUserAssociatedIpCell(user) {
     ips.map(function(ip) { return '<code>' + esc(ip) + '</code>'; }).join('') + '</div></details>';
 }
 
+function adminUserRegistrationIpCell(user) {
+  const ip = String(user.registrationIp || '').trim();
+  return ip
+    ? '<code class="user-admin-ip-single">' + esc(ip) + '</code>'
+    : '<span class="user-admin-ip-empty">未记录</span>';
+}
+
 function updateAdminUserSelectionControls(filtered) {
   const allUsers = adminUserData && Array.isArray(adminUserData.users) ? adminUserData.users : [];
   const knownUids = new Set(allUsers.map(function(user) { return String(user.uid || ''); }));
@@ -273,11 +280,16 @@ function renderAdminUsers() {
       .replace('T', ' ')
       .replace(/(?:Z|[+-]\d{2}:\d{2})$/, '')
       .slice(0, 16);
+    const registrationTime = String(user.createdAt || '')
+      .replace('T', ' ')
+      .replace(/(?:Z|[+-]\d{2}:\d{2})$/, '');
     return '<tr class="' + (banned ? 'banned' : '') + '" data-admin-user-row="' + esc(uid) + '">' +
       '<td><input class="user-admin-checkbox" type="checkbox" data-admin-user-select="' + esc(uid) + '"' + (adminUserSelection.has(uid) ? ' checked' : '') + ' aria-label="选择用户 ' + esc(nickname) + '"></td>' +
       '<td class="user-admin-nickname">' + esc(nickname) + '</td>' +
       '<td><span class="user-admin-cell-ellipsis">' + esc(user.email || '—') + '</span></td>' +
       '<td><span class="user-admin-cell-ellipsis user-admin-uid-value">' + (adminUserUidHidden ? '••••••••' : esc(uid)) + '</span></td>' +
+      '<td><span class="user-admin-cell-ellipsis user-admin-registration-time" title="' + esc(registrationTime) + '">' + esc(registrationTime || '—') + '</span></td>' +
+      '<td class="user-admin-registration-ip">' + adminUserRegistrationIpCell(user) + '</td>' +
       '<td>' + (banned ? '封禁' : '正常') + '</td>' +
       '<td>' + accountLevel + '</td>' +
       '<td>' + esc(adminUserIdentityLabel(identityType)) + '</td>' +
@@ -293,7 +305,7 @@ function renderAdminUsers() {
       '</tr>';
   }).join('');
   host.innerHTML = '<table class="traffic-detail-table user-admin-table' + (adminUserUidHidden ? ' user-admin-hide-uid' : '') + '" aria-label="用户总表">' +
-    '<thead><tr><th>选择</th><th>昵称</th><th>邮箱</th><th>UID</th><th>封禁状态</th><th>注册状态</th><th>风控状态</th><th>会员状态</th><th>VIP 到期时间</th><th>设备信息</th><th>受限设备数</th><th>今日流量</th><th>本月流量</th><th>累计流量</th><th>最后上报</th><th>关联 IP</th></tr></thead>' +
+    '<thead><tr><th>选择</th><th>昵称</th><th>邮箱</th><th>UID</th><th>注册时间</th><th>注册 IP</th><th>封禁状态</th><th>注册状态</th><th>风控状态</th><th>会员状态</th><th>VIP 到期时间</th><th>设备信息</th><th>受限设备数</th><th>今日流量</th><th>本月流量</th><th>累计流量</th><th>最后上报</th><th>关联 IP</th></tr></thead>' +
     '<tbody>' + rows + '</tbody></table>';
   host.querySelectorAll('[data-admin-user-select]').forEach(function(input) {
     input.addEventListener('change', function() {
@@ -454,10 +466,11 @@ function exportAdminUsersCsv() {
     show('当前没有可导出的用户', true);
     return;
   }
-  const lines = [['UID', '昵称', '邮箱', '封禁状态', '注册状态', '风控状态', '历史设备数', '封禁设备数', '品牌', '型号', 'Android', 'App版本', '今日流量MB', '本月流量MB', '累计流量MB', '最后上报', '关联IP']];
+  const lines = [['UID', '昵称', '邮箱', '注册时间', '注册IP', '封禁状态', '注册状态', '风控状态', '历史设备数', '封禁设备数', '品牌', '型号', 'Android', 'App版本', '今日流量MB', '本月流量MB', '累计流量MB', '最后上报', '关联IP']];
   users.forEach(function(user) {
     const security = adminUserSecurity(user);
-    lines.push([user.uid, user.nickname, user.email, user.accountType === 'banned' ? '封禁' : '正常',
+    lines.push([user.uid, user.nickname, user.email, user.createdAt, user.registrationIp,
+      user.accountType === 'banned' ? '封禁' : '正常',
       String(user.email || '').trim() ? '正式用户' : '游客', adminUserIdentityLabel(user.identityType),
       security.historicalDeviceCount, security.bannedDeviceCount,
       user.brand, user.model, user.androidVersion, user.appVersion,

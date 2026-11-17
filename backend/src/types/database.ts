@@ -30,6 +30,7 @@ export interface UserRow extends Partial<DeviceFields>, Partial<TrafficFields> {
   vip_expires_at?: string | null;
   identity_type?: UserIdentityType;
   created_at: string;
+  registration_ip?: string | null;
   device_brand?: string | null;
   device_model?: string | null;
   device_android_version?: string | null;

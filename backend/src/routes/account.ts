@@ -141,7 +141,13 @@ export function createAccountRoutes(deps: Pick<
 
       const now = new Date();
       await ensureUserSchema(env);
-      const identity = await registerOrTouchUser(env, deviceId, body || {}, now);
+      const identity = await registerOrTouchUser(
+        env,
+        deviceId,
+        body || {},
+        now,
+        request.headers.get("CF-Connecting-IP") || "",
+      );
       const user = identity && identity.userId > 0
         ? await readUserWithTraffic(env, identity.userId, undefined, now)
         : null;

@@ -162,7 +162,7 @@ const CLIENT_SECURITY_REPORTS_SCHEMA = `CREATE TABLE IF NOT EXISTS client_securi
 const CLIENT_SECURITY_REPORTS_INDEX = `CREATE INDEX IF NOT EXISTS idx_client_security_reports_pending_mb
   ON client_security_reports_mb(status, last_reported_at DESC, id DESC)`;
 
-export const USER_SCHEMA_VERSION = 25;
+export const USER_SCHEMA_VERSION = 26;
 export const USER_SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS app_schema_mb (
     component TEXT PRIMARY KEY,
@@ -181,6 +181,7 @@ export const USER_SCHEMA_STATEMENTS = [
     password_hash TEXT NOT NULL DEFAULT '',
     vip_expires_at TEXT,
     created_at TEXT NOT NULL,
+    registration_ip TEXT NOT NULL DEFAULT '',
     created_day TEXT GENERATED ALWAYS AS (substr(created_at, 1, 10)) VIRTUAL
   )`,
   `CREATE INDEX IF NOT EXISTS idx_users_mb_created_at
@@ -570,6 +571,9 @@ export const USER_SCHEMA_MIGRATIONS: Record<number, string[]> = {
   23: NOTIFICATION_SCHEMA_STATEMENTS,
   24: [SYSTEM_LOG_IP_INDEX, ...SECURITY_RISK_RULE_HITS_SCHEMA_STATEMENTS],
   25: [CLIENT_SECURITY_REPORTS_SCHEMA, CLIENT_SECURITY_REPORTS_INDEX],
+  26: [
+    `ALTER TABLE users_mb ADD COLUMN registration_ip TEXT NOT NULL DEFAULT ''`,
+  ],
 };
 export function resolveAdminBasePath(value: unknown): string | null {
   const route = String(value || "").trim().replace(/^\/+|\/+$/g, "");

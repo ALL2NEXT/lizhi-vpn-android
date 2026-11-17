@@ -101,6 +101,7 @@ export function createAdminUserRoutes(deps: Pick<
         const associatedIps = ipsByUser.get(Number(row.id)) || [];
         return {
           ...publicAdminUser(row),
+          registrationIp: cleanText(row.registration_ip),
           associatedIps,
           associatedIpCount: associatedIps.length,
         };

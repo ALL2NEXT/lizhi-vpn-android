@@ -29,6 +29,7 @@ import {
   normalizeUserReference,
   randomPublicUid,
 } from "../domain/account.ts";
+import { normalizeClientIp } from "../domain/ip.ts";
 import { beijingTimestamp, usagePeriodKeys } from "../domain/time.ts";
 import { cleanText } from "../lib/values.ts";
 import { observeRequestUser } from "../http/request.ts";
@@ -488,9 +489,16 @@ export async function attachDeviceToUser(db: Database, userId: number, deviceId:
     Number(results[1] && results[1].meta && results[1].meta.changes) > 0;
 }
 
-export async function registerOrTouchUser(env: Env, deviceId: string, profile: DeviceProfile, now: Date) {
+export async function registerOrTouchUser(
+  env: Env,
+  deviceId: string,
+  profile: DeviceProfile,
+  now: Date,
+  registrationIp = "",
+) {
   const db = await ensureUserSchema(env);
   const seenAt = beijingTimestamp(now);
+  const normalizedRegistrationIp = normalizeClientIp(registrationIp);
   const existing = await readDeviceContextFromDb(db, deviceId);
   if (existing && (existing.deviceBanned || existing.userStatus === "banned")) {
     return existing;
@@ -506,8 +514,9 @@ export async function registerOrTouchUser(env: Env, deviceId: string, profile: D
     uid = randomPublicUid();
     try {
       await db.prepare(
-        "INSERT INTO users_mb (uid, nickname, identity_type, created_at) VALUES (?, ?, 'human', ?)",
-      ).bind(uid, defaultNickname(uid), seenAt).run();
+        `INSERT INTO users_mb (uid, nickname, identity_type, created_at, registration_ip)
+         VALUES (?, ?, 'human', ?, ?)`,
+      ).bind(uid, defaultNickname(uid), seenAt, normalizedRegistrationIp).run();
       created = await db.prepare(
         "SELECT id FROM users_mb WHERE uid = ?",
       ).bind(uid).first<Pick<UserRow, "id">>();
