@@ -79,9 +79,9 @@ internal fun AccountSettingsOverviewContent(
             icon = Icons.Outlined.Person,
             title = accountDisplayName(account),
             subtitle = if (account.email.isBlank()) {
-                accountIdentityText(account)
+                accountSummaryText(account)
             } else {
-                "${accountIdentityText(account)} · ${account.email}"
+                "${accountSummaryText(account)} · ${account.email}"
             },
             onClick = onOpenAccountInfo
         )
@@ -248,7 +248,7 @@ internal fun AccountInfoDetailContent(
             }
         )
         SettingsDivider()
-        AccountDetailRow(label = "账户身份", value = accountIdentityText(account))
+        AccountDetailRow(label = "账户状态", value = accountStatusText(account))
         SettingsDivider()
         AccountDetailRow(label = "UID", value = account.uid)
         SettingsDivider()
@@ -692,17 +692,17 @@ private fun accountDisplayName(account: AccountInfo): String =
     account.nickname.trim().takeIf { it.isNotBlank() && it != "用户" }
         ?: "用户${account.uid.takeLast(6).uppercase()}"
 
-private fun accountIdentityText(account: AccountInfo): String = when {
+private fun accountSummaryText(account: AccountInfo): String = when {
     account.deviceBlocked || account.accountType == "banned" -> "被封禁用户"
-    account.accountType == "formal" -> "正式用户"
+    account.email.isNotBlank() -> "正式用户"
     else -> "游客"
 }
 
-private fun accountTypeText(account: AccountInfo): String = when {
-    account.deviceBlocked || account.accountType == "banned" -> "封禁账户"
-    account.accountType == "formal" -> "正式账户"
-    else -> "游客账户"
-}
+private fun accountStatusText(account: AccountInfo): String =
+    if (account.deviceBlocked || account.accountType == "banned") "被封禁" else "正常"
+
+private fun accountTypeText(account: AccountInfo): String =
+    if (account.email.isNotBlank()) "正式" else "游客"
 
 private fun formattedAccountTimestamp(value: String?): String? = value
     ?.replace('T', ' ')
