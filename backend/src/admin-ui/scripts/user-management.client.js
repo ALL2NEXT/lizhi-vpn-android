@@ -154,9 +154,21 @@ function adminUserDeviceCell(user) {
   const deviceCount = Number(security.historicalDeviceCount) || devices.length;
   const bannedCount = Number(security.bannedDeviceCount) || 0;
   if (devices.length === 0) {
-    return '<span class="user-admin-device-empty">暂无历史设备关系</span>';
+    const latestName = [user.brand, user.model].filter(Boolean).join(' ');
+    const latestSoftware = [
+      user.androidVersion ? 'Android ' + user.androidVersion : '',
+      Number(user.androidSdk) > 0 ? 'SDK ' + user.androidSdk : '',
+      user.appVersion ? 'App ' + user.appVersion : '',
+    ].filter(Boolean).join(' · ');
+    const latestInfo = [latestName, latestSoftware].filter(Boolean).join(' · ');
+    return latestInfo
+      ? '<span class="user-admin-device-empty">' + esc(latestInfo) + ' · 暂无设备历史</span>'
+      : '<span class="user-admin-device-empty">暂无历史设备关系</span>';
   }
-  const detailRows = devices.map(function(device) {
+  const displayDevices = devices.slice().sort(function(left, right) {
+    return Number(Boolean(right.current)) - Number(Boolean(left.current));
+  });
+  const detailRows = displayDevices.map(function(device) {
     const name = [device.brand, device.model].filter(Boolean).join(' ') || '未登记设备';
     const relation = device.current ? '当前设备' : '历史设备';
     const blocked = device.blocked ? ' · ' + (device.blockedByAccount ? '账户封禁' : '其他来源封禁') : '';
@@ -168,7 +180,17 @@ function adminUserDeviceCell(user) {
     return '<div class="user-admin-device-detail"><strong>' + esc(name) + '</strong> · ' + esc(relation + blocked) +
       '<br><span>设备 ID：' + esc(device.deviceId || '暂无') + ' · ' + esc(software) + '</span></div>';
   }).join('');
-  return '<details><summary>' + deviceCount + ' 台设备' + (bannedCount ? ' · ' + bannedCount + ' 台封禁' : '') + '</summary>' + detailRows + '</details>';
+  const summaryDevice = displayDevices.find(function(device) { return device.current; }) || displayDevices[0];
+  const summaryName = [summaryDevice.brand, summaryDevice.model].filter(Boolean).join(' ') || '未登记设备';
+  const summarySoftware = [
+    summaryDevice.androidVersion ? 'Android ' + summaryDevice.androidVersion : '',
+    Number(summaryDevice.androidSdk) > 0 ? 'SDK ' + summaryDevice.androidSdk : '',
+    summaryDevice.appVersion ? 'App ' + summaryDevice.appVersion : '',
+  ].filter(Boolean).join(' · ');
+  const summaryDeviceInfo = ' · ' + (summaryDevice.current ? '当前：' : '最近：') + esc(summaryName) +
+    (summarySoftware ? ' · ' + esc(summarySoftware) : '');
+  return '<details><summary>' + deviceCount + ' 台设备' + summaryDeviceInfo +
+    (bannedCount ? ' · ' + bannedCount + ' 台受限' : '') + '</summary>' + detailRows + '</details>';
 }
 
 function adminUserAssociatedIpCell(user) {
@@ -261,10 +283,6 @@ function renderAdminUsers() {
       '<td>' + esc(adminUserIdentityLabel(identityType)) + '</td>' +
       '<td>' + esc(membershipStatus) + '</td>' +
       '<td>' + esc(vipExpiresAt || '—') + '</td>' +
-      '<td>' + esc(user.brand || '—') + '</td>' +
-      '<td>' + esc(user.model || '—') + '</td>' +
-      '<td>' + esc(user.androidVersion || '暂无') + '</td>' +
-      '<td>' + esc(user.appVersion || '暂无') + '</td>' +
       '<td class="user-admin-device-cell">' + adminUserDeviceCell(user) + '</td>' +
       '<td>' + bannedDeviceCount + '</td>' +
       '<td>' + formatMegabytes(today.totalMb) + '</td>' +
@@ -275,7 +293,7 @@ function renderAdminUsers() {
       '</tr>';
   }).join('');
   host.innerHTML = '<table class="traffic-detail-table user-admin-table' + (adminUserUidHidden ? ' user-admin-hide-uid' : '') + '" aria-label="用户总表">' +
-    '<thead><tr><th>选择</th><th>昵称</th><th>邮箱</th><th>UID</th><th>封禁状态</th><th>注册状态</th><th>风控状态</th><th>会员状态</th><th>VIP 到期时间</th><th>品牌</th><th>型号</th><th>Android 版本</th><th>App 版本</th><th>设备与软件信息</th><th>受限设备数</th><th>今日流量</th><th>本月流量</th><th>累计流量</th><th>最后上报</th><th>关联 IP</th></tr></thead>' +
+    '<thead><tr><th>选择</th><th>昵称</th><th>邮箱</th><th>UID</th><th>封禁状态</th><th>注册状态</th><th>风控状态</th><th>会员状态</th><th>VIP 到期时间</th><th>设备信息</th><th>受限设备数</th><th>今日流量</th><th>本月流量</th><th>累计流量</th><th>最后上报</th><th>关联 IP</th></tr></thead>' +
     '<tbody>' + rows + '</tbody></table>';
   host.querySelectorAll('[data-admin-user-select]').forEach(function(input) {
     input.addEventListener('change', function() {
