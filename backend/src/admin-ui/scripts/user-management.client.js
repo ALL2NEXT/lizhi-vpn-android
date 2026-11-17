@@ -267,10 +267,10 @@ function renderAdminUsers() {
       '<td class="user-admin-identity"><button class="user-detail-link" type="button" data-admin-user-detail="' + esc(uid) + '">' + esc(nickname) + '</button></td>' +
       '<td><span class="user-admin-cell-ellipsis">' + esc(user.email || '—') + '</span></td>' +
       '<td><span class="user-admin-cell-ellipsis user-admin-uid-value">' + (adminUserUidHidden ? '••••••••' : esc(uid)) + '</span></td>' +
-      '<td><span class="user-status-badge ' + (banned ? 'banned' : 'active') + '">' + (banned ? '封禁' : '正常') + '</span></td>' +
+      '<td>' + (banned ? '封禁' : '正常') + '</td>' +
       '<td>' + accountLevel + '</td>' +
-      '<td><span class="user-identity-badge ' + identityType + '">' + esc(adminUserIdentityLabel(identityType)) + '</span></td>' +
-      '<td><span class="user-admin-membership-badge ' + (user.vipActive === true ? 'active' : 'inactive') + '">' + membershipStatus + '</span></td>' +
+      '<td>' + esc(adminUserIdentityLabel(identityType)) + '</td>' +
+      '<td>' + esc(membershipStatus) + '</td>' +
       '<td>' + esc(vipExpiresAt || '—') + '</td>' +
       '<td>' + esc(user.brand || '—') + '</td>' +
       '<td>' + esc(user.model || '—') + '</td>' +

@@ -541,10 +541,10 @@
      .user-admin-table .user-admin-ip-cell { min-width: 180px; white-space: normal; }
      .user-admin-ip-details { min-width: 130px; }
      .user-admin-ip-details summary { display: flex; align-items: center; gap: 6px; color: #5f6368; cursor: pointer; white-space: nowrap; }
-     .user-admin-ip-details summary code, .user-admin-ip-single { color: #174ea6; font-size: 12px; }
+     .user-admin-ip-details summary code, .user-admin-ip-single { color: #202124; font-size: 12px; }
      .user-admin-ip-details summary span, .user-admin-ip-empty { color: #5f6368; font-size: 12px; }
      .user-admin-ip-list { display: grid; gap: 5px; margin-top: 6px; padding: 7px 8px; border-radius: 6px; background: #f8fafd; }
-     .user-admin-ip-list code { overflow-wrap: anywhere; color: #174ea6; font-size: 12px; }
+     .user-admin-ip-list code { overflow-wrap: anywhere; color: #202124; font-size: 12px; }
      .user-admin-zero-filter { margin: 0; }
      .user-admin-zero-filter.active { color: #174ea6; border-color: #1a73e8; background: #e6f4ea; }
      .device-relation-devices { min-width: 440px; max-width: 860px; white-space: normal !important; vertical-align: top !important; }
@@ -620,18 +620,9 @@
      .user-admin-identity small, .user-admin-identity code { display: block; max-width: 290px; overflow: hidden; text-overflow: ellipsis; }
      .user-admin-cell-ellipsis { display: block; max-width: 210px; overflow: hidden; text-overflow: ellipsis; }
      .user-admin-uid-value { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
-     .user-admin-membership-badge { display: inline-flex; align-items: center; padding: 3px 8px; border-radius: 6px; font-size: 13px; }
-     .user-admin-membership-badge.active { color: #805500; background: #fff2cf; }
-     .user-admin-membership-badge.inactive { color: #68758a; background: #eef1f5; }
-     .user-identity-badge { display: inline-flex; align-items: center; padding: 3px 8px; border-radius: 6px; font-size: 13px; white-space: nowrap; }
-     .user-identity-badge.human { color: #137333; background: #e6f4ea; }
-     .user-identity-badge.bot { color: #8a4c00; background: #fff2cf; }
      .user-detail-link { display: block; max-width: 290px; padding: 0; overflow: hidden; color: #202124; background: transparent; font: inherit; font-weight: 700; text-overflow: ellipsis; text-align: left; }
      .user-detail-link:hover { color: #1a73e8; text-decoration: underline; }
-     .user-status-badge, .draft-badge { display: inline-block; padding: 3px 8px; border-radius: 6px; font-size: 13px; }
-     .user-status-badge.active { color: #137333; background: #e6f4ea; }
-     .user-status-badge.banned { color: #b3261e; background: #fce8e6; }
-     .draft-badge { margin-top: 4px; color: #b06000; background: #fef7e0; }
+     .draft-badge { display: inline-block; margin-top: 4px; padding: 3px 8px; border-radius: 6px; color: #b06000; background: #fef7e0; font-size: 13px; }
      .user-draft-count { flex-basis: 100%; color: #b06000; font-size: 13px; }
      .user-detail-dialog { box-sizing: border-box; inset: 0 0 0 auto; width: 680px; height: 100vh; max-width: none; max-height: 100vh; margin: 0; padding: 24px; overflow-y: auto; color: #202124; background: #ffffff; border: 0; border-left: 1px solid #dadce0; }
      .user-detail-dialog::backdrop { background: rgb(0 0 0 / 65%); }
@@ -1174,8 +1165,8 @@
     .device-relation-modal-card { border-color: var(--line); box-shadow: 0 8px 28px rgb(60 64 67 / 20%); }
     .source-settings-dialog-header, .source-settings-dialog-actions { border-color: var(--line); }
     .source-settings-dialog-header h3, .device-relation-modal-header h3 { color: var(--ink); }
-    .security-badge, .user-status-badge.active { color: #137333; background: #e6f4ea; }
-    .security-badge.banned, .user-status-badge.banned { color: var(--red); background: #fce8e6; }
+    .security-badge { color: #137333; background: #e6f4ea; }
+    .security-badge.banned { color: var(--red); background: #fce8e6; }
     .login-gate { width: min(430px, calc(100% - 32px)); margin-top: max(8vh, 48px); }
     .login-gate .card { padding: 28px; border-color: #e3e9f1; border-radius: 16px; box-shadow: 0 2px 10px rgb(60 64 67 / 7%); }
 
@@ -1210,7 +1201,7 @@
     .security-device-wrap { border-right: 0; border-bottom: 0; border-left: 0; border-radius: 0; }
     .subscription-import-item { padding: 12px 4px; border: 0; border-bottom: 1px solid #e7edf4; border-radius: 0; }
     .device-relation-chip { border-color: #dfe6ee; border-radius: 8px; background: #fff; }
-    .security-badge, .user-status-badge, .draft-badge { border-radius: 8px; font-size: 13px; }
+    .security-badge, .draft-badge { border-radius: 8px; font-size: 13px; }
     .user-draft-count, .user-detail-heading p { font-size: 14px; }
     .settings-save-bar {
       padding: 12px 16px;
