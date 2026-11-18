@@ -38,7 +38,6 @@ internal object SpeedTestSettingsCodec {
                 put("id", LegacySpeedTestSettings.DEFAULT_ID)
                 put("name", "迁移后的测速设置")
                 put("builtIn", true)
-                put("defaultsVersion", SettingsRepository.DEFAULT_SPEED_TEST_PRESET_REVISION)
             }
             val legacyPreferences = preferences.toMutablePreferences().apply {
                 this[SettingsRepository.LEGACY_SPEED_TEST_SETTINGS_JSON] = JSONArray().put(item).toString()
@@ -93,7 +92,6 @@ internal object SpeedTestSettingsCodec {
                 remove("id")
                 remove("name")
                 remove("builtIn")
-                remove("defaultsVersion")
                 remove("tcpingPercent")
                 remove("urlTestPercent")
                 remove("bandwidthPercent")
@@ -197,31 +195,6 @@ internal object SpeedTestSettingsCodec {
                             val item = array.optJSONObject(index) ?: continue
                             val id = item.optString("id").trim()
                             if (id.isBlank()) continue
-                            // 仅在内置预置版本升级时刷新默认字段；自定义方案保持原样。
-                            if (id == LegacySpeedTestSettings.DEFAULT_ID &&
-                                item.optInt("defaultsVersion", 0) < SettingsRepository.DEFAULT_SPEED_TEST_PRESET_REVISION
-                            ) {
-                                val defaults = LegacySpeedTestSettings.default()
-                                item.put("tcpingSelectionMode", defaults.tcpingSelectionMode.name)
-                                item.put("tcpingSelectionValue", defaults.tcpingSelectionValue)
-                                item.put("urlTestSelectionMode", defaults.urlTestSelectionMode.name)
-                                item.put("urlTestSelectionValue", defaults.urlTestSelectionValue)
-                                item.put("linkTypeTestEnabled", defaults.linkTypeTestEnabled)
-                                item.put("linkTypeConcurrencyMode", defaults.linkTypeConcurrencyMode.name)
-                                item.put("linkTypeConcurrency", defaults.linkTypeConcurrency)
-                                item.put("unlockTestConcurrencyMode", defaults.unlockTestConcurrencyMode.name)
-                                item.put("unlockTestConcurrency", defaults.unlockTestConcurrency)
-                                item.put("unlockTestRequestConcurrency", defaults.unlockTestRequestConcurrency)
-                                item.put("tcpingConcurrencyMode", defaults.tcpingConcurrencyMode.name)
-                                item.put("tcpingConcurrency", defaults.tcpingConcurrency)
-                                item.put("urlTestConcurrencyMode", defaults.urlTestConcurrencyMode.name)
-                                item.put("urlTestConcurrency", defaults.urlTestConcurrency)
-                                item.put(
-                                    "bandwidthTestConcurrencyMode",
-                                    defaults.bandwidthTestConcurrencyMode.name
-                                )
-                                item.put("bandwidthTestConcurrency", defaults.bandwidthTestConcurrency)
-                            }
                             add(
                                 normalizeLegacySpeedTestSettings(
                                     LegacySpeedTestSettings(
@@ -230,7 +203,7 @@ internal object SpeedTestSettingsCodec {
                                         builtIn = item.optBoolean("builtIn", false),
                                         tcpingEnabled = item.optBoolean("tcpingEnabled", true),
                                         urlTestEnabled = item.optBoolean("urlTestEnabled", true),
-                                        bandwidthEnabled = item.optBoolean("bandwidthEnabled", true),
+                                        bandwidthEnabled = item.optBoolean("bandwidthEnabled", false),
                                         linkTypeTestEnabled = item.optBoolean("linkTypeTestEnabled", false),
                                         linkTypeAcceptDirect = item.optBoolean("linkTypeAcceptDirect", true),
                                         linkTypeAcceptRelay = item.optBoolean("linkTypeAcceptRelay", true),
@@ -492,9 +465,6 @@ internal object SpeedTestSettingsCodec {
             array.put(
                 JSONObject().apply {
                     put("id", normalized.id)
-                    if (normalized.id == LegacySpeedTestSettings.DEFAULT_ID) {
-                        put("defaultsVersion", SettingsRepository.DEFAULT_SPEED_TEST_PRESET_REVISION)
-                    }
                     put("name", normalized.name)
                     put("builtIn", normalized.builtIn)
                     put("tcpingEnabled", normalized.tcpingEnabled)

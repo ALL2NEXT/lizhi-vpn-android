@@ -81,7 +81,7 @@ data class LegacySpeedTestSettings(
             tcpingEnabled = true,
             urlTestEnabled = true,
             bandwidthEnabled = false,
-            linkTypeTestEnabled = true,
+            linkTypeTestEnabled = false,
             // 默认将 TCPing 延迟最优的 10 个节点交给下一项测试。
             tcpingSelectionMode = SpeedTestSelectionMode.COUNT,
             tcpingSelectionValue = 10,

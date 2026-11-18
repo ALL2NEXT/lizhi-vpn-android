@@ -48,7 +48,7 @@ data class SpeedTestSettings(
             tcpingEnabled = true,
             urlTestEnabled = true,
             bandwidthEnabled = false,
-            linkTypeTestEnabled = true,
+            linkTypeTestEnabled = false,
             tcpingSelectionMode = SpeedTestSelectionMode.COUNT,
             tcpingSelectionValue = 10,
             urlTestSelectionMode = SpeedTestSelectionMode.COUNT,

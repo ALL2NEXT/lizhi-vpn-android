@@ -111,10 +111,6 @@ class SettingsRepository(
     companion object {
         const val DEFAULT_SERVICE_REQUEST_TIMEOUT_MS = 25_000L
         private const val AUTO_REFRESH_SOURCE_PREFIX = "auto_refresh_source_on_startup:"
-        /** 默认测速预置与旧版主题数据迁移分别维护版本。 */
-        internal const val DEFAULT_SPEED_TEST_PRESET_REVISION = 4
-        internal const val DEFAULT_SKIN_PARTICLE_PRESET_REVISION = 1
-        internal const val DEFAULT_SKIN_PRESET_REVISION = 3
         private const val MIN_SERVICE_REQUEST_TIMEOUT_MS = 5_000L
         private const val MAX_SERVICE_REQUEST_TIMEOUT_MS = 60_000L
 

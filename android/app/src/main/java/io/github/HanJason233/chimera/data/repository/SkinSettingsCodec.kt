@@ -217,50 +217,6 @@ internal object SkinSettingsCodec {
                             "homeIconRotationEnabled",
                             false
                         )
-                        val defaultsVersion = item.optInt("defaultsVersion", 0)
-                        if (id == LegacySkinScheme.DEFAULT_SCHEME_ID &&
-                            defaultsVersion < SettingsRepository.DEFAULT_SKIN_PARTICLE_PRESET_REVISION
-                        ) {
-                            item.put("homeIconEffectEnabled", LegacySkinScheme.default().homeIconEffectEnabled)
-                        }
-                        if (id == LegacySkinScheme.DEFAULT_SCHEME_ID &&
-                            defaultsVersion < SettingsRepository.DEFAULT_SKIN_PRESET_REVISION
-                        ) {
-                            val defaultScheme = LegacySkinScheme.default()
-                            // Revert the just introduced defaults when upgrading from revision 2.
-                            if (defaultsVersion >= 2 &&
-                                item.optString("homeDisconnectedIconEffect") ==
-                                HomeIconMotionEffect.BREATHE.storageName
-                            ) {
-                                item.put(
-                                    "homeDisconnectedIconEffect",
-                                    HomeIconMotionEffect.NONE.storageName
-                                )
-                            }
-                            if (defaultsVersion >= 2 &&
-                                item.optString("homeConnectedIconEffect") ==
-                                HomeIconMotionEffect.ROTATE.storageName
-                            ) {
-                                item.put(
-                                    "homeConnectedIconEffect",
-                                    HomeIconMotionEffect.NONE.storageName
-                                )
-                            }
-                            if (item.optString("homeConnectingIconEffect") in setOf("", "none")) {
-                                item.put(
-                                    "homeConnectingIconEffect",
-                                    defaultScheme.homeConnectingIconEffect.storageName
-                                )
-                            }
-                            if (item.optString("homeDisconnectingIconEffect") in setOf("", "none") &&
-                                !legacyHomeIconRotationEnabled
-                            ) {
-                                item.put(
-                                    "homeDisconnectingIconEffect",
-                                    defaultScheme.homeDisconnectingIconEffect.storageName
-                                )
-                            }
-                        }
                         // 旧版只有统一粒子开关，新字段缺失时沿用旧设置作为四种状态的初始值。
                         val legacyHomeIconEffectEnabled = item.optBoolean(
                             "homeIconEffectEnabled",
