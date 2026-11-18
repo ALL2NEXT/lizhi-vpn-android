@@ -6,7 +6,6 @@ import org.json.JSONObject
 import io.github.HanJason233.chimera.data.model.HomeNavigationStyle
 import io.github.HanJason233.chimera.data.model.HomeIconEffect
 import io.github.HanJason233.chimera.data.model.HomeIconMotionEffect
-import io.github.HanJason233.chimera.data.model.LegacySkinScheme
 import io.github.HanJason233.chimera.data.model.SkinSettings
 import io.github.HanJason233.chimera.data.model.SkinThemeMode
 import io.github.HanJason233.chimera.data.model.SpeedTestStage
@@ -122,46 +121,8 @@ internal object SkinSettingsCodec {
             )
         }
 
-        // 迁移时沿用旧版当前选中的主题；没有选择记录时与旧版一样优先采用首个自定义主题。
-        val legacySchemes = decodeLegacySkinSchemes(preferences)
-        val activeId = preferences[SettingsRepository.LEGACY_ACTIVE_SKIN_SCHEME_ID]
-            ?.takeIf { id -> legacySchemes.any { it.id == id } }
-            ?: legacySchemes.firstOrNull { !it.isDefault }?.id
-            ?: LegacySkinScheme.DEFAULT_SCHEME_ID
-        return legacySchemes.firstOrNull { it.id == activeId }
-            ?.toSkinSettings()
-            ?: LegacySkinScheme.default().toSkinSettings()
+        return SkinSettings()
     }
-
-    private fun LegacySkinScheme.toSkinSettings() = SkinSettings(
-        appDisplayName = appDisplayName,
-        appIconPresetId = appIconPresetId,
-        baseColorArgb = baseColorArgb,
-        themeMode = themeMode,
-        navigationStyle = navigationStyle,
-        monetEnabled = monetEnabled,
-        customImagePath = customImagePath,
-        homeDisconnectedImagePath = homeDisconnectedImagePath,
-        homeConnectingImagePath = homeConnectingImagePath,
-        homeDisconnectingImagePath = homeDisconnectingImagePath,
-        homeConnectedImagePath = homeConnectedImagePath,
-        homeIconEffect = homeIconEffect,
-        homeIconEffectEnabled = homeIconEffectEnabled,
-        homeDisconnectedIconEffect = homeDisconnectedIconEffect,
-        homeConnectingIconEffect = homeConnectingIconEffect,
-        homeDisconnectingIconEffect = homeDisconnectingIconEffect,
-        homeConnectedIconEffect = homeConnectedIconEffect,
-        homeDisconnectedParticleEffectEnabled = homeDisconnectedParticleEffectEnabled,
-        homeConnectingParticleEffectEnabled = homeConnectingParticleEffectEnabled,
-        homeDisconnectingParticleEffectEnabled = homeDisconnectingParticleEffectEnabled,
-        homeConnectedParticleEffectEnabled = homeConnectedParticleEffectEnabled,
-        showNodeProtocol = showNodeProtocol,
-        showNodeSecurity = showNodeSecurity,
-        showNodeTransport = showNodeTransport,
-        showNodeCore = showNodeCore,
-        showNodeAddress = showNodeAddress,
-        showNodePort = showNodePort
-    )
 
     internal fun encodeSkinSettings(settings: SkinSettings): String = JSONObject().apply {
         put("appDisplayName", settings.appDisplayName)
@@ -194,148 +155,4 @@ internal object SkinSettingsCodec {
         put("homeTestDisplayStages", JSONArray(settings.homeTestDisplayStages.map { it.name }))
     }.toString()
 
-    private fun decodeLegacySkinSchemes(preferences: Preferences): List<LegacySkinScheme> {
-        fun defaultSchemeWithLegacyNodeDisplaySettings(): LegacySkinScheme =
-            LegacySkinScheme.default().copy(
-                showNodeProtocol = preferences[SettingsRepository.NODE_LABEL_SHOW_PROTOCOL] ?: false,
-                showNodeSecurity = preferences[SettingsRepository.NODE_LABEL_SHOW_SECURITY] ?: false,
-                showNodeTransport = preferences[SettingsRepository.NODE_LABEL_SHOW_TRANSPORT] ?: false,
-                showNodeCore = preferences[SettingsRepository.NODE_LABEL_SHOW_CORE] ?: false
-            )
-
-        val storedJson = preferences[SettingsRepository.LEGACY_SKIN_SCHEMES_JSON]
-        if (!storedJson.isNullOrBlank()) {
-            val storedSchemes = runCatching {
-                val array = JSONArray(storedJson)
-                buildList {
-                    for (index in 0 until array.length()) {
-                        val item = array.optJSONObject(index) ?: continue
-                        val id = item.optString("id").trim()
-                        if (id.isBlank()) continue
-                        // 旧版统一旋转开关只作用于连接中和断开中，读取时映射到这两个状态。
-                        val legacyHomeIconRotationEnabled = item.optBoolean(
-                            "homeIconRotationEnabled",
-                            false
-                        )
-                        // 旧版只有统一粒子开关，新字段缺失时沿用旧设置作为四种状态的初始值。
-                        val legacyHomeIconEffectEnabled = item.optBoolean(
-                            "homeIconEffectEnabled",
-                            id != LegacySkinScheme.DEFAULT_SCHEME_ID
-                        )
-                        add(
-                            LegacySkinScheme(
-                                id = id,
-                                appDisplayName = item.optString(
-                                    "appDisplayName",
-                                    SkinSettings.DEFAULT_APP_DISPLAY_NAME
-                                ).trim().ifBlank { SkinSettings.DEFAULT_APP_DISPLAY_NAME }
-                                    .let { if (it == "Firefly") "Chimera" else it },
-                                appIconPresetId = item.optString(
-                                    "appIconPresetId",
-                                    SkinSettings.DEFAULT_APP_ICON_PRESET_ID
-                                ).trim().ifBlank { SkinSettings.DEFAULT_APP_ICON_PRESET_ID },
-                                baseColorArgb = normalizeSkinColor(
-                                    item.optLong(
-                                        "baseColorArgb",
-                                        SkinSettings.DEFAULT_BASE_COLOR_ARGB
-                                    )
-                                ),
-                                showNodeProtocol = item.optBoolean(
-                                    "showNodeProtocol",
-                                    preferences[SettingsRepository.NODE_LABEL_SHOW_PROTOCOL] ?: false
-                                ),
-                                showNodeSecurity = item.optBoolean(
-                                    "showNodeSecurity",
-                                    preferences[SettingsRepository.NODE_LABEL_SHOW_SECURITY] ?: false
-                                ),
-                                showNodeTransport = item.optBoolean(
-                                    "showNodeTransport",
-                                    preferences[SettingsRepository.NODE_LABEL_SHOW_TRANSPORT] ?: false
-                                ),
-                                showNodeCore = item.optBoolean(
-                                    "showNodeCore",
-                                    preferences[SettingsRepository.NODE_LABEL_SHOW_CORE] ?: false
-                                ),
-                                showNodeAddress = item.optBoolean("showNodeAddress", false),
-                                showNodePort = item.optBoolean("showNodePort", false),
-                                themeMode = SkinThemeMode.fromStorage(
-                                    item.optString("themeMode").takeIf { it.isNotBlank() }
-                                ),
-                                navigationStyle = HomeNavigationStyle.fromStorage(
-                                    item.optString("navigationStyle").takeIf { it.isNotBlank() }
-                                ),
-                                monetEnabled = item.optBoolean("monetEnabled", false),
-                                customImagePath = item.optString("customImagePath")
-                                    .takeIf { it.isNotBlank() && it != JSONObject.NULL.toString() },
-                                homeDisconnectedImagePath = item.optString("homeDisconnectedImagePath")
-                                    .takeIf { it.isNotBlank() && it != JSONObject.NULL.toString() },
-                                homeConnectingImagePath = item.optString("homeConnectingImagePath")
-                                    .takeIf { it.isNotBlank() && it != JSONObject.NULL.toString() },
-                                homeDisconnectingImagePath = item.optString("homeDisconnectingImagePath")
-                                    .takeIf { it.isNotBlank() && it != JSONObject.NULL.toString() },
-                                homeConnectedImagePath = item.optString("homeConnectedImagePath")
-                                    .takeIf { it.isNotBlank() && it != JSONObject.NULL.toString() },
-                                homeIconEffect = HomeIconEffect.fromStorage(
-                                    item.optString("homeIconEffect").takeIf { it.isNotBlank() }
-                                ),
-                                homeIconEffectEnabled = item.optBoolean(
-                                    "homeIconEffectEnabled",
-                                    id != LegacySkinScheme.DEFAULT_SCHEME_ID
-                                ),
-                                homeDisconnectedParticleEffectEnabled = item.optBoolean(
-                                    "homeDisconnectedParticleEffectEnabled",
-                                    legacyHomeIconEffectEnabled
-                                ),
-                                homeConnectingParticleEffectEnabled = item.optBoolean(
-                                    "homeConnectingParticleEffectEnabled",
-                                    legacyHomeIconEffectEnabled
-                                ),
-                                homeDisconnectingParticleEffectEnabled = item.optBoolean(
-                                    "homeDisconnectingParticleEffectEnabled",
-                                    legacyHomeIconEffectEnabled
-                                ),
-                                homeConnectedParticleEffectEnabled = item.optBoolean(
-                                    "homeConnectedParticleEffectEnabled",
-                                    legacyHomeIconEffectEnabled
-                                ),
-                                homeDisconnectedIconEffect = HomeIconMotionEffect.fromStorage(
-                                    item.optString("homeDisconnectedIconEffect")
-                                        .takeIf { it.isNotBlank() }
-                                ),
-                                homeConnectingIconEffect = HomeIconMotionEffect.fromStorage(
-                                        item.optString("homeConnectingIconEffect")
-                                            .takeIf { it.isNotBlank() }
-                                        ?: if (legacyHomeIconRotationEnabled) {
-                                            HomeIconMotionEffect.ROTATE.storageName
-                                        } else {
-                                            null
-                                        }
-                                ),
-                                homeDisconnectingIconEffect = HomeIconMotionEffect.fromStorage(
-                                        item.optString("homeDisconnectingIconEffect")
-                                            .takeIf { it.isNotBlank() }
-                                        ?: if (legacyHomeIconRotationEnabled) {
-                                            HomeIconMotionEffect.ROTATE.storageName
-                                        } else {
-                                            null
-                                        }
-                                ),
-                                homeConnectedIconEffect = HomeIconMotionEffect.fromStorage(
-                                    item.optString("homeConnectedIconEffect")
-                                        .takeIf { it.isNotBlank() }
-                                )
-                            )
-                        )
-                    }
-                }
-            }.getOrDefault(emptyList())
-            val defaultScheme = storedSchemes.firstOrNull { it.isDefault }
-                ?: defaultSchemeWithLegacyNodeDisplaySettings()
-            return listOf(defaultScheme) + storedSchemes
-                .filterNot { it.isDefault }
-                .distinctBy { it.id }
-        }
-
-        return listOf(defaultSchemeWithLegacyNodeDisplaySettings())
-    }
 }

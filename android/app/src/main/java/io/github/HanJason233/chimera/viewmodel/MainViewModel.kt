@@ -624,9 +624,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
     
     init {
-        viewModelScope.launch(Dispatchers.IO) {
-            settingsRepository.migrateLegacySpeedTestSettings()
-        }
         viewModelScope.launch {
             homeTestNodeSelection.collect { stored ->
                 val results = stored?.second

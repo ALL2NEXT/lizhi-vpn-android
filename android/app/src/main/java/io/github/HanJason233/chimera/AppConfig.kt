@@ -102,12 +102,6 @@ object AppConfig {
     const val HYSTERIA_UP_MBPS = 1000
     const val HYSTERIA_DOWN_MBPS = 1000
 
-    // 旧版全局自动删除设置迁移默认值；新配置按测速方案和测试项保存
-    const val AUTO_DELETE_TCPING_TIMEOUT_NODES = false
-    const val AUTO_DELETE_URL_TEST_TIMEOUT_NODES = false
-    const val AUTO_DELETE_LOW_BANDWIDTH_NODES = false
-    const val AUTO_DELETE_BANDWIDTH_THRESHOLD_MBPS = 10
-    
     // Concurrency
     const val TCPING_CONCURRENCY = 16 // TCPing并发数
     const val URL_TEST_CONCURRENCY = 10 // URL Test并发数

@@ -140,14 +140,6 @@ class SettingsRepository(
         private val FAILOVER_CONSECUTIVE_FAILURES = intPreferencesKey("failover_consecutive_failures")
         private val FAILOVER_TRANSFER_STRATEGY = stringPreferencesKey("failover_transfer_target")
         private val FAILOVER_TRANSFER_NODE_IDS = stringPreferencesKey("failover_transfer_node_ids")
-        internal val LEGACY_HOME_SPEED_TEST_SETTINGS_ID =
-            stringPreferencesKey("home_long_press_speed_test_scheme_id")
-        internal val LEGACY_GROUP_MANUAL_SPEED_TEST_SETTINGS_ID =
-            stringPreferencesKey("group_manual_speed_test_scheme_id")
-        internal val LEGACY_GROUP_MANUAL_SPEED_TEST_ENABLED =
-            booleanPreferencesKey("group_manual_speed_test_enabled")
-        internal val LEGACY_HOME_LONG_PRESS_SPEED_TEST_ENABLED =
-            booleanPreferencesKey("home_long_press_speed_test_enabled")
         private val LEGACY_MANUAL_IP_ADDRESS_TEST_PANEL_ENABLED =
             booleanPreferencesKey("manual_ip_address_test_panel_enabled")
         
@@ -205,24 +197,7 @@ class SettingsRepository(
         private val HYSTERIA_UP_MBPS = intPreferencesKey("hysteria_up_mbps")
         private val HYSTERIA_DOWN_MBPS = intPreferencesKey("hysteria_down_mbps")
         private val CORE_ASSIGNMENTS = stringSetPreferencesKey("protocol_core_assignments")
-        // 迁移旧版全局节点标签设置；新值并入全局外观配置。
-        internal val NODE_LABEL_SHOW_PROTOCOL = booleanPreferencesKey("node_label_show_protocol")
-        internal val NODE_LABEL_SHOW_SECURITY = booleanPreferencesKey("node_label_show_security")
-        internal val NODE_LABEL_SHOW_TRANSPORT = booleanPreferencesKey("node_label_show_transport")
-        internal val NODE_LABEL_SHOW_CORE = booleanPreferencesKey("node_label_show_core")
-        // 迁移旧版全局自动删除设置；新设置保存在各测试项中。
-        internal val AUTO_DELETE_TCPING_TIMEOUT_NODES =
-            booleanPreferencesKey("auto_delete_tcping_timeout_nodes")
-        internal val AUTO_DELETE_URL_TEST_TIMEOUT_NODES =
-            booleanPreferencesKey("auto_delete_url_test_timeout_nodes")
-        internal val AUTO_DELETE_LOW_BANDWIDTH_NODES =
-            booleanPreferencesKey("auto_delete_low_bandwidth_nodes")
-        internal val AUTO_DELETE_BANDWIDTH_THRESHOLD_MBPS =
-            intPreferencesKey("auto_delete_bandwidth_threshold_mbps")
         internal val SKIN_SETTINGS_JSON = stringPreferencesKey("skin_settings_json")
-        internal val LEGACY_SKIN_SCHEMES_JSON = stringPreferencesKey("skin_schemes_json")
-        internal val LEGACY_ACTIVE_SKIN_SCHEME_ID = stringPreferencesKey("active_skin_scheme_id")
-        internal val LEGACY_SPEED_TEST_SETTINGS_JSON = stringPreferencesKey("speed_test_schemes_json")
         internal val HOME_SPEED_TEST_SETTINGS_JSON = stringPreferencesKey("home_speed_test_settings_json")
         internal val GROUP_MANUAL_SPEED_TEST_SETTINGS_JSON =
             stringPreferencesKey("group_manual_speed_test_settings_json")
@@ -262,16 +237,14 @@ class SettingsRepository(
     val homeSpeedTestSettings: Flow<SpeedTestSettings> = store.data.map { preferences ->
         SpeedTestSettingsCodec.decodeSpeedTestSettings(
             preferences = preferences,
-            settingsKey = HOME_SPEED_TEST_SETTINGS_JSON,
-            legacySelectionKey = LEGACY_HOME_SPEED_TEST_SETTINGS_ID
+            settingsKey = HOME_SPEED_TEST_SETTINGS_JSON
         )
     }
 
     val groupManualSpeedTestSettings: Flow<SpeedTestSettings> = store.data.map { preferences ->
         SpeedTestSettingsCodec.decodeSpeedTestSettings(
             preferences = preferences,
-            settingsKey = GROUP_MANUAL_SPEED_TEST_SETTINGS_JSON,
-            legacySelectionKey = LEGACY_GROUP_MANUAL_SPEED_TEST_SETTINGS_ID
+            settingsKey = GROUP_MANUAL_SPEED_TEST_SETTINGS_JSON
         )
     }
 
@@ -300,20 +273,14 @@ class SettingsRepository(
         decodeFailoverSettings(preferences)
     }
 
-    suspend fun migrateLegacySpeedTestSettings() {
-        store.edit { preferences -> SpeedTestSettingsCodec.migrateLegacySpeedTestSettings(preferences) }
-    }
-
     suspend fun setHomeSpeedTestSettings(settings: SpeedTestSettings) {
         store.edit { preferences ->
-            SpeedTestSettingsCodec.migrateLegacySpeedTestSettings(preferences)
             preferences[HOME_SPEED_TEST_SETTINGS_JSON] = SpeedTestSettingsCodec.encodeSpeedTestSettings(settings)
         }
     }
 
     suspend fun setGroupManualSpeedTestSettings(settings: SpeedTestSettings) {
         store.edit { preferences ->
-            SpeedTestSettingsCodec.migrateLegacySpeedTestSettings(preferences)
             preferences[GROUP_MANUAL_SPEED_TEST_SETTINGS_JSON] = SpeedTestSettingsCodec.encodeSpeedTestSettings(settings)
         }
     }
@@ -987,12 +954,6 @@ class SettingsRepository(
                 baseColorArgb = SkinSettingsCodec.normalizeSkinColor(settings.baseColorArgb)
             )
             preferences[SKIN_SETTINGS_JSON] = SkinSettingsCodec.encodeSkinSettings(normalizedSettings)
-            preferences.remove(LEGACY_SKIN_SCHEMES_JSON)
-            preferences.remove(LEGACY_ACTIVE_SKIN_SCHEME_ID)
-            preferences.remove(NODE_LABEL_SHOW_PROTOCOL)
-            preferences.remove(NODE_LABEL_SHOW_SECURITY)
-            preferences.remove(NODE_LABEL_SHOW_TRANSPORT)
-            preferences.remove(NODE_LABEL_SHOW_CORE)
         }
     }
     
