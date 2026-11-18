@@ -394,8 +394,8 @@ internal fun SubscriptionGroupingScreen(
                         modifier = Modifier.fillMaxWidth(),
                         minLines = 3,
                         maxLines = 6,
-                        label = { Text("节点 URI 或订阅链接") },
-                        placeholder = { Text("可粘贴一个或多个节点 URI") },
+                        label = { Text("节点 URI") },
+                        placeholder = { Text("粘贴单个或多个节点 URI，每行一个") },
                         enabled = !isManagingNodes
                     )
                     TextButton(

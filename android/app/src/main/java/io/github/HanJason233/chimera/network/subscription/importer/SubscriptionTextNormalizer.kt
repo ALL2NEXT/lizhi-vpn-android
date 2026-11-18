@@ -27,6 +27,44 @@ internal object SubscriptionTextNormalizer {
 
     fun isYamlContent(value: String): Boolean = yamlMarker.containsMatchIn(value)
 
+    /** 只接受一个或多个以空白分隔的节点 URI。 */
+    fun nodeUrisOnly(value: String): List<String>? {
+        val matches = uri.findAll(value).toList()
+        if (matches.isEmpty()) return null
+
+        var offset = 0
+        for (match in matches) {
+            if (value.substring(offset, match.range.first).any { !it.isWhitespace() }) return null
+            offset = match.range.last + 1
+        }
+        if (value.substring(offset).any { !it.isWhitespace() }) return null
+
+        val nodeUris = matches.map { match ->
+            match.value.replace("\\://", "://").replace("\\@", "@")
+        }
+        return nodeUris.takeIf { uris -> uris.all(::isNodeUri) }
+    }
+
+    private fun isNodeUri(value: String): Boolean {
+        val scheme = value.substringBefore("://").lowercase()
+        if (scheme !in setOf("http", "https")) return true
+
+        // HTTP 代理 URI 需要凭据或显式端口；普通 HTTP(S) 订阅链接不属于此入口。
+        val address = value.substringAfter("://")
+        val authority = address.substringBeforeAny('/', '?', '#')
+        val path = address.substringAfter(authority).substringBeforeAny('?', '#')
+        val hostAndPort = authority.substringAfterLast('@')
+        val explicitPort = if (hostAndPort.startsWith("[")) {
+            Regex("\\]:\\d+$").containsMatchIn(hostAndPort)
+        } else {
+            Regex(":\\d+$").containsMatchIn(hostAndPort)
+        }
+        return (authority.contains('@') || explicitPort) && path.isEmpty()
+    }
+
+    private fun String.substringBeforeAny(vararg delimiters: Char): String =
+        takeWhile { it !in delimiters }
+
     /** 只用于配置外的文本；保留 URI 的 query/fragment，兼容 Markdown 链接。 */
     fun uris(value: String): List<String> {
         val markdown = markdownLink.replace(value) {

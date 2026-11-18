@@ -9,10 +9,12 @@ import io.github.HanJason233.chimera.data.repository.SettingsRepository
 import io.github.HanJason233.chimera.feature.nodegrouping.data.icon.PersonalSourceIconStore
 import io.github.HanJason233.chimera.feature.nodegrouping.data.icon.SubscriptionFaviconLoader
 import io.github.HanJason233.chimera.network.subscription.ParsedSubscription
+import io.github.HanJason233.chimera.network.subscription.importer.LocalSubscriptionContent
 import io.github.HanJason233.chimera.network.subscription.importer.ParsedSubscriptionPart
 import io.github.HanJason233.chimera.network.subscription.importer.SubscriptionImportInput
 import io.github.HanJason233.chimera.network.subscription.importer.SubscriptionImportService
 import io.github.HanJason233.chimera.network.subscription.importer.SubscriptionInputDetector
+import io.github.HanJason233.chimera.network.subscription.importer.SubscriptionTextNormalizer
 import io.github.HanJason233.chimera.network.nodetest.common.GlobalTestExecution
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -51,7 +53,6 @@ enum class SubscriptionGroupNodeImportResult {
     IMPORTED,
     ALREADY_EXISTS,
     INVALID,
-    FETCH_FAILED,
     NOT_FOUND
 }
 
@@ -287,15 +288,22 @@ internal class SubscriptionGroupCoordinator(
                 return@launch
             }
 
-            val importInput = SubscriptionInputDetector.detect(normalizedInput)
-            val parsedSubscriptions = subscriptionImportService.parseSubscriptionInput(importInput)
+            val nodeUris = SubscriptionTextNormalizer.nodeUrisOnly(normalizedInput)
+            if (nodeUris.isNullOrEmpty()) {
+                onResult(SubscriptionGroupNodeImportResult.INVALID, 0)
+                return@launch
+            }
+
+            val parsedSubscriptions = subscriptionImportService.parseSubscriptionInput(
+                SubscriptionImportInput.FullContent(LocalSubscriptionContent(nodeUris))
+            )
             if (parsedSubscriptions.isFailure) {
                 Log.e(
                     tag,
-                    "Unable to import nodes into local subscription group",
+                    "Unable to parse node URIs into local subscription group",
                     parsedSubscriptions.exceptionOrNull()
                 )
-                onResult(SubscriptionGroupNodeImportResult.FETCH_FAILED, 0)
+                onResult(SubscriptionGroupNodeImportResult.INVALID, 0)
                 return@launch
             }
 

@@ -51,9 +51,7 @@ internal fun SubscriptionGroupingDestination(
                         SubscriptionGroupNodeImportResult.ALREADY_EXISTS ->
                             "这些节点已在当前分组中" to true
                         SubscriptionGroupNodeImportResult.INVALID ->
-                            "未找到可导入节点，请检查 URI" to false
-                        SubscriptionGroupNodeImportResult.FETCH_FAILED ->
-                            "订阅链接获取失败，请检查地址和网络" to false
+                            "未找到可导入节点，请粘贴有效的节点 URI" to false
                         SubscriptionGroupNodeImportResult.NOT_FOUND ->
                             "当前分组不存在" to false
                     }
