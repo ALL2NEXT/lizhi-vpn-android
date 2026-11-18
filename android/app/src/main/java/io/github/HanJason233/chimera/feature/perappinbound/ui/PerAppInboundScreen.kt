@@ -7,23 +7,17 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Android
-import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Search
@@ -38,14 +32,10 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -77,6 +67,7 @@ import kotlinx.coroutines.withContext
 import io.github.HanJason233.chimera.R
 import io.github.HanJason233.chimera.data.model.ProxyMode
 import io.github.HanJason233.chimera.ui.components.SegmentedToggle
+import io.github.HanJason233.chimera.ui.components.AppScreenScaffold
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -102,117 +93,68 @@ fun PerAppInboundScreen(
         }
     }
 
-    Scaffold(
-        contentWindowInsets = WindowInsets(0),
-        topBar = {
-            TopAppBar(
-                modifier = Modifier.windowInsetsPadding(WindowInsets.statusBarsIgnoringVisibility),
-                windowInsets = WindowInsets(0),
-                title = {
-                    Text("${if (mode == ProxyMode.GLOBAL) "全局" else "智能"} VPN 作用范围")
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.per_app_inbound_back)
-                        )
-                    }
-                },
-                actions = {
-                    if (isLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.padding(horizontal = 12.dp).size(22.dp),
-                            strokeWidth = 2.dp
-                        )
-                    }
-                    if (searchActive) {
-                        IconButton(onClick = {
-                            searchQuery = ""
-                            viewModel.filterApps("")
-                            searchActive = false
-                        }) {
-                            Icon(
-                                imageVector = Icons.Outlined.Close,
-                                contentDescription = stringResource(R.string.per_app_inbound_close_search)
-                            )
-                        }
-                    } else {
-                        IconButton(onClick = { searchActive = true }) {
-                            Icon(
-                                imageVector = Icons.Outlined.Search,
-                                contentDescription = stringResource(R.string.per_app_inbound_search)
-                            )
-                        }
-                    }
-                    IconButton(onClick = { showMenu = true }) {
-                        Icon(
-                            imageVector = Icons.Outlined.MoreVert,
-                            contentDescription = stringResource(R.string.per_app_inbound_more_actions)
-                        )
-                    }
-                    DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.per_app_inbound_select_all)) },
-                            enabled = !isLoading && apps.isNotEmpty(),
-                            onClick = { showMenu = false; viewModel.selectAll(mode) }
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.per_app_inbound_invert_selection)) },
-                            enabled = !isLoading && apps.isNotEmpty(),
-                            onClick = { showMenu = false; viewModel.invertSelection(mode) }
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.per_app_inbound_auto_select)) },
-                            enabled = !isLoading,
-                            onClick = { showMenu = false; viewModel.selectProxyAppsAutomatically(mode) }
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
+    AppScreenScaffold(
+        title = "${if (mode == ProxyMode.GLOBAL) "全局" else "智能"} VPN 作用范围",
+        onBack = onBack,
+        isSearchActive = searchActive,
+        searchQuery = searchQuery,
+        searchPlaceholder = stringResource(R.string.per_app_inbound_search_hint),
+        onSearchQueryChange = { query ->
+            searchQuery = query
+            viewModel.filterApps(query)
+        },
+        onSearchClose = {
+            searchQuery = ""
+            viewModel.filterApps("")
+            searchActive = false
+        },
+        actions = {
+            if (isLoading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.padding(horizontal = 12.dp).size(22.dp),
+                    strokeWidth = 2.dp
                 )
-            )
-        }
-    ) { innerPadding ->
+            }
+            if (!searchActive) {
+                IconButton(onClick = { searchActive = true }) {
+                    Icon(
+                        imageVector = Icons.Outlined.Search,
+                        contentDescription = stringResource(R.string.per_app_inbound_search)
+                    )
+                }
+            }
+            IconButton(onClick = { showMenu = true }) {
+                Icon(
+                    imageVector = Icons.Outlined.MoreVert,
+                    contentDescription = stringResource(R.string.per_app_inbound_more_actions)
+                )
+            }
+            DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.per_app_inbound_select_all)) },
+                    enabled = !isLoading && apps.isNotEmpty(),
+                    onClick = { showMenu = false; viewModel.selectAll(mode) }
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.per_app_inbound_invert_selection)) },
+                    enabled = !isLoading && apps.isNotEmpty(),
+                    onClick = { showMenu = false; viewModel.invertSelection(mode) }
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.per_app_inbound_auto_select)) },
+                    enabled = !isLoading,
+                    onClick = { showMenu = false; viewModel.selectProxyAppsAutomatically(mode) }
+                )
+            }
+        },
+        contentPadding = PaddingValues(0.dp),
+        contentWindowInsets = WindowInsets(0)
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
-                .consumeWindowInsets(innerPadding)
                 .imePadding()
         ) {
-            if (searchActive) {
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { query ->
-                        searchQuery = query
-                        viewModel.filterApps(query)
-                    },
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                    singleLine = true,
-                    shape = RoundedCornerShape(16.dp),
-                    placeholder = { Text(stringResource(R.string.per_app_inbound_search_hint)) },
-                    leadingIcon = {
-                        Icon(Icons.Outlined.Search, contentDescription = null)
-                    },
-                    trailingIcon = {
-                        if (searchQuery.isNotEmpty()) {
-                            IconButton(onClick = {
-                                searchQuery = ""
-                                viewModel.filterApps("")
-                            }) {
-                                Icon(
-                                    Icons.Outlined.Close,
-                                    contentDescription = stringResource(R.string.per_app_inbound_clear_search)
-                                )
-                            }
-                        }
-                    },
-                    keyboardOptions = KeyboardOptions.Default
-                )
-            }
-
             // 两个分应用开关和说明入口放在同一行，保持与 v2rayNG 设置栏一致。
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
