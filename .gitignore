@@ -74,6 +74,7 @@ subscription.txt
 subscription_base64.txt
 
 # Sensitive notes
+/订阅加解密说明书.txt
 firefly签名.txt
 chimera签名.txt
 
