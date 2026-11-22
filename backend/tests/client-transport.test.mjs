@@ -91,7 +91,7 @@ test("客户端加密传输覆盖账号、查询参数、错误响应和持久�
 
   const deviceId = "a".repeat(64);
   await t.test("账号注册和配置查询均通过 AES-GCM，网络正文不含账号或设备信息", async () => {
-    const registration = await seal("/api/account/register", { method: "POST", body: { deviceId, nickname: "加密测试" } });
+    const registration = await seal("/api/account/register", { method: "POST", body: { deviceId, email: "transport@example.com", password: "test-password" } });
     assert.equal(registration.packet.includes(Buffer.from(deviceId)), false);
     const result = await open(await send(registration.packet), registration.responseKey);
     assert.equal(result.status, 200);

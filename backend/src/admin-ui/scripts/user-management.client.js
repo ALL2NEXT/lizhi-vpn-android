@@ -16,7 +16,6 @@ const ADMIN_USER_COLUMN_GROUPS = [
   ]},
   {key: 'status', label: '状态信息', columns: [
     {key: 'accountStatus', label: '封禁状态'},
-    {key: 'registrationStatus', label: '注册状态'},
     {key: 'riskStatus', label: '风控状态'},
     {key: 'membershipStatus', label: '会员状态'},
     {key: 'vipExpiresAt', label: 'VIP 到期时间'},
@@ -266,11 +265,9 @@ function adminUserList() {
     ? adminUserData.users : [];
   const search = String(value('userAdminSearch') || '').toLowerCase();
   const statusFilters = selectedAdminUserFilters('status');
-  const typeFilters = selectedAdminUserFilters('type');
   const identityFilters = selectedAdminUserFilters('identity');
   const membershipFilters = selectedAdminUserFilters('membership');
   const filterStatus = adminUserFilterEnabled('status');
-  const filterType = adminUserFilterEnabled('type');
   const filterIdentity = adminUserFilterEnabled('identity');
   const filterMembership = adminUserFilterEnabled('membership');
   const filtered = users.filter(function(user) {
@@ -284,12 +281,10 @@ function adminUserList() {
     const todayTotal = Number(user.today && user.today.totalMb || 0);
     const monthTotal = Number(user.month && user.month.totalMb || 0);
     const total = Number(user.totalMb || 0);
-    const accountLevel = String(user.email || '').trim() ? 'formal' : 'guest';
     const accountStatus = user.accountType === 'banned' ? 'banned' : 'active';
     const membership = user.vipActive === true ? 'member' : 'non_member';
     if (search && searchable.indexOf(search) < 0) return false;
     if (filterStatus && !statusFilters.has(accountStatus)) return false;
-    if (filterType && !typeFilters.has(accountLevel)) return false;
     if (filterIdentity && !identityFilters.has(identityType)) return false;
     if (filterMembership && !membershipFilters.has(membership)) return false;
     if (adminUserZeroFilters.today && todayTotal === 0) return false;
@@ -431,7 +426,6 @@ function renderAdminUsers() {
     const month = user.month || {};
     const bannedDeviceCount = Number(adminUserSecurity(user).bannedDeviceCount) || 0;
     const nickname = user.nickname || '未命名用户';
-    const accountLevel = String(user.email || '').trim() ? '正式用户' : '游客';
     const identityType = user.identityType === 'bot' ? 'bot' : 'human';
     const membershipStatus = user.vipActive === true ? '会员' : '非会员';
     const vipExpiresAt = String(user.vipExpiresAt || '')
@@ -449,7 +443,6 @@ function renderAdminUsers() {
       '<td><span class="user-admin-cell-ellipsis user-admin-registration-time" title="' + esc(registrationTime) + '">' + esc(registrationTime || '—') + '</span></td>' +
       '<td class="user-admin-registration-ip">' + adminUserRegistrationIpCell(user) + '</td>' +
       '<td>' + (banned ? '封禁' : '正常') + '</td>' +
-      '<td>' + accountLevel + '</td>' +
       '<td>' + esc(adminUserIdentityLabel(identityType)) + '</td>' +
       '<td>' + esc(membershipStatus) + '</td>' +
       '<td>' + esc(vipExpiresAt || '—') + '</td>' +
@@ -463,7 +456,7 @@ function renderAdminUsers() {
       '</tr>';
   }).join('');
   host.innerHTML = '<table class="traffic-detail-table user-admin-table" aria-label="用户总表">' +
-    '<thead><tr><th><input class="user-admin-checkbox" id="userAdminSelectAll" type="checkbox" aria-label="全选当前结果" title="全选当前结果" onchange="toggleAllAdminUsers(this.checked)"></th><th>昵称</th><th>邮箱</th><th>UID</th><th>注册时间</th><th>注册 IP</th><th>封禁状态</th><th>注册状态</th><th>风控状态</th><th>会员状态</th><th>VIP 到期时间</th><th>设备信息</th><th>受限设备数</th><th>今日流量</th><th>本月流量</th><th>累计流量</th><th>最后上报</th><th>关联 IP</th></tr></thead>' +
+    '<thead><tr><th><input class="user-admin-checkbox" id="userAdminSelectAll" type="checkbox" aria-label="全选当前结果" title="全选当前结果" onchange="toggleAllAdminUsers(this.checked)"></th><th>昵称</th><th>邮箱</th><th>UID</th><th>注册时间</th><th>注册 IP</th><th>封禁状态</th><th>风控状态</th><th>会员状态</th><th>VIP 到期时间</th><th>设备信息</th><th>受限设备数</th><th>今日流量</th><th>本月流量</th><th>累计流量</th><th>最后上报</th><th>关联 IP</th></tr></thead>' +
     '<tbody>' + rows + '</tbody></table>';
   applyAdminUserColumnVisibility();
   host.querySelectorAll('[data-admin-user-select]').forEach(function(input) {
@@ -626,12 +619,12 @@ function exportAdminUsersCsv() {
     show('当前没有可导出的用户', true);
     return;
   }
-  const lines = [['UID', '昵称', '邮箱', '注册时间', '注册IP', '封禁状态', '注册状态', '风控状态', '历史设备数', '封禁设备数', '品牌', '型号', 'Android', 'App版本', '今日流量MB', '本月流量MB', '累计流量MB', '最后上报', '关联IP']];
+  const lines = [['UID', '昵称', '邮箱', '注册时间', '注册IP', '封禁状态', '风控状态', '历史设备数', '封禁设备数', '品牌', '型号', 'Android', 'App版本', '今日流量MB', '本月流量MB', '累计流量MB', '最后上报', '关联IP']];
   users.forEach(function(user) {
     const security = adminUserSecurity(user);
     lines.push([user.uid, user.nickname, user.email, user.createdAt, user.registrationIp,
       user.accountType === 'banned' ? '封禁' : '正常',
-      String(user.email || '').trim() ? '正式用户' : '游客', adminUserIdentityLabel(user.identityType),
+      adminUserIdentityLabel(user.identityType),
       security.historicalDeviceCount, security.bannedDeviceCount,
       user.brand, user.model, user.androidVersion, user.appVersion,
       user.today && user.today.totalMb, user.month && user.month.totalMb, user.totalMb, user.lastReportAt,

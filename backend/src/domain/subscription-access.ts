@@ -12,11 +12,8 @@ export function subscriptionGroupAccessError(
 ): SubscriptionGroupAccessError | null {
   if (!group.enabled || !access.registered) return "account_access_denied";
 
-  // 封禁状态、邮箱绑定类型和后台账号身份是独立条件，分组必须同时匹配这些维度。
+  // 封禁状态和后台账号身份是独立条件，分组必须同时匹配这些维度。
   if (!group.allowedStatuses.includes(access.accountStatus)) return "account_access_denied";
-  if (!group.allowedAccountTypes.includes(access.accountType)) {
-    return "account_access_denied";
-  }
   if (!group.allowedIdentityTypes.includes(access.identityType)) {
     return "account_access_denied";
   }

@@ -76,9 +76,16 @@ test("IP 与用户关联按成功请求采集，可双向查询并保留历史",
     await legacy.batch([
       legacy.prepare("CREATE TABLE app_schema_mb (component TEXT PRIMARY KEY, version INTEGER, applied_at TEXT)"),
       legacy.prepare("INSERT INTO app_schema_mb VALUES ('users', 19, '2026-10-01')"),
-      legacy.prepare("CREATE TABLE users_mb (id INTEGER PRIMARY KEY, uid TEXT UNIQUE)"),
-      legacy.prepare("CREATE TABLE system_logs_mb (id INTEGER PRIMARY KEY, occurred_at TEXT, ip TEXT)"),
-      legacy.prepare("INSERT INTO system_logs_mb VALUES (1, '2026-10-01T00:00:00+08:00', '192.0.2.65')"),
+      legacy.prepare("CREATE TABLE users_mb (id INTEGER PRIMARY KEY, uid TEXT UNIQUE, email TEXT)"),
+      legacy.prepare("CREATE TABLE user_usage_mb (user_id INTEGER)"),
+      legacy.prepare("CREATE TABLE device_account_links_mb (user_uid TEXT)"),
+      legacy.prepare("CREATE TABLE device_bans_mb (reason TEXT, lifted_at TEXT)"),
+      legacy.prepare("INSERT INTO users_mb VALUES (1, 'guest-uid', NULL), (2, 'formal-uid', 'user@example.com')"),
+      legacy.prepare("INSERT INTO user_usage_mb (user_id) VALUES (1), (2)"),
+      legacy.prepare("INSERT INTO device_account_links_mb VALUES ('guest-uid'), ('formal-uid')"),
+      legacy.prepare("INSERT INTO device_bans_mb VALUES ('manual', NULL)"),
+      legacy.prepare("CREATE TABLE system_logs_mb (id INTEGER PRIMARY KEY, occurred_at TEXT, ip TEXT, level TEXT, category TEXT, request_id TEXT)"),
+      legacy.prepare("INSERT INTO system_logs_mb VALUES (1, '2026-10-01T00:00:00+08:00', '192.0.2.65', 'info', 'request', '')"),
     ]);
     assert.equal(await initializeUserSchemaDatabase(legacy), USER_SCHEMA_VERSION);
     const old = await legacy.prepare("SELECT * FROM system_logs_mb WHERE id = 1").first();
@@ -87,6 +94,11 @@ test("IP 与用户关联按成功请求采集，可双向查询并保留历史",
     assert.equal(old.device_id, "");
     assert.equal(old.identity_source, "");
     assert.equal((await legacy.prepare("SELECT COUNT(*) AS total FROM user_ip_links_mb").first()).total, 0);
+    assert.deepEqual((await legacy.prepare("SELECT uid FROM users_mb").all()).results.map(row => row.uid), ['formal-uid']);
+    assert.deepEqual((await legacy.prepare("SELECT user_id FROM user_usage_mb").all()).results.map(row => row.user_id), [2]);
+    assert.deepEqual((await legacy.prepare("SELECT user_uid FROM device_account_links_mb").all()).results.map(row => row.user_uid), ['formal-uid']);
+    assert.equal((await legacy.prepare("SELECT COUNT(*) AS total FROM device_bans_mb WHERE lifted_at IS NULL").first()).total, 1);
+    await assert.rejects(legacy.prepare("INSERT INTO users_mb (uid, email) VALUES ('new-guest', '')").run(), /user_email_required/);
   });
 
   await t.test("注册、配置和订阅请求建立多对多关系，管理接口鉴权且统计随查询变化", async () => {
@@ -95,12 +107,12 @@ test("IP 与用户关联按成功请求采集，可双向查询并保留历史",
       method: "PUT", admin: true,
       body: { subscriptionGroups: [{ id: "public", subscriptions: [{ id: "11", content: "vless://id@example.com:443#test" }] }] },
     });
-    uidA = (await call("/api/account/register", { method: "POST", body: { deviceId: deviceA } })).account.uid;
-    uidB = (await call("/api/account/register", { method: "POST", body: { deviceId: deviceB } })).account.uid;
+    uidA = (await call("/api/account/register", { method: "POST", body: { deviceId: deviceA, email: "ip-user@example.com", password: "ip-test-password-123" } })).account.uid;
+    uidB = (await call("/api/account/register", { method: "POST", body: { deviceId: deviceB, email: "ip-user-b@example.com", password: "ip-test-password-123" } })).account.uid;
     await call("/api/client?deviceId=" + deviceA);
     await call("/api/subscription/11?deviceId=" + deviceA);
     await call("/api/client?deviceId=" + deviceA, { ip: ip2 });
-    await eventually(async () => Number((await row(uidA, ip1))?.request_count) === 3 && Boolean(await row(uidA, ip2)));
+    await eventually(async () => Number((await row(uidA, ip1))?.request_count) === 3 && Boolean(await row(uidA, ip2)) && Boolean(await row(uidB, ip1)));
     await call("/local-admin/api/ip-relations", { status: 401 });
     const byIp = await links("?ip=" + ip1);
     assert.equal(byIp.total, 2);
@@ -130,7 +142,6 @@ test("IP 与用户关联按成功请求采集，可双向查询并保留历史",
 
   await t.test("失败登录不关联目标账户，成功切换账户保留当次身份与旧关系", async () => {
     const credentials = { deviceId: deviceA, email: "ip-user@example.com", password: "ip-test-password-123" };
-    await call("/api/account/bind", { method: "POST", body: credentials });
     await call("/api/account/login", { method: "POST", ip: ip3, body: { ...credentials, deviceId: deviceB, password: "wrong-password" }, status: 401 });
     assert.equal((await links("?ip=" + ip3)).total, 0);
     await call("/api/account/login", { method: "POST", ip: ip3, body: { ...credentials, deviceId: deviceB } });

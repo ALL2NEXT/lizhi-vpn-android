@@ -10,7 +10,6 @@ import retrofit2.http.POST
 import retrofit2.http.Query
 import retrofit2.http.Tag
 import retrofit2.http.Url
-import io.github.HanJason233.chimera.data.model.AccountBindingRequest
 import io.github.HanJason233.chimera.data.model.AccountActionResponse
 import io.github.HanJason233.chimera.data.model.AccountDeleteRequest
 import io.github.HanJason233.chimera.data.model.AccountLoginRequest
@@ -43,19 +42,13 @@ interface ApiService {
     suspend fun registerAccount(
         @Url url: String,
         @Body request: AccountRegisterRequest
-    ): AccountRegisterResponse
-
-    @POST
-    suspend fun bindAccount(
-        @Url url: String,
-        @Body request: AccountBindingRequest
-    ): AccountRegisterResponse
+    ): Response<AccountRegisterResponse>
 
     @POST
     suspend fun loginAccount(
         @Url url: String,
         @Body request: AccountLoginRequest
-    ): AccountRegisterResponse
+    ): Response<AccountRegisterResponse>
 
     @POST
     suspend fun activateVip(

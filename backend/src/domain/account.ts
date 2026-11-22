@@ -16,12 +16,11 @@ export function normalizeNickname(value: unknown, fallback = "") {
 }
 
 export const ACCOUNT_TYPE_BANNED = "banned";
-export const ACCOUNT_TYPE_GUEST = "guest";
 export const ACCOUNT_TYPE_FORMAL = "formal";
 
-export function normalizeAccountType(value: unknown, fallback: AccountType = ACCOUNT_TYPE_GUEST): AccountType {
+export function normalizeAccountType(value: unknown, fallback: AccountType = ACCOUNT_TYPE_FORMAL): AccountType {
   const normalized = cleanText(value);
-  return normalized === ACCOUNT_TYPE_BANNED || normalized === ACCOUNT_TYPE_GUEST || normalized === ACCOUNT_TYPE_FORMAL
+  return normalized === ACCOUNT_TYPE_BANNED || normalized === ACCOUNT_TYPE_FORMAL
     ? normalized
     : fallback;
 }
@@ -31,32 +30,15 @@ export function normalizeUserIdentityType(value: unknown): UserIdentityType {
   return normalized === "bot" ? "bot" : "human";
 }
 
-export function accountTypeRank(value: unknown) {
-  switch (cleanText(value)) {
-    case ACCOUNT_TYPE_BANNED:
-      return 0;
-    case ACCOUNT_TYPE_GUEST:
-      return 1;
-    case ACCOUNT_TYPE_FORMAL:
-      return 2;
-    default:
-      return 0;
-  }
-}
-
-export function canAccessAccountType(accountType: AccountType, minimumAccountType: AccountType) {
-  return accountTypeRank(accountType) >= accountTypeRank(minimumAccountType);
-}
-
 export function isFormalAccount(user: { email?: unknown } | null | undefined) {
   return Boolean(user && cleanText(user.email));
 }
 
-export function accountTypeForUser(user: { email?: unknown; status?: unknown } | null | undefined) {
-  if (cleanText(user && user.status) === "banned") {
+export function accountTypeForUser(user: { email?: unknown; status?: unknown; deviceBlocked?: boolean } | null | undefined): AccountType {
+  if (!isFormalAccount(user) || user?.deviceBlocked || cleanText(user?.status) === "banned") {
     return ACCOUNT_TYPE_BANNED;
   }
-  return isFormalAccount(user) ? ACCOUNT_TYPE_FORMAL : ACCOUNT_TYPE_GUEST;
+  return ACCOUNT_TYPE_FORMAL;
 }
 
 export function normalizeAndroidSdk(value: unknown, fallback: unknown = 0) {

@@ -176,8 +176,8 @@ internal class SubscriptionDataLoader(
         return try {
             // 首次配置请求使用本机超时值，不能依赖本次响应下发的配置。
             val requestTimeoutMs = settingsRepository.serviceRequestTimeoutMs.first()
-            // 先注册或同步设备，确保后台已保存当前客户端版本和设备关联。
-            accountManager.register(requestTimeoutMs).getOrThrow()
+            // 同步已登录设备，确保后台保存当前客户端版本和设备关联。
+            accountManager.syncCurrentAccount(requestTimeoutMs).getOrThrow()
             discardCacheForChangedAccount()
             val backendUrl = AppConfig.BACKEND_URL
             val deviceId = accountManager.accountId()

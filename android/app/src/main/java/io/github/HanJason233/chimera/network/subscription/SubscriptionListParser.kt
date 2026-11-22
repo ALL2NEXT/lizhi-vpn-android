@@ -3,10 +3,8 @@ import com.google.gson.JsonArray
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
-import io.github.HanJason233.chimera.data.model.DEFAULT_MIN_ACCOUNT_TYPE
 import io.github.HanJason233.chimera.data.model.SubscriptionList
 import io.github.HanJason233.chimera.data.model.SubscriptionSource
-import io.github.HanJason233.chimera.data.model.normalizeSubscriptionAccountType
 
 /**
  * Parses the subscription contents returned by the unified Worker backend.
@@ -81,11 +79,7 @@ class SubscriptionListParser {
             ?: ""
         val enabled = source.get("enabled")?.let { readBoolean(it) } ?: true
         val id = readString(source, "id")?.trim().orEmpty()
-        val minAccountType = normalizeSubscriptionAccountType(
-            readString(source, "minAccountType", "requiredAccountType", "minimumAccountType")
-        )
         val allowedStatuses = readStringList(source, "allowedStatuses")
-        val allowedAccountTypes = readStringList(source, "allowedAccountTypes")
         val allowedMembershipTypes = readStringList(source, "allowedMembershipTypes")
         val minAppVersion = readString(source, "minAppVersion")?.trim().orEmpty()
         val maxAppVersion = readString(source, "maxAppVersion")?.trim().orEmpty()
@@ -94,9 +88,7 @@ class SubscriptionListParser {
             name = name,
             url = url,
             enabled = enabled,
-            minAccountType = minAccountType.ifBlank { DEFAULT_MIN_ACCOUNT_TYPE },
             allowedStatuses = allowedStatuses,
-            allowedAccountTypes = allowedAccountTypes,
             allowedMembershipTypes = allowedMembershipTypes,
             minAppVersion = minAppVersion,
             maxAppVersion = maxAppVersion

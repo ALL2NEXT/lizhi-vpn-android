@@ -82,7 +82,6 @@ fun AccountSettingsScreen(
     val isUpdatingNickname by viewModel.isUpdatingNickname.collectAsStateWithLifecycle()
     val isSyncingAccount by viewModel.isSyncingAccount.collectAsStateWithLifecycle()
     val isActivatingVip by viewModel.isActivatingVip.collectAsStateWithLifecycle()
-    val isBindingAccount by viewModel.isBindingAccount.collectAsStateWithLifecycle()
     val isSwitchingAccount by viewModel.isSwitchingAccount.collectAsStateWithLifecycle()
     val isDeletingAccount by viewModel.isDeletingAccount.collectAsStateWithLifecycle()
     val accountMessage by viewModel.accountMessage.collectAsStateWithLifecycle()
@@ -103,18 +102,11 @@ fun AccountSettingsScreen(
     var nickname by remember(accountInfo?.uid, accountInfo?.nickname) {
         mutableStateOf(accountInfo?.nickname.orEmpty())
     }
-    var email by remember(accountInfo?.uid, accountInfo?.email) {
-        mutableStateOf(accountInfo?.email.orEmpty())
-    }
-    var registrationCode by remember(accountInfo?.uid) { mutableStateOf("") }
     var vipCode by remember(accountInfo?.uid) { mutableStateOf("") }
-    var password by remember(accountInfo?.uid) { mutableStateOf("") }
-    var confirmPassword by remember(accountInfo?.uid) { mutableStateOf("") }
     var switchEmail by remember(accountInfo?.uid) { mutableStateOf("") }
     var switchPassword by remember(accountInfo?.uid) { mutableStateOf("") }
     var deletePassword by remember(accountInfo?.uid) { mutableStateOf("") }
     var showNicknameDialog by remember(accountInfo?.uid) { mutableStateOf(false) }
-    var showBindDialog by remember(accountInfo?.uid) { mutableStateOf(false) }
     var showSwitchDialog by remember(accountInfo?.uid) { mutableStateOf(false) }
     var showDeleteConfirmation by remember(accountInfo?.uid) { mutableStateOf(false) }
 
@@ -175,17 +167,10 @@ fun AccountSettingsScreen(
     }
 
     LaunchedEffect(accountInfo?.uid, accountInfo?.email) {
-        email = accountInfo?.email.orEmpty()
         selectedNotification = null
-        if (!accountInfo?.email.isNullOrBlank()) {
-            password = ""
-            confirmPassword = ""
-        }
         switchEmail = ""
         switchPassword = ""
         deletePassword = ""
-        registrationCode = ""
-        showBindDialog = false
         showNicknameDialog = false
         showSwitchDialog = false
         showDeleteConfirmation = false
@@ -234,18 +219,6 @@ fun AccountSettingsScreen(
         normalizedNickname != account.nickname &&
         account.accountType != "banned" &&
         !isUpdatingNickname
-    val canOpenBindDialog = account != null &&
-        account.email.isBlank() &&
-        account.accountType != "banned" &&
-        backendSettings.registrationEnabled &&
-        !isSyncingAccount &&
-        !isActivatingVip &&
-        !isBindingAccount &&
-        !isSwitchingAccount &&
-        !isDeletingAccount
-    val normalizedEmail = email.trim().lowercase()
-    val normalizedRegistrationCode = registrationCode.trim().uppercase()
-        .replace("-", "").replace(" ", "")
     val normalizedVipCode = vipCode.trim().uppercase().replace("-", "").replace(" ", "")
     val canActivateVip = account != null &&
         account.accountType != "banned" &&
@@ -253,19 +226,8 @@ fun AccountSettingsScreen(
         !isActivatingVip &&
         !isSyncingAccount &&
         !isUpdatingNickname &&
-        !isBindingAccount &&
         !isSwitchingAccount &&
         !isDeletingAccount
-    val canBindAccount = account != null &&
-        account.email.isBlank() &&
-        account.accountType != "banned" &&
-        backendSettings.registrationEnabled &&
-        android.util.Patterns.EMAIL_ADDRESS.matcher(normalizedEmail).matches() &&
-        (normalizedRegistrationCode.isBlank() || normalizedRegistrationCode.matches(Regex("^[A-HJ-NP-Z2-9]{15}$"))) &&
-        (!backendSettings.requireAdminRegistrationCode || normalizedRegistrationCode.isNotBlank()) &&
-        password.length in 8..128 &&
-        password == confirmPassword &&
-        !isBindingAccount
     val canSwitchAccount = account != null &&
         account.accountType != "banned" &&
         !account.deviceBlocked &&
@@ -380,18 +342,10 @@ fun AccountSettingsScreen(
                     )
                     AccountSettingsPage.ACCOUNT_INFO -> AccountInfoDetailContent(
                         account = account,
-                        registrationEnabled = backendSettings.registrationEnabled,
-                        canOpenBindDialog = canOpenBindDialog,
                         isUpdatingNickname = isUpdatingNickname,
                         onEditNickname = {
                             nickname = account.nickname
                             showNicknameDialog = true
-                        },
-                        onRegisterAccount = {
-                            email = ""
-                            password = ""
-                            confirmPassword = ""
-                            showBindDialog = true
                         }
                     )
                     AccountSettingsPage.VIP -> VipDetailContent(
@@ -544,84 +498,6 @@ fun AccountSettingsScreen(
         )
     }
 
-    if (showBindDialog && account != null) {
-        AppAlertDialog(
-            onDismissRequest = { if (!isBindingAccount) showBindDialog = false },
-            title = { Text("注册正式用户") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedTextField(
-                        value = email,
-                        onValueChange = { email = it },
-                        label = { Text("邮箱") },
-                        singleLine = true,
-                        enabled = !isBindingAccount,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    OutlinedTextField(
-                        value = password,
-                        onValueChange = { if (it.length <= 128) password = it },
-                        label = { Text("密码") },
-                        supportingText = { Text("8～128 个字符") },
-                        singleLine = true,
-                        enabled = !isBindingAccount,
-                        visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    OutlinedTextField(
-                        value = confirmPassword,
-                        onValueChange = { if (it.length <= 128) confirmPassword = it },
-                        label = { Text("确认密码") },
-                        singleLine = true,
-                        enabled = !isBindingAccount,
-                        visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    OutlinedTextField(
-                        value = registrationCode,
-                        onValueChange = { if (it.length <= 32) registrationCode = it },
-                        label = { Text(if (backendSettings.requireAdminRegistrationCode) "注册码（必填）" else "注册码（可选）") },
-                        singleLine = true,
-                        enabled = !isBindingAccount,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = canBindAccount,
-                    onClick = {
-                        viewModel.bindEmailPassword(
-                            normalizedEmail,
-                            password,
-                            normalizedRegistrationCode,
-                        )
-                    }
-                ) {
-                    if (isBindingAccount) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.padding(end = 8.dp),
-                            color = MaterialTheme.colorScheme.primary,
-                            strokeWidth = 2.dp
-                        )
-                    }
-                    Text(if (isBindingAccount) "注册中…" else "确认注册")
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    enabled = !isBindingAccount,
-                    onClick = { showBindDialog = false }
-                ) {
-                    Text("取消")
-                }
-            }
-        )
-    }
-
     if (showSwitchDialog && account != null) {
         AppAlertDialog(
             onDismissRequest = { if (!isSwitchingAccount) showSwitchDialog = false },
@@ -679,27 +555,22 @@ fun AccountSettingsScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("账户数据、流量记录和本地数据将永久删除，注销成功后软件会立即退出。此操作不可恢复。")
-                    if (account.email.isNotBlank()) {
-                        OutlinedTextField(
-                            value = deletePassword,
-                            onValueChange = { if (it.length <= 128) deletePassword = it },
-                            label = { Text("当前账户密码") },
-                            supportingText = { Text("绑定账户注销时必须填写") },
-                            singleLine = true,
-                            enabled = !isDeletingAccount,
-                            visualTransformation = PasswordVisualTransformation(),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    } else {
-                        Text("当前为游客账户，无需输入密码。")
-                    }
+                    OutlinedTextField(
+                        value = deletePassword,
+                        onValueChange = { if (it.length <= 128) deletePassword = it },
+                        label = { Text("当前账户密码") },
+                        supportingText = { Text("注销账户时必须填写") },
+                        singleLine = true,
+                        enabled = !isDeletingAccount,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
             },
             confirmButton = {
                 TextButton(
-                    enabled = !isDeletingAccount &&
-                        (account.email.isBlank() || deletePassword.length in 8..128),
+                    enabled = !isDeletingAccount && deletePassword.length in 8..128,
                     onClick = {
                         showDeleteConfirmation = false
                         viewModel.deleteAccount(deletePassword, onAccountDeleted)

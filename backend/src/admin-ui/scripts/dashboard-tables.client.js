@@ -104,9 +104,8 @@ function renderTrafficDetails() {
     return '<tr class="' + (banned ? 'banned' : '') + '">' +
       '<td><code>' + esc(user.uid) + '</code></td>' +
       '<td>' + esc(user.nickname || user.uid) + '</td>' +
-      '<td>' + esc(user.email || '游客账户') + '</td>' +
+      '<td>' + esc(user.email || '—') + '</td>' +
       '<td>' + (banned ? '封禁' : '正常') + '</td>' +
-      '<td>' + (user.accountType === 'formal' ? '正式用户' : user.accountType === 'guest' ? '游客' : user.accountType === 'banned' ? '封禁' : esc(user.accountType || '未知')) + '</td>' +
       '<td>' + formatMegabytes(today.uploadMb) + '</td>' +
       '<td>' + formatMegabytes(today.downloadMb) + '</td>' +
       '<td>' + formatMegabytes(today.totalMb) + '</td>' +
@@ -120,7 +119,7 @@ function renderTrafficDetails() {
       '</tr>';
   }).join('');
   host.innerHTML = '<table class="traffic-detail-table" aria-label="账户流量汇总表单">' +
-    '<thead><tr><th scope="col">UID</th><th scope="col">昵称</th><th scope="col">邮箱</th><th scope="col">状态</th><th scope="col">等级</th>' +
+    '<thead><tr><th scope="col">UID</th><th scope="col">昵称</th><th scope="col">邮箱</th><th scope="col">状态</th>' +
     trafficDetailSortHeader('todayUploadMb', '今日上传') +
     trafficDetailSortHeader('todayDownloadMb', '今日下载') +
     trafficDetailSortHeader('todayTotalMb', '今日总流量') +

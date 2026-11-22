@@ -2,8 +2,6 @@ package io.github.HanJason233.chimera.network.subscription
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import io.github.HanJason233.chimera.data.model.ACCOUNT_TYPE_FORMAL
-import io.github.HanJason233.chimera.data.model.ACCOUNT_TYPE_GUEST
 
 class SubscriptionListParserTest {
 
@@ -41,20 +39,20 @@ class SubscriptionListParserTest {
     }
 
     @Test
-    fun parseReadsMinimumAccountType() {
+    fun parseIgnoresLegacyAccountTypes() {
         val result = parser.parse(
             """
             {
               "subscriptions": [
                 {"name":"A","url":"https://example.com/a","minAccountType":"formal"},
-                {"name":"B","url":"https://example.com/b"},
+                {"name":"B","url":"https://example.com/b","allowedAccountTypes":["guest"]},
                 {"name":"C","url":"https://example.com/c","requiredAccountType":"invalid"}
               ]
             }
             """.trimIndent()
         ).getOrThrow()
 
-        assertEquals(listOf(ACCOUNT_TYPE_FORMAL, ACCOUNT_TYPE_GUEST, ACCOUNT_TYPE_GUEST), result.sources.map { it.minAccountType })
+        assertEquals(listOf("A", "B", "C"), result.sources.map { it.name })
     }
 
     @Test

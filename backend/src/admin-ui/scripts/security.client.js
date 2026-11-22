@@ -260,7 +260,7 @@ function renderAccountSecurity() {
   }
   const rows = filtered.map(function(account) {
     const banned = account.accountType === 'banned';
-    const email = account.email || '游客账户';
+    const email = account.email || '—';
     const uid = String(account.uid || '');
     return '<tr class="' + (banned ? 'banned' : '') + '">' +
       '<td><input class="security-account-checkbox" type="checkbox" data-security-select-uid="' +
@@ -271,12 +271,11 @@ function renderAccountSecurity() {
       '<td><span class="security-account-name">' + esc(account.nickname || account.uid) + '</span></td>' +
       '<td><code>' + esc(account.uid) + '</code></td>' +
       '<td><span class="security-account-email">' + esc(email) + '</span></td>' +
-      '<td>' + esc(account.accountType === 'banned' ? '被封禁用户' : account.accountType === 'formal' ? '正式用户' : '游客') + '</td>' +
       '<td>' + esc(account.createdAt || '暂无') + '</td></tr>';
   }).join('');
   host.innerHTML = '<table class="security-account-table" aria-label="Account security">' +
     '<thead><tr><th>Select</th><th>Status</th><th>Nickname</th><th>UID</th><th>Email</th>' +
-    '<th>Account type</th><th>Created at</th></tr></thead>' +
+    '<th>Created at</th></tr></thead>' +
     '<tbody>' + rows + '</tbody></table>';
   host.querySelectorAll('[data-security-select-uid]').forEach(function(input) {
     input.onchange = function() {

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  accountTypeForUser, canAccessAccountType, normalizeAccountId,
+  accountTypeForUser, normalizeAccountType, normalizeAccountId,
   normalizeAccountPassword, normalizeRegistrationCode, reportBytes,
 } from "../src/domain/account.ts";
 import {
@@ -20,7 +20,7 @@ import { normalizeState, readState, writeState } from "../src/services/state.ts"
 const now = new Date("2026-10-07T02:00:00Z");
 const node = "vless://id@example.com:443#日本";
 
-test("账号输入限制、等级访问和封禁优先级", () => {
+test("账号输入限制及封禁优先级", () => {
   assert.equal(normalizeAccountId(" A" + "a".repeat(63) + " "), "a".repeat(64));
   assert.equal(normalizeAccountId({ deviceId: "a".repeat(64) }), "");
   assert.equal(normalizeAccountPassword("short"), "");
@@ -28,8 +28,9 @@ test("账号输入限制、等级访问和封禁优先级", () => {
   assert.equal(normalizeRegistrationCode("reg-abcd-efgh-jkmn"), "REGABCDEFGHJKMN");
   assert.equal(accountTypeForUser({ email: "user@example.com", deviceBlocked: true }), "banned");
   assert.equal(accountTypeForUser({ email: "user@example.com" }), "formal");
-  assert.equal(canAccessAccountType("guest", "formal"), false);
-  assert.equal(canAccessAccountType("formal", "guest"), true);
+  assert.equal(accountTypeForUser({ email: "" }), "banned");
+  assert.equal(accountTypeForUser(null), "banned");
+  assert.equal(normalizeAccountType("guest"), "formal");
 });
 
 test("流量兼容旧 MB 字段，字节字段优先且有上限", () => {
@@ -107,10 +108,22 @@ test("旧 KV 字段可迁移，内联订阅不会自动重命名", () => {
   const state = normalizeState({
     sources: [null, { title: "line", nodesText: node, autoRename: true, minimumAccountType: "formal" }],
   });
-  assert.deepEqual(state.subscriptionGroups[0].allowedAccountTypes, ["formal"]);
+  assert.equal(state.subscriptionGroups[0].enabled, true);
+  assert.equal(Object.hasOwn(state.subscriptionGroups[0], "allowedAccountTypes"), false);
   assert.equal(state.subscriptionGroups[0].subscriptions[0].autoRename, false);
   assert.equal(state.settings.registrationEnabled, true);
   assert.equal(normalizeState(null).subscriptionGroups.length, 0);
+});
+
+test("旧分组的账户类型限制移除时不会扩大访问权限", () => {
+  const groups = normalizeState({ subscriptionGroups: [
+    { id: "mixed", allowedAccountTypes: ["guest", "formal"], subscriptions: [{ content: node }] },
+    { id: "guest-only", allowedAccountTypes: ["guest"], subscriptions: [{ content: node }] },
+    { id: "none", allowedAccountTypes: [], subscriptions: [{ content: node }] },
+    { id: "new", subscriptions: [{ content: node }] },
+  ] }).subscriptionGroups;
+  assert.deepEqual(groups.map((group) => group.enabled), [true, false, false, true]);
+  assert.ok(groups.every((group) => !Object.hasOwn(group, "allowedAccountTypes")));
 });
 
 test("旧公告和客户端更新字段不会进入归一化状态", () => {

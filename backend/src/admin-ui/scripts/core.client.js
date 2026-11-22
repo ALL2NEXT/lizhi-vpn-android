@@ -34,7 +34,6 @@
    {key: 'select', label: '选择', width: 48, min: 44},
    {key: 'accountId', label: '用户 UID', width: 150, min: 110},
    {key: 'nickname', label: '昵称', width: 110, min: 70},
-   {key: 'accountType', label: '用户类型', width: 90, min: 70},
    {key: 'brand', label: '品牌', width: 90, min: 60},
    {key: 'model', label: '型号', width: 120, min: 70},
    {key: 'androidVersion', label: 'Android', width: 85, min: 65},
@@ -235,7 +234,7 @@
    if (error === 'invalid_registration_code_count') return '注册码数量必须是 1 到 100 之间的整数';
    if (error === 'invalid_registration_code_max_uses') return '单个注册码可用次数必须是 1 到 1000 之间的整数';
    if (error === 'registration_code_not_found') return '注册码不存在';
-   if (error === 'formal_registration_closed') return '正式用户注册暂未开放';
+   if (error === 'formal_registration_closed') return '用户注册暂未开放';
    if (error === 'account_not_found') return '用户不存在，请检查 UID';
    if (error === 'account_banned') return '账户已被封禁';
    if (error === 'device_banned') return '设备已被封禁';

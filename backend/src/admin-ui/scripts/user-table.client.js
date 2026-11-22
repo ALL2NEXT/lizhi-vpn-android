@@ -68,7 +68,6 @@ function userSortValue(row, columnKey) {
   switch (columnKey) {
     case 'accountId': return user.uid;
     case 'nickname': return field('nickname', user.nickname);
-    case 'accountType': return String(field('accountType', user.accountType));
     case 'brand': return field('brand', user.brand);
     case 'model': return field('model', user.model);
     case 'androidVersion': return field('androidVersion', user.androidVersion);
@@ -91,7 +90,7 @@ function userSortValue(row, columnKey) {
 }
 function compareUserSortValues(left, right, columnKey) {
   const numericColumns = [
-    'accountType', 'activeToday', 'activeMonth',
+    'activeToday', 'activeMonth',
     'trafficTodayUpload', 'trafficTodayDownload', 'trafficToday',
     'trafficMonthUpload', 'trafficMonthDownload', 'trafficMonth',
     'trafficTotalUpload', 'trafficTotalDownload', 'trafficTotal',

@@ -16,7 +16,7 @@ interface GroupRow {
   group_type: string;
   enabled: number;
   allowed_statuses_json: string;
-  allowed_account_types_json: string;
+  allowed_account_types_json?: string;
   allowed_identity_types_json: string;
   allowed_membership_types_json: string;
   update_enabled: number;
@@ -58,6 +58,12 @@ function parseIdentityTypes(value: string): SubscriptionGroup["allowedIdentityTy
   const identities = parseJsonArray(value, ["human", "bot", "unknown"])
     .map((identity) => identity === "unknown" ? "human" : identity);
   return Array.from(new Set(identities)) as SubscriptionGroup["allowedIdentityTypes"];
+}
+
+// Support rolling upgrades while the legacy column is removed by migration 0009.
+async function hasLegacyAccountTypeColumn(db: Database) {
+  const columns = await db.prepare("PRAGMA table_info(subscription_groups)").all<{ name: string }>();
+  return (columns.results || []).some((column) => column.name === "allowed_account_types_json");
 }
 
 function isLocalSource(source: SubscriptionSource) {
@@ -140,6 +146,7 @@ export async function loadSubscriptionGroups(env: Env, includeContent = false): 
   const db = env.SUBSCRIPTIONS_DB;
   if (!db || !(await hasImportedLegacySubscriptions(env))) return null;
   await moveInlineSubscriptionContentToKv(env, db);
+  const hasLegacyColumn = await hasLegacyAccountTypeColumn(db);
 
   const sourceQuery = includeContent
     ? `SELECT id, group_id, source_order, name, source_type, url, content, content_key,
@@ -152,7 +159,7 @@ export async function loadSubscriptionGroups(env: Env, includeContent = false): 
        FROM subscription_sources ORDER BY group_id, source_order, id`;
   const [groupResult, sourceResult] = await db.batch([
     db.prepare(`SELECT id, group_order, name, group_type, enabled,
-        allowed_statuses_json, allowed_account_types_json, allowed_identity_types_json,
+        allowed_statuses_json, ${hasLegacyColumn ? "allowed_account_types_json," : ""} allowed_identity_types_json,
         allowed_membership_types_json,
         update_enabled, cache_minutes,
         min_app_version, max_app_version, max_users_per_subscription, reset_period_days
@@ -184,9 +191,9 @@ export async function loadSubscriptionGroups(env: Env, includeContent = false): 
     id: row.id,
     name: row.name,
     groupType: row.group_type === "load_balanced" ? "load_balanced" as const : "standard" as const,
-    enabled: row.enabled === 1,
+    enabled: row.enabled === 1 &&
+      (!hasLegacyColumn || parseJsonArray(row.allowed_account_types_json || "", ["formal"]).includes("formal")),
     allowedStatuses: parseJsonArray(row.allowed_statuses_json, ["normal", "banned"]) as SubscriptionGroup["allowedStatuses"],
-    allowedAccountTypes: parseJsonArray(row.allowed_account_types_json, ["guest", "formal"]) as SubscriptionGroup["allowedAccountTypes"],
     allowedIdentityTypes: parseIdentityTypes(row.allowed_identity_types_json),
     allowedMembershipTypes: parseJsonArray(row.allowed_membership_types_json, ["member", "non_member"]) as SubscriptionGroup["allowedMembershipTypes"],
     updateEnabled: row.update_enabled === 1,
@@ -215,6 +222,7 @@ async function prepareSources(env: Env, groups: SubscriptionGroup[], importLegac
   const config = env.CONFIG;
   if (!config) throw new Error("Missing KV binding CONFIG");
   const db = env.SUBSCRIPTIONS_DB!;
+  const hasLegacyColumn = await hasLegacyAccountTypeColumn(db);
   const pendingGuard = `EXISTS (SELECT 1 FROM subscription_store_meta
     WHERE key = '${LEGACY_IMPORT_KEY}' AND value = 'pending')`;
   const oldKeys = (await db.prepare(
@@ -234,7 +242,6 @@ async function prepareSources(env: Env, groups: SubscriptionGroup[], importLegac
       encryption_mode: "none",
       enabled: group.enabled ? 1 : 0,
       allowed_statuses_json: JSON.stringify(group.allowedStatuses),
-      allowed_account_types_json: JSON.stringify(group.allowedAccountTypes),
       allowed_identity_types_json: JSON.stringify(group.allowedIdentityTypes),
       allowed_membership_types_json: JSON.stringify(group.allowedMembershipTypes),
       update_enabled: group.updateEnabled ? 1 : 0,
@@ -286,14 +293,14 @@ async function prepareSources(env: Env, groups: SubscriptionGroup[], importLegac
 
   const groupInsertSql = `INSERT INTO subscription_groups
     (id, group_order, name, group_type, encryption_mode, enabled, allowed_statuses_json,
-     allowed_account_types_json, allowed_identity_types_json, allowed_membership_types_json,
+     ${hasLegacyColumn ? "allowed_account_types_json," : ""} allowed_identity_types_json, allowed_membership_types_json,
      update_enabled, cache_minutes, min_app_version,
      max_app_version, max_users_per_subscription, reset_period_days)
     SELECT json_extract(j.value, '$.id'), json_extract(j.value, '$.group_order'),
       json_extract(j.value, '$.name'), json_extract(j.value, '$.group_type'),
       json_extract(j.value, '$.encryption_mode'),
       json_extract(j.value, '$.enabled'), json_extract(j.value, '$.allowed_statuses_json'),
-      json_extract(j.value, '$.allowed_account_types_json'),
+      ${hasLegacyColumn ? "'[\"formal\"]'," : ""}
       json_extract(j.value, '$.allowed_identity_types_json'),
       json_extract(j.value, '$.allowed_membership_types_json'), json_extract(j.value, '$.update_enabled'),
       json_extract(j.value, '$.cache_minutes'), json_extract(j.value, '$.min_app_version'),

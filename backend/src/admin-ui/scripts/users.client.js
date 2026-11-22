@@ -229,7 +229,7 @@ function exportUsersCsv() {
     return;
   }
   const headers = [
-    '账户哈希', '昵称', '用户类型', '品牌', '型号', 'Android', 'App版本',
+    '账户哈希', '昵称', '品牌', '型号', 'Android', 'App版本',
     '今日活跃', '本月活跃', '今日上传(MB)', '今日下载(MB)', '今日总量(MB)',
     '本月上传(MB)', '本月下载(MB)', '本月总量(MB)',
     '累计上传(MB)', '累计下载(MB)', '累计总量(MB)',
@@ -239,7 +239,6 @@ function exportUsersCsv() {
     return [
       user.uid,
       user.nickname,
-      user.accountType,
       user.brand,
       user.model,
       user.androidVersion,

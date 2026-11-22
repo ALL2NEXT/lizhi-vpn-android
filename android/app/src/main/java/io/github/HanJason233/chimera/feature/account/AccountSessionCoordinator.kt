@@ -54,8 +54,6 @@ internal class AccountSessionCoordinator(
         accountManager.currentAccount() != null || accountManager.isOfflineMode()
     )
     val startupAccountAuthenticated = _startupAccountAuthenticated.asStateFlow()
-    private val _isBindingAccount = MutableStateFlow(false)
-    val isBindingAccount = _isBindingAccount.asStateFlow()
     private val _isSwitchingAccount = MutableStateFlow(false)
     val isSwitchingAccount = _isSwitchingAccount.asStateFlow()
     private val _isDeletingAccount = MutableStateFlow(false)
@@ -89,7 +87,7 @@ internal class AccountSessionCoordinator(
     fun activateVipCard(code: String) {
         if (
             _isActivatingVip.value || _isSyncingAccount.value || _isUpdatingNickname.value ||
-            _isBindingAccount.value || _isSwitchingAccount.value || _isDeletingAccount.value
+            _isSwitchingAccount.value || _isDeletingAccount.value
         ) return
         scope.launch {
             _isActivatingVip.value = true
@@ -115,7 +113,6 @@ internal class AccountSessionCoordinator(
         if (
             _isSyncingAccount.value ||
             _isUpdatingNickname.value ||
-            _isBindingAccount.value ||
             _isSwitchingAccount.value ||
             _isDeletingAccount.value ||
             _isActivatingVip.value
@@ -143,7 +140,7 @@ internal class AccountSessionCoordinator(
     fun syncAccountOnOverviewEntry() {
         val current = accountManager.currentAccount() ?: return
         if (accountManager.isOfflineMode() || _isSyncingAccount.value ||
-            _isUpdatingNickname.value || _isBindingAccount.value ||
+            _isUpdatingNickname.value ||
             _isSwitchingAccount.value || _isDeletingAccount.value || _isActivatingVip.value
         ) return
 
@@ -263,34 +260,6 @@ internal class AccountSessionCoordinator(
     private fun currentNotificationScope(): String =
         "${AppConfig.BACKEND_URL.trimEnd('/')}|${accountManager.currentAccount()?.uid.orEmpty()}"
 
-    fun bindEmailPassword(
-        email: String,
-        password: String,
-        registrationCode: String = "",
-    ) {
-        if (_isBindingAccount.value || _isActivatingVip.value) return
-        scope.launch {
-            _isBindingAccount.value = true
-            _accountMessage.value = null
-            try {
-                accountManager.bindEmailPassword(
-                    email = email,
-                    password = password,
-                    registrationCode = registrationCode,
-                    timeoutMs = serviceRequestTimeoutMs.value
-                ).onSuccess {
-                    _accountMessage.value = "绑定成功，已获得绑定经验"
-                    refreshSubscriptions(true)
-                }.onFailure { error ->
-                    Log.w(tag, "Failed to bind account credentials", error)
-                    _accountMessage.value = accountBindingErrorMessage(error)
-                }
-            } finally {
-                _isBindingAccount.value = false
-            }
-        }
-    }
-
     fun loginAtStartup(email: String, password: String) {
         runStartupAccountAction {
             accountManager.loginAccount(
@@ -307,21 +276,12 @@ internal class AccountSessionCoordinator(
         registrationCode: String
     ) {
         runStartupAccountAction {
-            if (accountManager.currentAccount() == null) {
-                accountManager.register(serviceRequestTimeoutMs.value).getOrThrow()
-            }
-            accountManager.bindEmailPassword(
+            accountManager.registerAccount(
                 email = email,
                 password = password,
                 registrationCode = registrationCode,
                 timeoutMs = serviceRequestTimeoutMs.value
             ).getOrThrow()
-        }
-    }
-
-    fun continueAsGuestAtStartup() {
-        runStartupAccountAction {
-            accountManager.register(serviceRequestTimeoutMs.value).getOrThrow()
         }
     }
 
@@ -431,7 +391,6 @@ internal class AccountSessionCoordinator(
         }
     }
 
-    /** 注销成功后清除本地数据，避免退出前再次自动注册游客账户。 */
     private fun startupAccountErrorMessage(error: Throwable): String = when (error.message) {
         "invalid_email" -> "邮箱格式无效"
         "invalid_password" -> "密码长度需在 8～128 个字符之间"
@@ -440,24 +399,22 @@ internal class AccountSessionCoordinator(
         "registration_code_required",
         "invalid_registration_code",
         "formal_registration_closed",
-        "invalid_bind_credentials",
-        "account_already_bound",
-        "email_already_bound" -> accountBindingErrorMessage(error)
+        "invalid_registration_credentials",
+        "email_already_bound" -> accountRegistrationErrorMessage(error)
         else -> accountActionErrorMessage(error)
     }
 
-    private fun accountBindingErrorMessage(error: Throwable): String {
+    private fun accountRegistrationErrorMessage(error: Throwable): String {
         return when (error.message) {
             "registration_disabled" -> "用户注册暂未开放"
             "registration_code_required" -> "必须使用管理员发放的注册码注册"
             "invalid_registration_code" -> "注册码无效或已使用"
-            "formal_registration_closed" -> "正式用户注册暂未开放"
-            "invalid_bind_credentials" -> "邮箱或密码格式无效"
-            "account_banned" -> "账户已被封禁，无法绑定"
-            "account_already_bound" -> "账户已经绑定邮箱"
-            "email_already_bound" -> "该邮箱已经绑定其他账户"
+            "formal_registration_closed" -> "用户注册暂未开放"
+            "invalid_registration_credentials" -> "邮箱或密码格式无效"
+            "account_banned" -> "账户已被封禁"
+            "email_already_bound" -> "该邮箱已注册"
             "account_not_found" -> "账户不存在，请重新同步账户"
-            else -> error.message ?: "账户绑定失败"
+            else -> error.message ?: "注册失败"
         }
     }
 
@@ -469,6 +426,7 @@ internal class AccountSessionCoordinator(
             "invalid_account_password" -> "当前账户密码错误"
             "account_banned" -> "账户已被封禁，无法切换"
             "account_not_found" -> "账户不存在，请重新同步账户"
+            "account_not_registered" -> "账号已失效，请使用邮箱登录"
             "invalid_vip_activation_request" -> "VIP 卡密格式无效"
             "invalid_or_used_vip_card" -> "VIP 卡密无效或已兑换"
             "vip_activation_failed" -> "VIP 激活失败，请稍后重试"

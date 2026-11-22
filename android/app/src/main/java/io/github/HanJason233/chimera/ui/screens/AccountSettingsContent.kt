@@ -224,11 +224,8 @@ internal fun AccountSettingsLoadingOverviewContent() {
 @Composable
 internal fun AccountInfoDetailContent(
     account: AccountInfo,
-    registrationEnabled: Boolean,
-    canOpenBindDialog: Boolean,
     isUpdatingNickname: Boolean,
-    onEditNickname: () -> Unit,
-    onRegisterAccount: () -> Unit
+    onEditNickname: () -> Unit
 ) {
     AccountSettingsCard {
         AccountDetailRow(
@@ -252,28 +249,7 @@ internal fun AccountInfoDetailContent(
         SettingsDivider()
         AccountDetailRow(label = "UID", value = account.uid)
         SettingsDivider()
-        AccountDetailRow(
-            label = "邮箱",
-            value = account.email.displayOrUnknown(),
-            trailing = if (account.email.isBlank()) {
-                {
-                    TextButton(
-                        onClick = onRegisterAccount,
-                        enabled = registrationEnabled && canOpenBindDialog
-                    ) {
-                        Text(
-                            text = if (registrationEnabled) "注册正式用户" else "注册未开放",
-                            color = MaterialTheme.colorScheme.primary,
-                            maxLines = 1
-                        )
-                    }
-                }
-            } else {
-                null
-            }
-        )
-        SettingsDivider()
-        AccountDetailRow(label = "账户类型", value = accountTypeText(account))
+        AccountDetailRow(label = "邮箱", value = account.email.displayOrUnknown())
     }
 }
 
@@ -694,15 +670,11 @@ private fun accountDisplayName(account: AccountInfo): String =
 
 private fun accountSummaryText(account: AccountInfo): String = when {
     account.deviceBlocked || account.accountType == "banned" -> "被封禁用户"
-    account.email.isNotBlank() -> "正式用户"
-    else -> "游客"
+    else -> "已登录"
 }
 
 private fun accountStatusText(account: AccountInfo): String =
     if (account.deviceBlocked || account.accountType == "banned") "被封禁" else "正常"
-
-private fun accountTypeText(account: AccountInfo): String =
-    if (account.email.isNotBlank()) "正式" else "游客"
 
 private fun formattedAccountTimestamp(value: String?): String? = value
     ?.replace('T', ' ')

@@ -162,7 +162,16 @@ const CLIENT_SECURITY_REPORTS_SCHEMA = `CREATE TABLE IF NOT EXISTS client_securi
 const CLIENT_SECURITY_REPORTS_INDEX = `CREATE INDEX IF NOT EXISTS idx_client_security_reports_pending_mb
   ON client_security_reports_mb(status, last_reported_at DESC, id DESC)`;
 
-export const USER_SCHEMA_VERSION = 27;
+const USER_EMAIL_REQUIRED_TRIGGERS = [
+  `CREATE TRIGGER IF NOT EXISTS trg_users_require_email_insert_mb
+   BEFORE INSERT ON users_mb WHEN NEW.email IS NULL OR trim(NEW.email) = ''
+   BEGIN SELECT RAISE(ABORT, 'user_email_required'); END`,
+  `CREATE TRIGGER IF NOT EXISTS trg_users_require_email_update_mb
+   BEFORE UPDATE OF email ON users_mb WHEN NEW.email IS NULL OR trim(NEW.email) = ''
+   BEGIN SELECT RAISE(ABORT, 'user_email_required'); END`,
+];
+
+export const USER_SCHEMA_VERSION = 28;
 export const USER_SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS app_schema_mb (
     component TEXT PRIMARY KEY,
@@ -177,7 +186,7 @@ export const USER_SCHEMA_STATEMENTS = [
       CHECK (status IN ('active', 'banned')),
     identity_type TEXT NOT NULL DEFAULT 'human'
       CHECK (identity_type IN ('human', 'bot')),
-    email TEXT COLLATE NOCASE,
+    email TEXT NOT NULL COLLATE NOCASE CHECK (trim(email) <> ''),
     password_hash TEXT NOT NULL DEFAULT '',
     vip_expires_at TEXT,
     created_at TEXT NOT NULL,
@@ -191,6 +200,7 @@ export const USER_SCHEMA_STATEMENTS = [
   `CREATE UNIQUE INDEX IF NOT EXISTS idx_users_mb_email
     ON users_mb(email)
     WHERE email IS NOT NULL AND email <> ''`,
+  ...USER_EMAIL_REQUIRED_TRIGGERS,
   `CREATE TABLE IF NOT EXISTS registration_codes_mb (
     id INTEGER PRIMARY KEY,
     code TEXT NOT NULL UNIQUE,
@@ -525,6 +535,14 @@ export const USER_SCHEMA_MIGRATIONS: Record<number, string[]> = {
        SET lifted_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
      WHERE reason = 'account_banned' AND lifted_at IS NULL`,
   ],
+  28: [
+    // Preserve device and ban records; remove data that belongs exclusively to guests.
+    `DELETE FROM user_usage_mb WHERE user_id IN (SELECT id FROM users_mb WHERE email IS NULL OR trim(email) = '')`,
+    `DELETE FROM user_ip_links_mb WHERE user_uid IN (SELECT uid FROM users_mb WHERE email IS NULL OR trim(email) = '')`,
+    `DELETE FROM device_account_links_mb WHERE user_uid IN (SELECT uid FROM users_mb WHERE email IS NULL OR trim(email) = '')`,
+    `DELETE FROM users_mb WHERE email IS NULL OR trim(email) = ''`,
+    ...USER_EMAIL_REQUIRED_TRIGGERS,
+  ],
 };
 export function resolveAdminBasePath(value: unknown): string | null {
   const route = String(value || "").trim().replace(/^\/+|\/+$/g, "");
@@ -545,7 +563,7 @@ export const DEFAULT_STATE: AppState = {
     telegramUrl: "",
     latestAppVersion: "",
     appDownloadUrl: "",
-    // 后台可关闭游客注册正式用户；默认保持现有注册流程开放。
+    // 后台可以关闭新用户注册。
     registrationEnabled: true,
     requireAdminRegistrationCode: false,
   },

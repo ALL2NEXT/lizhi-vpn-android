@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { createServer } from "node:http";
 import { Miniflare, convertV4MiniflareOptions } from "miniflare";
-import { USER_SCHEMA_VERSION } from "../src/config.ts";
+import { SYSTEM_LOG_SETTINGS_KEY, USER_SCHEMA_VERSION } from "../src/config.ts";
 
 test("本地 Worker 的账号、订阅和管理接口", async (t) => {
   const buildDir = fileURLToPath(new URL("../.wrangler/build/", import.meta.url));
@@ -82,24 +82,20 @@ test("本地 Worker 的账号、订阅和管理接口", async (t) => {
     assert.equal(preview.sources[1].name, "Remote YAML");
     assert.equal(preview.sources[1].url, origin + "/sub");
     assert.equal(preview.sources[1].content, "");
-    assert.ok(preview.sources.every(source => source.minAccountType === "banned"));
+    assert.ok(preview.sources.every(source => !Object.hasOwn(source, "minAccountType")));
     assert.equal(preview.failedSources.length, 1);
     assert.deepEqual((await call("/local-admin/api/state", { admin: true })).data, before);
     const allFailed = (await call(route, { method: "POST", admin: true, body: { input: origin + "/failed" }, status: 422 })).data;
     assert.equal(allFailed.sources.length, 0);
   });
 
-  await t.test("游客注册可重复调用，非法 JSON 字段不会绕过校验", async () => {
+  await t.test("游客注册被拒绝且不会创建账户", async () => {
     await call("/api/account/register", { method: "POST", body: { deviceId: 12 }, status: 400 });
     await call("/api/account/register", { method: "POST", body: null, status: 400 });
-    const { data } = await call("/api/account/register", {
-      method: "POST", body: { deviceId, brand: "Test", model: "Phone", androidSdk: 35, appVersion: "1.2.0" },
-    });
-    uid = data.account.uid;
-    assert.equal(data.account.accountType, "guest");
-    assert.equal(data.account.androidSdk, 35);
-    const repeat = await call("/api/account/register", { method: "POST", body: { deviceId } });
-    assert.equal(repeat.data.account.uid, uid);
+    await call("/api/account/register", { method: "POST", body: { deviceId }, status: 404 });
+    await call("/api/account/sync", { method: "POST", body: { deviceId }, status: 404 });
+    await call("/api/account/bind", { method: "POST", body: { deviceId }, status: 404 });
+    assert.deepEqual((await call("/local-admin/api/users", { admin: true })).data.users, []);
   });
 
   await t.test("管理鉴权、KV 保存和账号访问控制", async () => {
@@ -109,20 +105,25 @@ test("本地 Worker 的账号、订阅和管理接口", async (t) => {
       body: { subscriptions: [{ content: source, name: "formal", minAccountType: "formal", minAppVersion: "1.2" }], settings: { requireAdminRegistrationCode: true } },
     });
     await call(`/api/subscription/1?deviceId=${deviceId}`, { status: 403 });
-    const client = (await call(`/api/client?deviceId=${deviceId}`)).data;
-    assert.deepEqual(client.subscriptions, []);
+    await call(`/api/client?deviceId=${deviceId}`, { status: 403 });
   });
 
-  await t.test("一次性注册码绑定邮箱，密码登录附加第二台设备", async () => {
-    const credentials = { deviceId, uid, email: "user@example.com", password: "test-password-123" };
-    await call("/api/account/bind", { method: "POST", body: credentials, status: 400 });
+  await t.test("注册码直接创建邮箱账户，设备同步及密码登录正常", async () => {
+    const credentials = { deviceId, email: "user@example.com", password: "test-password-123", brand: "Test", model: "Phone", androidSdk: 35, appVersion: "1.2.0" };
+    await call("/api/account/register", { method: "POST", body: credentials, status: 400 });
     const codes = (await call("/local-admin/api/registration-codes", { method: "POST", admin: true, body: { count: 1 } })).data.codes;
-    const bound = await call("/api/account/bind", { method: "POST", body: { ...credentials, registrationCode: codes[0] } });
+    const bound = await call("/api/account/register", { method: "POST", body: { ...credentials, registrationCode: codes[0] } });
+    uid = bound.data.account.uid;
     assert.equal(bound.data.account.accountType, "formal");
+    assert.equal(bound.data.account.androidSdk, 35);
+    await call("/api/account/register", { method: "POST", body: { ...credentials, deviceId: secondDeviceId, email: "other@example.com", registrationCode: codes[0] }, status: 409 });
+    await call("/api/account/register", { method: "POST", body: { ...credentials, registrationCode: codes[0] }, status: 409 });
+    assert.equal((await call("/api/account/sync", { method: "POST", body: { deviceId } })).data.account.uid, uid);
+    assert.equal((await call("/api/account/register", { method: "POST", body: { deviceId } })).data.account.uid, uid);
     const usedCodes = (await call("/local-admin/api/registration-codes", { admin: true })).data.codes;
     assert.equal(usedCodes[0].usedByUid, uid);
     await call("/api/account/login", { method: "POST", body: { ...credentials, deviceId: secondDeviceId, password: "wrong-password" }, status: 401 });
-    const loggedIn = await call("/api/account/login", { method: "POST", body: { ...credentials, deviceId: secondDeviceId } });
+    const loggedIn = await call("/api/account/login", { method: "POST", body: { ...credentials, appVersion: "", deviceId: secondDeviceId } });
     assert.equal(loggedIn.data.account.uid, uid);
     const client = (await call(`/api/client?deviceId=${deviceId}`)).data;
     assert.equal(Object.hasOwn(client.subscriptions[0], "encrypted"), false);
@@ -131,6 +132,45 @@ test("本地 Worker 的账号、订阅和管理接口", async (t) => {
     assert.equal(subscription.response.headers.get("x-chimera-client-ip"), null);
     assert.equal(subscription.response.headers.get("x-firefly-client-ip"), null);
     await call(`/api/subscription/1?deviceId=${secondDeviceId}`, { status: 403 });
+  });
+
+  await t.test("单次注册码并发使用时只创建一个账号", async () => {
+    const codes = (await call("/local-admin/api/registration-codes", { method: "POST", admin: true, body: { count: 1 } })).data.codes;
+    const attempts = ["c", "d"].map((letter) => ({
+      deviceId: letter.repeat(64), email: `${letter}@example.com`,
+      password: "test-password-123", registrationCode: codes[0],
+    }));
+    const responses = await Promise.all(attempts.map((body) => mf.dispatchFetch("https://worker.test/api/account/register", {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+    })));
+    assert.deepEqual(responses.map((response) => response.status).sort(), [200, 409]);
+    const winner = responses.findIndex((response) => response.status === 200);
+    const account = (await responses[winner].json()).account;
+    await call("/api/account/delete", { method: "POST", body: {
+      deviceId: attempts[winner].deviceId, uid: account.uid, password: attempts[winner].password,
+    } });
+  });
+
+  await t.test("开启详细请求日志时不会保存账户密码", async () => {
+    const kv = await mf.getKVNamespace("CONFIG");
+    const db = await mf.getD1Database("USERS_DB");
+    await kv.put(SYSTEM_LOG_SETTINGS_KEY, JSON.stringify({
+      categories: { request: true, outbound: false }, details: { requestBody: true },
+    }));
+    const password = "secret-not-for-logs";
+    await call("/api/account/login", { method: "POST", status: 401, body: {
+      deviceId, email: "user@example.com", password,
+    } });
+    let captures = [];
+    for (let attempt = 0; attempt < 50 && !captures.length; attempt += 1) {
+      captures = (await db.prepare(
+        "SELECT p.content FROM system_log_payload_parts_mb p JOIN system_logs_mb l ON l.request_id = p.request_id WHERE l.path = '/api/account/login' ORDER BY l.id DESC",
+      ).all()).results;
+      if (!captures.length) await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    assert.ok(captures.length > 0);
+    assert.equal(captures.some((row) => row.content.includes(password)), false);
+    await kv.delete(SYSTEM_LOG_SETTINGS_KEY);
   });
 
   await t.test("重复上报以会话最大值更新，报表 SQL 和账号流量一致", async () => {
@@ -152,7 +192,7 @@ test("本地 Worker 的账号、订阅和管理接口", async (t) => {
 
   await t.test("封禁关联设备并撤销封禁，批量更新和密码删除可用", async () => {
     const banned = (await call(`/local-admin/api/users/${uid}/ban`, { method: "POST", admin: true })).data;
-    assert.equal(banned.blockedDeviceCount, 2);
+    assert.equal(banned.status, "banned");
     await call(`/api/subscription/1?deviceId=${deviceId}`, { status: 403 });
     await call("/api/account/login", { method: "POST", body: { deviceId, email: "user@example.com", password: "test-password-123" }, status: 403 });
     await call(`/local-admin/api/users/${uid}/ban`, { method: "DELETE", admin: true });

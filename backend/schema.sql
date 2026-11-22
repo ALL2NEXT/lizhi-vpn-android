@@ -12,10 +12,11 @@ CREATE TABLE users_mb (
     CHECK (status IN ('active', 'banned')),
   identity_type TEXT NOT NULL DEFAULT 'human'
     CHECK (identity_type IN ('human', 'bot')),
-  email TEXT COLLATE NOCASE,
+  email TEXT NOT NULL COLLATE NOCASE CHECK (trim(email) <> ''),
   password_hash TEXT NOT NULL DEFAULT '',
   vip_expires_at TEXT,
   created_at TEXT NOT NULL,
+  registration_ip TEXT NOT NULL DEFAULT '',
   created_day TEXT GENERATED ALWAYS AS (substr(created_at, 1, 10)) VIRTUAL
 );
 
@@ -28,6 +29,14 @@ ON users_mb(created_day);
 CREATE UNIQUE INDEX idx_users_mb_email
 ON users_mb(email)
 WHERE email IS NOT NULL AND email <> '';
+
+CREATE TRIGGER trg_users_require_email_insert_mb
+BEFORE INSERT ON users_mb WHEN NEW.email IS NULL OR trim(NEW.email) = ''
+BEGIN SELECT RAISE(ABORT, 'user_email_required'); END;
+
+CREATE TRIGGER trg_users_require_email_update_mb
+BEFORE UPDATE OF email ON users_mb WHEN NEW.email IS NULL OR trim(NEW.email) = ''
+BEGIN SELECT RAISE(ABORT, 'user_email_required'); END;
 
 CREATE TABLE registration_codes_mb (
   id INTEGER PRIMARY KEY,

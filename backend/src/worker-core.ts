@@ -20,7 +20,6 @@ import {
   normalizeAccountId,
   normalizeUserIdentityType,
   normalizeAccountPassword,
-  canAccessAccountType,
   normalizeAndroidSdk,
   normalizeBatchUserReferences,
   normalizeRegistrationCode,
@@ -70,7 +69,7 @@ import {
   readUser,
   readUserWithTraffic,
   readDeviceContextFromDb,
-  registerOrTouchUser,
+  syncUserDevice,
   publicAccount,
   publicAdminUser,
   resolveAccountAccess,
@@ -106,7 +105,6 @@ import {
 } from "./services/system-logs.ts";
 
 const routeDeps = {
-  canAccessAccountType,
   resolveAccountAccess,
   beijingTimestamp,
   normalizeAccountId,
@@ -128,7 +126,7 @@ const routeDeps = {
   readUser,
   readUserWithTraffic,
   attachDeviceToUser,
-  registerOrTouchUser,
+  syncUserDevice,
   // 账户注册成功后需要用统一格式返回账户信息。
   publicAccount,
   normalizeNickname,
@@ -217,11 +215,16 @@ async function captureRequest(
   request: Request,
   details: SystemLogDetailSettings,
 ): Promise<NonNullable<SystemLogHttpCapture["request"]>> {
+  // Account credentials must never be written to the optional full request log.
+  const path = new URL(request.url).pathname.replace(/\/+$/, "");
+  const containsAccountCredentials = [
+    "/api/account/register", "/api/account/bind", "/api/account/login", "/api/account/delete",
+  ].includes(path);
   return {
     method: request.method,
     ...(details.requestUrl ? { url: request.url } : {}),
     ...(details.requestHeaders ? { headers: serializeHeaders(request.headers) } : {}),
-    ...(details.requestBody ? { body: await captureBody(request) } : {}),
+    ...(details.requestBody && !containsAccountCredentials ? { body: await captureBody(request) } : {}),
   };
 }
 

@@ -108,7 +108,16 @@ data class AccountRegisterRequest(
     val androidVersion: String,
 
     @SerializedName("androidSdk")
-    val androidSdk: Int
+    val androidSdk: Int,
+
+    @SerializedName("email")
+    val email: String? = null,
+
+    @SerializedName("password")
+    val password: String? = null,
+
+    @SerializedName("registrationCode")
+    val registrationCode: String? = null
 )
 
 data class AccountRegisterResponse(
@@ -120,23 +129,6 @@ data class AccountRegisterResponse(
 
     @SerializedName("error")
     val error: String? = null
-)
-
-data class AccountBindingRequest(
-    @SerializedName("deviceId")
-    val deviceId: String,
-
-    @SerializedName("uid")
-    val uid: String,
-
-    @SerializedName("email")
-    val email: String,
-
-    @SerializedName("password")
-    val password: String,
-
-    @SerializedName("registrationCode")
-    val registrationCode: String = ""
 )
 
 data class AccountLoginRequest(
@@ -200,7 +192,7 @@ data class AccountInfo(
     val nickname: String = "用户",
 
     @SerializedName("accountType")
-    val accountType: String = "guest",
+    val accountType: String = "formal",
 
     @SerializedName("email")
     val email: String = "",

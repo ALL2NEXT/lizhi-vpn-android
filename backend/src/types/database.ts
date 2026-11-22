@@ -47,6 +47,7 @@ export interface DeviceContextRow extends DeviceFields {
   user_id: number | null;
   uid: string | null;
   user_status: UserStatus | null;
+  user_registered: number;
   device_banned: number;
   block_reason: string;
 }

@@ -497,7 +497,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val isSyncingAccount = accountSession.isSyncingAccount
     val isStartupAccountActionInProgress = accountSession.isStartupAccountActionInProgress
     val startupAccountAuthenticated = accountSession.startupAccountAuthenticated
-    val isBindingAccount = accountSession.isBindingAccount
     val isSwitchingAccount = accountSession.isSwitchingAccount
     val isDeletingAccount = accountSession.isDeletingAccount
     val accountMessage = accountSession.accountMessage
@@ -1350,19 +1349,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun markAllClientNotificationsRead() = accountSession.markAllClientNotificationsRead()
 
-    fun bindEmailPassword(
-        email: String,
-        password: String,
-        registrationCode: String = ""
-    ) = accountSession.bindEmailPassword(email, password, registrationCode)
-
     fun loginAtStartup(email: String, password: String) =
         accountSession.loginAtStartup(email, password)
 
     fun registerAtStartup(email: String, password: String, registrationCode: String) =
         accountSession.registerAtStartup(email, password, registrationCode)
-
-    fun continueAsGuestAtStartup() = accountSession.continueAsGuestAtStartup()
 
     fun continueOfflineAtStartup() = accountSession.continueOfflineAtStartup()
 

@@ -94,7 +94,7 @@ test("AI 风控管理接口鉴权、隐藏密钥并提供脱敏请求数据", as
   assert.equal(Number(capturedBodies.total), 0, "AI API Key 不应进入系统日志完整请求载荷");
 
   const deviceId = "c".repeat(64);
-  const registered = await call("/api/account/register", { method: "POST", body: { deviceId } });
+  const registered = await call("/api/account/register", { method: "POST", body: { deviceId, email: "risk@example.com", password: "test-password" } });
   await call("/api/client?deviceId=" + deviceId);
   await eventually(async () => Boolean(await db.prepare(
     "SELECT 1 FROM user_ip_links_mb WHERE user_uid = ? AND ip = ?",

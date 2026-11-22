@@ -11,7 +11,6 @@ import type * as subscriptionStore from "../services/subscription-store.ts";
 import type * as systemLogs from "../services/system-logs.ts";
 
 export interface RouteDependencies {
-  canAccessAccountType: typeof account.canAccessAccountType;
   resolveAccountAccess: typeof users.resolveAccountAccess;
   beijingTimestamp: typeof time.beijingTimestamp;
   normalizeAccountId: typeof account.normalizeAccountId;
@@ -34,7 +33,7 @@ export interface RouteDependencies {
   readUser: typeof users.readUser;
   readUserWithTraffic: typeof users.readUserWithTraffic;
   attachDeviceToUser: typeof users.attachDeviceToUser;
-  registerOrTouchUser: typeof users.registerOrTouchUser;
+  syncUserDevice: typeof users.syncUserDevice;
   publicAccount: typeof users.publicAccount;
   normalizeNickname: typeof account.normalizeNickname;
   normalizeRegistrationCode: typeof account.normalizeRegistrationCode;

@@ -111,11 +111,11 @@ test("Clash 支持全部客户端协议，端口跳跃、SS 插件和证书参�
 
 test("无关配置、未知协议、无效端口和损坏链接不会生成空本地源", async () => {
   for (const value of ["////not-base64", "external-ui-url: https://ui.example", '{"route":{"url":"https://rules.example"}}', '{"outbounds":[{"type":"direct"},{"type":"selector"}]}', "vless://id@host:0", "vless://id@host:65536", "vmess://ignored"]) assert.deepEqual(toStandardUris(value), []);
-  await assert.rejects(importSubscriptionSources("no nodes", "guest"), /subscription_import_no_nodes/);
-  assert.equal((await importSubscriptionSources("", "formal")).sources[0].minAccountType, "formal");
-  await assert.rejects(importSubscriptionSources(null, "guest"), /invalid_subscription_import_input/);
-  await assert.rejects(importSubscriptionSources("中".repeat(MAX_MANAGED_SUBSCRIPTION_BYTES / 2), "guest"), /managed_subscription_too_large/);
-  await assert.rejects(importSubscriptionSources(Array.from({ length: 21 }, (_, i) => `https://source${i}.example/sub`).join("\n"), "guest"), /subscription_import_too_many_urls/);
+  await assert.rejects(importSubscriptionSources("no nodes"), /subscription_import_no_nodes/);
+  assert.equal(Object.hasOwn((await importSubscriptionSources("")).sources[0], "minAccountType"), false);
+  await assert.rejects(importSubscriptionSources(null), /invalid_subscription_import_input/);
+  await assert.rejects(importSubscriptionSources("中".repeat(MAX_MANAGED_SUBSCRIPTION_BYTES / 2)), /managed_subscription_too_large/);
+  await assert.rejects(importSubscriptionSources(Array.from({ length: 21 }, (_, i) => `https://source${i}.example/sub`).join("\n")), /subscription_import_too_many_urls/);
 });
 
 test("URI 省略端口沿用客户端默认值，VLESS 必须携带身份", () => {
@@ -144,7 +144,7 @@ test("智能导入自动命名，远程源保留 URL，部分失败保留成功�
     if (url.includes("one.example")) return new Response(yaml, { headers: { "profile-title": "base64:" + encodeBase64("日本订阅") } });
     return new Response(encodeBase64(encodeBase64(json)), { headers: { "content-disposition": "attachment; filename*=UTF-8''%E8%AE%A2%E9%98%85.yaml" } });
   });
-  const result = await importSubscriptionSources(`${localUri}\nhttps://one.example/sub\nhttps://bad.example/sub\nhttps://two.example/sub\nhttps://one.example/sub`, "formal");
+  const result = await importSubscriptionSources(`${localUri}\nhttps://one.example/sub\nhttps://bad.example/sub\nhttps://two.example/sub\nhttps://one.example/sub`);
   assert.deepEqual(result.sources.map(source => source.name), ["导入内容", "日本订阅", "订阅"]);
   assert.equal(result.nodeCount, 3);
   assert.equal(result.failedSources.length, 1);
@@ -152,7 +152,7 @@ test("智能导入自动命名，远程源保留 URL，部分失败保留成功�
   assert.deepEqual(result.sources.map(source => source.url), ["", "https://one.example/sub", "https://two.example/sub"]);
   assert.equal(result.sources[1].content, "");
   assert.equal(result.sources[0].content, localUri);
-  assert.ok(result.sources.every(source => source.minAccountType === "formal" && source.enabled && !source.autoRename));
+  assert.ok(result.sources.every(source => !Object.hasOwn(source, "minAccountType") && source.enabled && !source.autoRename));
   assert.equal(calls.filter(call => call.url.includes("bad.example")).length, 7);
 });
 
@@ -177,9 +177,9 @@ test("远程格式自动尝试 User-Agent，更新及 KV 缓存仍使用同一�
 
 test("无效本地配置丢弃但不影响远程；全部失败可返回逐来源错误", async t => {
   t.mock.method(globalThis, "fetch", async url => url.includes("bad.example") ? new Response("bad", { status: 404 }) : new Response(localUri));
-  const result = await importSubscriptionSources('{"outbounds":[{"type":"direct"}]}\nhttps://valid.example/sub', "guest");
+  const result = await importSubscriptionSources('{"outbounds":[{"type":"direct"}]}\nhttps://valid.example/sub');
   assert.equal(result.sources.length, 1);
-  const failure = await importSubscriptionSources("https://bad.example/sub", "guest");
+  const failure = await importSubscriptionSources("https://bad.example/sub");
   assert.equal(failure.sources.length, 0);
   assert.equal(failure.failedSources[0].error, "external_subscription_http_404");
 });

@@ -1,12 +1,10 @@
-import type { AccountType, SubscriptionSource } from "../types/models.ts";
+import type { SubscriptionSource } from "../types/models.ts";
 import type { Env } from "../types/env.ts";
 import { detectSubscriptionInput, toStandardUris } from "../domain/subscription-import/index.ts";
 import { fetchExternalSubscription, normalizeManagedContent } from "./subscriptions.ts";
 
 export interface ImportedSubscription extends Omit<SubscriptionSource, "id"> {
   nodeCount: number;
-  /** 兼容旧版管理端的预览字段；持久化时由分组负责权限。 */
-  minAccountType: AccountType;
   minAppVersion: string;
 }
 export interface SubscriptionImportResult {
@@ -18,23 +16,17 @@ interface PreparedSubscriptionImport extends SubscriptionImportResult {
   urls: string[];
 }
 
-function normalizeImportAccountType(value: unknown): AccountType {
-  return value === "banned" || value === "formal" ? value : "guest";
-}
-
 function importedSource(
   name: string,
   url: string,
   content: string,
   nodeCount: number,
-  minAccountType: AccountType,
 ): ImportedSubscription {
   return {
     name,
     url,
     content,
     nodeCount,
-    minAccountType,
     minAppVersion: "",
     enabled: true,
     remark: "",
@@ -44,17 +36,13 @@ function importedSource(
 }
 
 /** 解析输入并转换本地节点；远程地址继续交给 Worker 拉取。 */
-function prepareSubscriptionImport(
-  input: unknown,
-  accountType: unknown,
-): PreparedSubscriptionImport {
+function prepareSubscriptionImport(input: unknown): PreparedSubscriptionImport {
   if (typeof input !== "string") throw new Error("invalid_subscription_import_input");
   const content = normalizeManagedContent(input);
-  const minAccountType = normalizeImportAccountType(accountType);
   if (!content) {
     return {
       urls: [],
-      sources: [importedSource("新建线路", "", "", 0, minAccountType)],
+      sources: [importedSource("新建线路", "", "", 0)],
       failedSources: [],
       nodeCount: 0,
     };
@@ -67,7 +55,7 @@ function prepareSubscriptionImport(
     ? normalizeManagedContent(localNodes.join("\n"))
     : "";
   const sources = localContent
-    ? [importedSource("导入内容", "", localContent, localNodes.length, minAccountType)]
+    ? [importedSource("导入内容", "", localContent, localNodes.length)]
     : [];
   if (!urls.length && !sources.length) throw new Error("subscription_import_no_nodes");
   return {
@@ -79,11 +67,10 @@ function prepareSubscriptionImport(
 }
 
 /** 仅生成待编辑的线路，不修改 KV；原有「推送」操作负责保存和缓存预热。 */
-export async function importSubscriptionSources(input: unknown, accountType: unknown, env?: Env): Promise<SubscriptionImportResult> {
-  const plan = prepareSubscriptionImport(input, accountType);
+export async function importSubscriptionSources(input: unknown, env?: Env): Promise<SubscriptionImportResult> {
+  const plan = prepareSubscriptionImport(input);
   if (!plan.urls.length) return plan;
 
-  const minAccountType = normalizeImportAccountType(accountType);
   const sources: ImportedSubscription[] = [...plan.sources];
   const failedSources: SubscriptionImportResult["failedSources"] = [];
   // 小批并发且保留输入顺序，独立失败不会抹掉已成功的来源。
@@ -93,7 +80,7 @@ export async function importSubscriptionSources(input: unknown, accountType: unk
       try {
         const result = await fetchExternalSubscription(url, { env });
         return {
-          value: importedSource(result.name, url, "", result.nodeCount, minAccountType),
+          value: importedSource(result.name, url, "", result.nodeCount),
         };
       } catch (error) {
         return { url, error: error instanceof Error ? error.message : "external_subscription_unreachable" };

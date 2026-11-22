@@ -564,7 +564,6 @@ class MainActivity : ComponentActivity() {
                                 message = accountMessage,
                                 onLogin = viewModel::loginAtStartup,
                                 onRegister = viewModel::registerAtStartup,
-                                onGuestLogin = viewModel::continueAsGuestAtStartup,
                                 onOfflineUse = viewModel::continueOfflineAtStartup
                             )
                         }

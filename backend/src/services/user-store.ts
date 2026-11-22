@@ -27,9 +27,7 @@ import {
   normalizeUserIdentityType,
   normalizeUid,
   normalizeUserReference,
-  randomPublicUid,
 } from "../domain/account.ts";
-import { normalizeClientIp } from "../domain/ip.ts";
 import { beijingTimestamp, usagePeriodKeys } from "../domain/time.ts";
 import { cleanText } from "../lib/values.ts";
 import { observeRequestUser } from "../http/request.ts";
@@ -166,7 +164,7 @@ export async function resolveUserIdentity(env: Env, reference: unknown) {
 
 export async function resolveDeviceIdentity(env: Env, value: unknown) {
   const context = await readDeviceContext(env, value);
-  if (!context || context.deviceBanned || context.userStatus !== "active" || context.userId <= 0) {
+  if (!context || context.deviceBanned || !context.registered || context.userStatus !== "active" || context.userId <= 0) {
     return null;
   }
   observeRequestUser(env, context);
@@ -192,6 +190,7 @@ export async function readDeviceContextFromDb(db: Database, deviceId: string) {
        d.app_version,
        u.uid,
        u.status AS user_status,
+       CASE WHEN u.email IS NOT NULL AND trim(u.email) <> '' THEN 1 ELSE 0 END AS user_registered,
        EXISTS (
          SELECT 1 FROM device_bans_mb b
          WHERE b.device_row_id = d.id AND b.lifted_at IS NULL
@@ -215,6 +214,7 @@ export async function readDeviceContextFromDb(db: Database, deviceId: string) {
     userId: Number.isInteger(userId) && userId > 0 ? userId : 0,
     uid: normalizeStoredUid(row.uid),
     userStatus: cleanText(row.user_status),
+    registered: Number(row.user_registered) === 1,
     brand: cleanText(row.brand),
     model: cleanText(row.model),
     androidVersion: cleanText(row.android_version),
@@ -225,19 +225,17 @@ export async function readDeviceContextFromDb(db: Database, deviceId: string) {
 
 export async function resolveAccountAccess(env: Env, deviceId: string): Promise<{
   accountStatus: SubscriptionAccountStatus;
-  accountType: Exclude<AccountType, "banned">;
   identityType: UserIdentityType;
   vipActive: boolean;
   appVersion: string;
   registered: boolean;
   deviceBlocked: boolean;
 }> {
-  // 读取原始设备状态，封禁账号仍需根据邮箱类型参与分组的 AND 权限判断。
+  // 未绑定正式账号的设备不能访问订阅，即使数据库中存在不完整的历史记录。
   const identity = await readDeviceContext(env, deviceId);
-  if (!identity || identity.userId <= 0) {
+  if (!identity || !identity.registered || identity.userId <= 0) {
     return {
       accountStatus: "banned",
-      accountType: "guest",
       identityType: "human",
       vipActive: false,
       appVersion: "",
@@ -249,10 +247,9 @@ export async function resolveAccountAccess(env: Env, deviceId: string): Promise<
   const row = await db.prepare(
     "SELECT status, email, identity_type, vip_expires_at FROM users_mb WHERE id = ?",
   ).bind(identity.userId).first<Pick<UserRow, "status" | "email" | "identity_type" | "vip_expires_at">>();
-  if (!row || !(row.status === "active" || row.status === "banned")) {
+  if (!row || !cleanText(row.email) || !(row.status === "active" || row.status === "banned")) {
     return {
       accountStatus: "banned",
-      accountType: "guest",
       identityType: "human",
       vipActive: false,
       appVersion: "",
@@ -263,7 +260,6 @@ export async function resolveAccountAccess(env: Env, deviceId: string): Promise<
   observeRequestUser(env, identity);
   return {
     accountStatus: row.status === "banned" ? "banned" : "normal",
-    accountType: cleanText(row.email) ? "formal" : "guest",
     identityType: normalizeUserIdentityType(row.identity_type),
     vipActive: Date.parse(cleanText(row.vip_expires_at)) > Date.now(),
     appVersion: cleanText(identity.appVersion),
@@ -373,9 +369,9 @@ export function rowToUser(row: AccountRow, settings?: Settings): User {
 
 export function publicAccount(user: User | null): PublicAccount {
   if (!user) throw new Error("account_not_found");
-  const accountType: AccountType = ["banned", "guest", "formal"].includes(cleanText(user.accountType))
-    ? user.accountType
-    : accountTypeForUser(user);
+  if (!cleanText(user.email)) throw new Error("account_not_found");
+  const accountType: AccountType = user.accountType === "banned" || user.deviceBlocked
+    ? "banned" : "formal";
   const account: PublicAccount = {
     uid: user.uid,
     nickname: user.nickname,
@@ -491,51 +487,21 @@ export async function attachDeviceToUser(db: Database, userId: number, deviceId:
     Number(results[1] && results[1].meta && results[1].meta.changes) > 0;
 }
 
-export async function registerOrTouchUser(
+export async function syncUserDevice(
   env: Env,
   deviceId: string,
   profile: DeviceProfile,
-  now: Date,
-  registrationIp = "",
 ) {
   const db = await ensureUserSchema(env);
-  const seenAt = beijingTimestamp(now);
-  const normalizedRegistrationIp = normalizeClientIp(registrationIp);
   const existing = await readDeviceContextFromDb(db, deviceId);
   if (existing && (existing.deviceBanned || existing.userStatus === "banned")) {
     return existing;
   }
   if (existing && existing.userId > 0) {
+    if (!existing.registered) return null;
     await attachDeviceToUser(db, existing.userId, deviceId, profile, false);
     return readDeviceContextFromDb(db, deviceId);
   }
 
-  let uid = "";
-  let created = null;
-  for (let attempt = 0; attempt < 8 && !created; attempt += 1) {
-    uid = randomPublicUid();
-    try {
-      await db.prepare(
-        `INSERT INTO users_mb (uid, nickname, identity_type, created_at, registration_ip)
-         VALUES (?, ?, 'human', ?, ?)`,
-      ).bind(uid, defaultNickname(uid), seenAt, normalizedRegistrationIp).run();
-      created = await db.prepare(
-        "SELECT id FROM users_mb WHERE uid = ?",
-      ).bind(uid).first<Pick<UserRow, "id">>();
-    } catch (error) {
-      if (!/unique|constraint/i.test(String(error instanceof Error ? error.message : error))) throw error;
-    }
-  }
-  if (!created) throw new Error("account_create_failed");
-  const attached = await attachDeviceToUser(
-    db,
-    Number(created.id),
-    deviceId,
-    profile,
-    false,
-  );
-  if (!attached) {
-    await db.prepare("DELETE FROM users_mb WHERE id = ?").bind(Number(created.id)).run();
-  }
-  return readDeviceContextFromDb(db, deviceId);
+  return null;
 }

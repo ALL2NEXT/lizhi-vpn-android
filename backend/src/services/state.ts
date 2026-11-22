@@ -25,7 +25,6 @@ import {
 } from "./subscriptions.ts";
 
 const SUBSCRIPTION_STATUSES: SubscriptionAccountStatus[] = ["normal", "banned"];
-const SUBSCRIPTION_ACCOUNT_TYPES = ["guest", "formal"] as const;
 const SUBSCRIPTION_IDENTITY_TYPES: UserIdentityType[] = ["human", "bot"];
 const SUBSCRIPTION_MEMBERSHIP_TYPES: SubscriptionMembershipStatus[] = ["member", "non_member"];
 
@@ -149,9 +148,10 @@ function normalizeSubscriptionGroup(
     id: cleanText(input.id).slice(0, 80) || String(index + 1),
     name: cleanText(input.name || input.title).slice(0, 80) || `分组${index + 1}`,
     groupType: input.groupType === "load_balanced" ? "load_balanced" : "standard",
-    enabled: parseFlag(input.enabled, true),
+    // A legacy group that excluded registered users must not become accessible.
+    enabled: parseFlag(input.enabled, true) &&
+      (!Array.isArray(input.allowedAccountTypes) || input.allowedAccountTypes.includes("formal")),
     allowedStatuses: normalizeSelection(input.allowedStatuses, SUBSCRIPTION_STATUSES, ["normal"]),
-    allowedAccountTypes: normalizeSelection(input.allowedAccountTypes, SUBSCRIPTION_ACCOUNT_TYPES, ["guest", "formal"]),
     allowedIdentityTypes: normalizeIdentitySelection(input.allowedIdentityTypes),
     allowedMembershipTypes: normalizeSelection(
       input.allowedMembershipTypes,
@@ -302,7 +302,7 @@ export function normalizeState(input: unknown): AppState {
         // 旧版每条线路独立配置最低等级和版本，迁移时各自成为一个可编辑分组。
         const minimumType = normalizeAccountType(
           item.minAccountType ?? item.requiredAccountType ?? item.minimumAccountType,
-          "guest",
+          "formal",
         );
         return [{
           id: String(index + 1),
@@ -310,7 +310,6 @@ export function normalizeState(input: unknown): AppState {
           groupType: "standard",
           enabled: true,
           allowedStatuses: minimumType === "banned" ? ["normal", "banned"] : ["normal"],
-          allowedAccountTypes: minimumType === "formal" ? ["formal"] : ["guest", "formal"],
           allowedIdentityTypes: ["human", "bot"],
           allowedMembershipTypes: ["member", "non_member"],
           updateEnabled: true,

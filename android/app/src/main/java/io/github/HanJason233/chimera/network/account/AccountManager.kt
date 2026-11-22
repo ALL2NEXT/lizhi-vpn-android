@@ -11,7 +11,6 @@ import kotlinx.coroutines.withTimeout
 import io.github.HanJason233.chimera.AppConfig
 import io.github.HanJason233.chimera.BuildConfig
 import io.github.HanJason233.chimera.data.model.AccountActionResponse
-import io.github.HanJason233.chimera.data.model.AccountBindingRequest
 import io.github.HanJason233.chimera.data.model.AccountDeleteRequest
 import io.github.HanJason233.chimera.data.model.AccountInfo
 import io.github.HanJason233.chimera.data.model.ClientNotificationFeed
@@ -21,6 +20,8 @@ import io.github.HanJason233.chimera.data.model.AccountLoginRequest
 import io.github.HanJason233.chimera.data.model.AccountVipActivationRequest
 import io.github.HanJason233.chimera.data.model.AccountProfileUpdateRequest
 import io.github.HanJason233.chimera.data.model.AccountRegisterRequest
+import io.github.HanJason233.chimera.data.model.AccountRegisterResponse
+import retrofit2.Response
 import io.github.HanJason233.chimera.data.model.TrafficReportRequest
 import io.github.HanJason233.chimera.data.model.TrafficReportResponse
 import io.github.HanJason233.chimera.data.model.SecurityFindingReportRequest
@@ -31,7 +32,7 @@ import java.time.OffsetDateTime
 import java.util.UUID
 import org.json.JSONObject
 
-/** Registers this installation and keeps the current banned/guest/formal account identity. */
+/** Keeps the current registered account and device identity. */
 class AccountManager(private val context: Context) {
     private val preferences = context.getSharedPreferences(
         "account_identity",
@@ -51,37 +52,45 @@ class AccountManager(private val context: Context) {
 
     fun accountId(): String = deviceKey()
 
-    suspend fun register(timeoutMs: Long = 25000L): Result<AccountInfo> {
-        if (isOfflineMode()) {
-            return Result.failure(IllegalStateException("offline_mode_enabled"))
-        }
-        if (AppConfig.BACKEND_URL.isBlank()) {
-            return Result.failure(IllegalStateException("backend_url_missing"))
-        }
+    suspend fun syncCurrentAccount(timeoutMs: Long = 25000L): Result<AccountInfo> {
+        if (isOfflineMode()) return Result.failure(IllegalStateException("offline_mode_enabled"))
+        if (currentAccount() == null) return Result.failure(IllegalStateException("account_not_synced"))
+        if (AppConfig.BACKEND_URL.isBlank()) return Result.failure(IllegalStateException("backend_url_missing"))
         return runCatching {
             val response = withTimeout(timeoutMs.coerceIn(5000L, 60000L)) {
                 NetworkClient.apiService.registerAccount(
-                    accountEndpoint("/api/account/register"),
-                    AccountRegisterRequest(
-                        deviceId = accountId(),
-                        appVersion = BuildConfig.VERSION_NAME,
-                        brand = Build.MANUFACTURER.orEmpty(),
-                        model = Build.MODEL.orEmpty(),
-                        androidVersion = Build.VERSION.RELEASE.orEmpty(),
-                        androidSdk = Build.VERSION.SDK_INT
-                    )
+                    accountEndpoint("/api/account/sync"),
+                    accountRequest()
                 )
             }
-            val account = response.account ?: throw IllegalStateException(
-                response.error ?: "account_response_missing"
-            )
-            persistAccount(account)
-            account
+            readAccountResponse(response, "account_sync_failed").also(::persistAccount)
         }
     }
 
-    suspend fun syncCurrentAccount(timeoutMs: Long = 25000L): Result<AccountInfo> =
-        register(timeoutMs)
+    private fun accountRequest(
+        email: String? = null,
+        password: String? = null,
+        registrationCode: String? = null
+    ) = AccountRegisterRequest(
+        deviceId = accountId(),
+        appVersion = BuildConfig.VERSION_NAME,
+        brand = Build.MANUFACTURER.orEmpty(),
+        model = Build.MODEL.orEmpty(),
+        androidVersion = Build.VERSION.RELEASE.orEmpty(),
+        androidSdk = Build.VERSION.SDK_INT,
+        email = email,
+        password = password,
+        registrationCode = registrationCode
+    )
+
+    private fun readAccountResponse(response: Response<AccountRegisterResponse>, fallback: String): AccountInfo {
+        if (!response.isSuccessful) {
+            val errorBody = response.errorBody()?.string().orEmpty()
+            val errorCode = runCatching { JSONObject(errorBody).optString("error") }.getOrDefault("")
+            throw IllegalStateException(errorCode.ifBlank { fallback })
+        }
+        return response.body()?.account ?: throw IllegalStateException(fallback)
+    }
 
     suspend fun getClientNotifications(timeoutMs: Long = 10000L): Result<ClientNotificationFeed> {
         if (isOfflineMode()) {
@@ -227,25 +236,17 @@ class AccountManager(private val context: Context) {
                     )
                 )
             }
-            val account = response.account ?: throw IllegalStateException(
-                response.error ?: "account_login_failed"
-            )
-            persistAccount(account)
-            account
+            readAccountResponse(response, "account_login_failed").also(::persistAccount)
         }
     }
 
-    suspend fun bindEmailPassword(
+    suspend fun registerAccount(
         email: String,
         password: String,
         registrationCode: String = "",
         timeoutMs: Long = 10000L
     ): Result<AccountInfo> {
-        if (isOfflineMode()) {
-            return Result.failure(IllegalStateException("offline_mode_enabled"))
-        }
-        val registered = currentAccount()
-            ?: return Result.failure(IllegalStateException("account_not_synced"))
+        if (isOfflineMode()) return Result.failure(IllegalStateException("offline_mode_enabled"))
         val normalizedEmail = email.trim().lowercase()
         if (!android.util.Patterns.EMAIL_ADDRESS.matcher(normalizedEmail).matches()) {
             return Result.failure(IllegalArgumentException("invalid_email"))
@@ -255,23 +256,16 @@ class AccountManager(private val context: Context) {
         }
         return runCatching {
             val response = withTimeout(timeoutMs.coerceIn(5000L, 30000L)) {
-                NetworkClient.apiService.bindAccount(
-                    accountEndpoint("/api/account/bind"),
-                    AccountBindingRequest(
-                        deviceId = accountId(),
-                        uid = registered.uid,
-                        email = normalizedEmail,
-                        password = password,
-                        registrationCode = registrationCode.trim().uppercase()
-                            .replace("-", "").replace(" ", "")
+                NetworkClient.apiService.registerAccount(
+                    accountEndpoint("/api/account/register"),
+                    accountRequest(
+                        normalizedEmail,
+                        password,
+                        registrationCode.trim().uppercase().replace("-", "").replace(" ", "")
                     )
                 )
             }
-            val account = response.account ?: throw IllegalStateException(
-                response.error ?: "account_binding_failed"
-            )
-            persistAccount(account)
-            account
+            readAccountResponse(response, "account_registration_failed").also(::persistAccount)
         }
     }
 
@@ -344,7 +338,7 @@ class AccountManager(private val context: Context) {
         }
         val registered = currentAccount()
             ?: return Result.failure(IllegalStateException("account_not_synced"))
-        if (registered.email.isNotBlank() && password.length !in 8..128) {
+        if (password.length !in 8..128) {
             return Result.failure(IllegalArgumentException("invalid_account_password"))
         }
         return runCatching {
@@ -376,9 +370,17 @@ class AccountManager(private val context: Context) {
     private fun loadPersistedAccount(): AccountInfo? {
         val uid = preferences.getString(ACCOUNT_ID_KEY, null)?.takeIf { it.isNotBlank() } ?: return null
         val email = preferences.getString(ACCOUNT_EMAIL_KEY, "").orEmpty()
+        // Clear the old unregistered identity without changing the device ID or offline setting.
+        if (email.isBlank()) {
+            val editor = preferences.edit()
+            preferences.all.keys.filter { key ->
+                key.startsWith("account_") || key.startsWith("vip_") || key.startsWith("traffic_")
+            }.forEach(editor::remove)
+            editor.apply()
+            return null
+        }
         val storedType = preferences.getString(ACCOUNT_TYPE_KEY, "").orEmpty()
-        val accountType = storedType.takeIf { it in setOf("banned", "guest", "formal") }
-            ?: if (email.isBlank()) "guest" else "formal"
+        val accountType = if (storedType == "banned") "banned" else "formal"
         val traffic = AccountTrafficInfo(
             today = loadTrafficPeriod(TRAFFIC_TODAY_PREFIX),
             month = loadTrafficPeriod(TRAFFIC_MONTH_PREFIX),
@@ -412,6 +414,9 @@ class AccountManager(private val context: Context) {
     )
 
     private fun persistAccount(account: AccountInfo) {
+        require(account.email.isNotBlank() && account.accountType in setOf("formal", "banned")) {
+            "account_not_registered"
+        }
         val normalized = account.copy(
             accountType = if (account.deviceBlocked) "banned" else account.accountType
         )

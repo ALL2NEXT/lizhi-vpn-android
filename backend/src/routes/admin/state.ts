@@ -38,7 +38,7 @@ export function createAdminStateRoutes(deps: Pick<
     if (path === "/api/subscriptions/import" && request.method === "POST") {
       try {
         const incoming = await readJsonObject(request);
-        const result = await importSubscriptionSources(incoming.input, incoming.minAccountType, env);
+        const result = await importSubscriptionSources(incoming.input, env);
         return json({ ok: result.sources.length > 0, ...result }, result.sources.length ? 200 : 422);
       } catch (error) {
         return json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 400);

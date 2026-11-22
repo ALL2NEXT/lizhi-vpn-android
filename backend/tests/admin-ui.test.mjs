@@ -40,7 +40,8 @@ function harness() {
   const messages = [];
   const windowEvents = new Map();
   const documentEvents = new Map();
-  const serverUsers = [{uid: 'a', nickname: 'Alice', accountType: 'guest'}, {uid: 'b', nickname: 'Bob', accountType: 'banned', email: 'bob@example.test'}];
+  const serverUsers = [{uid: 'a', nickname: 'Alice', accountType: 'formal', email: 'alice@example.test'}, {uid: 'b', nickname: 'Bob', accountType: 'banned', email: 'bob@example.test'}];
+  const filterState = {enabled: false, status: 'active'};
   let requestHandler = async (url, options) => {
     if (url.endsWith('/state')) return {state: JSON.parse(options.body)};
     if (url.endsWith('/security/accounts')) return {accounts: []};
@@ -65,9 +66,13 @@ function harness() {
     URL,
     document: {
       getElementById: get,
-      querySelector(selector) { return panels.get(selector.match(/^\[data-panel="(.+)"\]$/)?.[1]) || null; },
+      querySelector(selector) {
+        if (selector === '[data-admin-user-filter-toggle="status"]') return {checked: filterState.enabled};
+        return panels.get(selector.match(/^\[data-panel="(.+)"\]$/)?.[1]) || null;
+      },
       querySelectorAll(selector) {
         if (selector === '[data-settings-discard]') return [...panels.values()].map(panel => panel.querySelector(selector));
+        if (selector === '[data-admin-user-filter="status"]:checked') return [{value: filterState.status}];
         return [];
       },
       addEventListener(type, handler) { documentEvents.set(type, handler); },
@@ -89,20 +94,20 @@ function harness() {
   context.fixtureUsers = serverUsers;
   vm.runInContext('adminUserData = {users: fixtureUsers, securityAccounts: []}', context);
   return {
-    get, panels, calls, messages, windowEvents, documentEvents, context,
+    get, panels, calls, messages, windowEvents, documentEvents, context, filterState,
     run: code => vm.runInContext(code, context),
   };
 }
 
-test('账户状态和类型可独立筛选及组合，封禁用户不会被类型判定排除', () => {
+test('注册状态筛选已移除，封禁状态筛选仍可用', () => {
   const h = harness();
-  h.get('userAdminStatusFilter').value = 'banned';
+  const html = readFileSync(new URL('../src/admin-ui/document.html', import.meta.url), 'utf8');
+  assert.equal(html.includes('data-admin-user-filter-toggle="type"'), false);
+  assert.equal(scripts[2].includes('data-field="allowedAccountTypes"'), false);
+  h.filterState.enabled = true;
+  h.filterState.status = 'banned';
   assert.equal(h.run('adminUserList().map(user => user.uid).join()'), 'b');
-  h.get('userAdminTypeFilter').value = 'formal';
-  assert.equal(h.run('adminUserList().map(user => user.uid).join()'), 'b');
-  h.get('userAdminTypeFilter').value = 'guest';
-  assert.equal(h.run('adminUserList().length'), 0);
-  h.get('userAdminStatusFilter').value = 'active';
+  h.filterState.status = 'active';
   assert.equal(h.run('adminUserList().map(user => user.uid).join()'), 'a');
 });
 

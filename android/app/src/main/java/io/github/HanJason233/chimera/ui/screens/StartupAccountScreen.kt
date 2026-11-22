@@ -64,7 +64,6 @@ fun StartupAccountScreen(
     message: String?,
     onLogin: (email: String, password: String) -> Unit,
     onRegister: (email: String, password: String, registrationCode: String) -> Unit,
-    onGuestLogin: () -> Unit,
     onOfflineUse: () -> Unit
 ) {
     var isRegistration by remember { mutableStateOf(false) }
@@ -221,7 +220,7 @@ fun StartupAccountScreen(
                     )
                     if (!backendSettings.registrationEnabled) {
                         Text(
-                            text = "暂未开放正式注册，你仍可以选择游客登录。",
+                            text = "用户注册暂未开放，请使用已有账号登录。",
                             modifier = Modifier.fillMaxWidth(),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 13.sp
@@ -291,22 +290,6 @@ fun StartupAccountScreen(
                 }
 
                 if (!isRegistration) {
-                    OutlinedButton(
-                        onClick = onGuestLogin,
-                        enabled = !isBusy,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(56.dp),
-                        shape = RoundedCornerShape(28.dp),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
-                    ) {
-                        Text(
-                            text = if (isBusy) "正在登录…" else "以游客身份继续",
-                            color = MaterialTheme.colorScheme.primary,
-                            fontSize = 16.sp
-                        )
-                    }
-
                     OutlinedButton(
                         onClick = onOfflineUse,
                         enabled = !isBusy,

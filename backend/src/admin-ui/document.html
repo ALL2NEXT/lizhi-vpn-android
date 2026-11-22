@@ -233,17 +233,6 @@
               </div>
             </fieldset>
             <fieldset class="user-admin-filter-section">
-              <legend>注册状态</legend>
-              <label class="user-admin-filter-toggle">
-                <span>启用筛选</span>
-                <span class="user-admin-filter-switch"><input type="checkbox" data-admin-user-filter-toggle="type" aria-label="启用注册状态筛选" onchange="renderAdminUsers()"><span aria-hidden="true"></span></span>
-              </label>
-              <div class="user-admin-filter-options" role="radiogroup" aria-label="按注册状态筛选">
-                <label class="user-admin-filter-option"><input type="radio" name="userAdminRegistrationFilter" data-admin-user-filter="type" value="guest" checked disabled onchange="renderAdminUsers()">游客</label>
-                <label class="user-admin-filter-option"><input type="radio" name="userAdminRegistrationFilter" data-admin-user-filter="type" value="formal" disabled onchange="renderAdminUsers()">正式用户</label>
-              </div>
-            </fieldset>
-            <fieldset class="user-admin-filter-section">
               <legend>风控状态</legend>
               <label class="user-admin-filter-toggle">
                 <span>启用筛选</span>
@@ -571,7 +560,7 @@
       <section class="settings-section">
         <h3 class="settings-section-title">注册控制</h3>
         <div class="registration-control-row">
-          <span id="registrationModeLabel" class="registration-control-label">正式用户控制</span>
+          <span id="registrationModeLabel" class="registration-control-label">用户注册</span>
           <div id="registrationModeSwitch" class="registration-mode-switch" data-mode="normal" role="radiogroup" aria-labelledby="registrationModeLabel">
             <span class="registration-mode-switch-thumb" aria-hidden="true"></span>
             <label class="registration-mode-option">

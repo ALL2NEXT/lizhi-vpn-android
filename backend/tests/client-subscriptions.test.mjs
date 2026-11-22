@@ -58,7 +58,7 @@ test("客户端按设备获取可用订阅，下载时再次校验完整权限",
       { id: "human", allowedIdentityTypes: ["human"], subscriptions: [{ id: "11", name: "真人线路", content }] },
       { id: "robot", allowedIdentityTypes: ["bot"], subscriptions: [{ id: "22", name: "机器人线路", content }] },
       { id: "vip", allowedMembershipTypes: ["member"], subscriptions: [{ id: "33", name: "会员线路", content }] },
-      { id: "formal", allowedAccountTypes: ["formal"], subscriptions: [{ id: "44", name: "正式账号线路", content }] },
+      { id: "common", subscriptions: [{ id: "44", name: "公共账号线路", content }] },
       { id: "version", minAppVersion: "1.2", maxAppVersion: "1.2.0", subscriptions: [{ id: "55", name: "版本线路", content }] },
       { id: "disabled", enabled: false, subscriptions: [{ id: "66", content }] },
       { id: "disabled-source", subscriptions: [{ id: "77", enabled: false, content }] },
@@ -66,8 +66,8 @@ test("客户端按设备获取可用订阅，下载时再次校验完整权限",
       { id: "banned", allowedStatuses: ["banned"], subscriptions: [{ id: "99", name: "封禁线路", content }] },
     ],
   };
-  await call("/api/account/register", { method: "POST", body: { deviceId: humanDevice, appVersion: "1.2.0" } });
-  await call("/api/account/register", { method: "POST", body: { deviceId: robotDevice, appVersion: "1.0.0" } });
+  await call("/api/account/register", { method: "POST", body: { deviceId: humanDevice, email: "human@example.com", password: "test-password", appVersion: "1.2.0" } });
+  await call("/api/account/register", { method: "POST", body: { deviceId: robotDevice, email: "robot@example.com", password: "test-password", appVersion: "1.0.0" } });
   const usersDb = await mf.getD1Database("USERS_DB");
   await usersDb.prepare("UPDATE users_mb SET identity_type = 'bot', email = 'robot@example.com', vip_expires_at = ? WHERE id = (SELECT user_id FROM user_devices_mb WHERE device_id = ?)")
     .bind(new Date(Date.now() + 86_400_000).toISOString(), robotDevice).run();
@@ -79,14 +79,14 @@ test("客户端按设备获取可用订阅，下载时再次校验完整权限",
     await call("/api/client?deviceId=invalid", { status: 401 });
     await call(`/api/client?deviceId=${unregisteredDevice}`, { status: 403 });
     const result = await call(`/api/client?deviceId=${humanDevice}&identityType=bot&vipActive=true&accountType=formal`);
-    assert.deepEqual(result.data.subscriptions.map((source) => source.id), ["11", "55", "load-balanced:balanced"]);
+    assert.deepEqual(result.data.subscriptions.map((source) => source.id), ["11", "44", "55", "load-balanced:balanced"]);
     assert.equal(result.response.headers.get("cache-control"), "no-store");
   });
 
-  await t.test("按真人、机器人、会员、邮箱及版本筛选，身份和权限规则不下发", async () => {
+  await t.test("按真人、机器人、会员及版本筛选，身份和权限规则不下发", async () => {
     const human = await list(humanDevice);
     const robot = await list(robotDevice);
-    assert.deepEqual(human.subscriptions.map((source) => source.id), ["11", "55", "load-balanced:balanced"]);
+    assert.deepEqual(human.subscriptions.map((source) => source.id), ["11", "44", "55", "load-balanced:balanced"]);
     assert.deepEqual(robot.subscriptions.map((source) => source.id), ["22", "33", "44", "load-balanced:balanced"]);
     for (const result of [human, robot]) {
       for (const source of result.subscriptions) {
@@ -104,28 +104,28 @@ test("客户端按设备获取可用订阅，下载时再次校验完整权限",
 
   await t.test("设备版本区间包含边界，并排除过低或过高的版本", async () => {
     for (const version of ["1.1.9", "1.2.1"]) {
-      await call("/api/account/register", { method: "POST", body: { deviceId: humanDevice, appVersion: version } });
+      await call("/api/account/sync", { method: "POST", body: { deviceId: humanDevice, appVersion: version } });
       assert.equal((await list(humanDevice)).subscriptions.some((source) => source.id === "55"), false);
       await call(`/api/subscription/55?deviceId=${humanDevice}`, { status: 403 });
     }
-    await call("/api/account/register", { method: "POST", body: { deviceId: humanDevice, appVersion: "1.2.0" } });
+    await call("/api/account/sync", { method: "POST", body: { deviceId: humanDevice, appVersion: "1.2.0" } });
     assert.equal((await list(humanDevice)).subscriptions.some((source) => source.id === "55"), true);
   });
 
-  await t.test("账号或设备封禁后只返回允许封禁账号的订阅", async () => {
+  await t.test("账号或设备封禁后拒绝订阅请求", async () => {
     await usersDb.prepare("INSERT INTO device_bans_mb (device_row_id, source_uid, reason, banned_at) SELECT d.id, u.uid, 'test_device_ban', ? FROM user_devices_mb d JOIN users_mb u ON u.id = d.user_id WHERE d.device_id = ?")
       .bind(new Date().toISOString(), humanDevice).run();
-    assert.deepEqual((await list(humanDevice)).subscriptions.map((source) => source.id), ["99"]);
+    await call(`/api/client?deviceId=${humanDevice}`, { status: 403 });
     await usersDb.prepare("UPDATE device_bans_mb SET lifted_at = ? WHERE reason = 'test_device_ban'")
       .bind(new Date().toISOString()).run();
     await usersDb.prepare("UPDATE users_mb SET status = 'banned' WHERE id = (SELECT user_id FROM user_devices_mb WHERE device_id = ?)").bind(humanDevice).run();
-    assert.deepEqual((await list(humanDevice)).subscriptions.map((source) => source.id), ["99"]);
+    await call(`/api/client?deviceId=${humanDevice}`, { status: 403 });
     await usersDb.prepare("UPDATE users_mb SET status = 'active' WHERE id = (SELECT user_id FROM user_devices_mb WHERE device_id = ?)").bind(humanDevice).run();
   });
 
   await t.test("获取列表后权限被撤销仍拒绝下载，空列表仍返回客户端设置", async () => {
     assert.ok((await list(humanDevice)).subscriptions.length > 0);
-    const updated = { ...state, subscriptionGroups: state.subscriptionGroups.map((group) => ({ ...group, allowedAccountTypes: [] })) };
+    const updated = { ...state, subscriptionGroups: state.subscriptionGroups.map((group) => ({ ...group, allowedIdentityTypes: [] })) };
     await call("/local-admin/api/state", { method: "PUT", admin: true, body: updated });
     await call(`/api/subscription/11?deviceId=${humanDevice}`, { status: 403 });
     await call(`/api/subscription/lb/balanced?deviceId=${humanDevice}`, { status: 403 });

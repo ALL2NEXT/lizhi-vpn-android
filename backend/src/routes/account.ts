@@ -3,6 +3,8 @@ import type { Env } from "../types/env.ts";
 import type { RouteDependencies } from "../types/routes.ts";
 
 import { observeRequestUser, readJsonObject } from "../http/request.ts";
+import { defaultNickname, normalizeAndroidSdk, randomPublicUid } from "../domain/account.ts";
+import { normalizeClientIp } from "../domain/ip.ts";
 
 const SECURITY_FINDING_CODES = new Set([
   "capture_detection_unavailable",
@@ -76,7 +78,7 @@ const SECURITY_FINDING_CODES = new Set([
 /*
  * Account routes.
  *
- * Accounts are exposed as one of three types: banned, guest, or formal.
+ * Accounts are registered with an email address and password.
  */
 
 export function createAccountRoutes(deps: Pick<
@@ -89,7 +91,7 @@ export function createAccountRoutes(deps: Pick<
   | "readUser"
   | "readUserWithTraffic"
   | "attachDeviceToUser"
-  | "registerOrTouchUser"
+  | "syncUserDevice"
   | "normalizeNickname"
   | "normalizeRegistrationCode"
   | "normalizeVipActivationCode"
@@ -115,7 +117,7 @@ export function createAccountRoutes(deps: Pick<
     readUser,
     readUserWithTraffic,
     attachDeviceToUser,
-    registerOrTouchUser,
+    syncUserDevice,
     normalizeNickname,
     normalizeRegistrationCode,
     normalizeVipActivationCode,
@@ -134,146 +136,122 @@ export function createAccountRoutes(deps: Pick<
   } = deps;
 
   async function handleAccount(path: string, request: Request, env: Env) {
-    if (path === "/api/account/register" && request.method === "POST") {
+    // Legacy clients use /register to refresh an already authenticated device.
+    // A device without an account can never create one without credentials.
+    if ((path === "/api/account/sync" || path === "/api/account/register") && request.method === "POST") {
       const body = await readJsonObject(request);
       const deviceId = normalizeAccountId(body && body.deviceId);
       if (!deviceId) return json({ ok: false, error: "invalid_device_id" }, 400);
 
-      const now = new Date();
-      await ensureUserSchema(env);
-      const identity = await registerOrTouchUser(
-        env,
-        deviceId,
-        body || {},
-        now,
-        request.headers.get("CF-Connecting-IP") || "",
-      );
-      if (identity && identity.userStatus === "banned") {
-        return json({ ok: false, error: "account_banned" }, 403);
+      if (path === "/api/account/sync" || (!body?.email && !body?.password)) {
+        const identity = await syncUserDevice(env, deviceId, body || {});
+        if (identity?.userStatus === "banned") return json({ ok: false, error: "account_banned" }, 403);
+        if (identity?.deviceBanned) return json({ ok: false, error: "device_banned", deviceBlocked: true }, 403);
+        if (!identity || identity.userId <= 0) return json({ ok: false, error: "account_not_found" }, 404);
+        const user = await readUserWithTraffic(env, identity.userId);
+        if (!user || !cleanText(user.email)) return json({ ok: false, error: "account_not_found" }, 404);
+        user.deviceBlocked = identity.deviceBanned;
+        observeRequestUser(env, identity);
+        return json({ ok: true, account: publicAccount(user), deviceBlocked: identity.deviceBanned });
       }
-      if (identity && identity.deviceBanned) {
-        return json({ ok: false, error: "device_banned", deviceBlocked: true }, 403);
-      }
-      const user = identity && identity.userId > 0
-        ? await readUserWithTraffic(env, identity.userId, undefined, now)
-        : null;
-      if (!user || !identity) {
-        throw new Error("account_create_failed");
-      }
-      user.deviceBlocked = Boolean(identity.deviceBanned);
-      observeRequestUser(env, identity);
 
-      return json({
-        ok: true,
-        account: publicAccount(user),
-        deviceBlocked: Boolean(identity.deviceBanned),
-      });
-    }
-
-    if (path === "/api/account/bind" && request.method === "POST") {
-      const body = await readJsonObject(request);
-      const deviceId = normalizeAccountId(body && body.deviceId);
-      const requestedUid = normalizeUid(body && body.uid);
-      const email = normalizeAccountEmail(body && body.email);
-      const password = normalizeAccountPassword(body && body.password);
-      const rawRegistrationCode = cleanText(body && body.registrationCode);
-      const registrationCode = normalizeRegistrationCode(rawRegistrationCode);
-      if (!deviceId || !email || !password) {
-        return json({ ok: false, error: "invalid_bind_credentials" }, 400);
-      }
-      if (rawRegistrationCode && !registrationCode) {
-        return json({ ok: false, error: "invalid_registration_code" }, 400);
-      }
+      const email = normalizeAccountEmail(body?.email);
+      const password = normalizeAccountPassword(body?.password);
+      const rawCode = cleanText(body?.registrationCode);
+      const registrationCode = normalizeRegistrationCode(rawCode);
+      if (!email || !password) return json({ ok: false, error: "invalid_registration_credentials" }, 400);
+      if (rawCode && !registrationCode) return json({ ok: false, error: "invalid_registration_code" }, 400);
 
       const db = await ensureUserSchema(env);
       const currentDevice = await readDeviceContextFromDb(db, deviceId);
-      if (currentDevice && currentDevice.userStatus === "banned") {
-        return json({ ok: false, error: "account_banned" }, 403);
-      }
-      if (currentDevice && currentDevice.deviceBanned) {
-        return json({ ok: false, error: "device_banned" }, 403);
-      }
-      const identity = await resolveDeviceIdentity(env, deviceId);
-      if (!identity || (requestedUid && requestedUid !== identity.uid)) {
-        return json({ ok: false, error: "account_not_found" }, 404);
-      }
+      if (currentDevice?.userStatus === "banned") return json({ ok: false, error: "account_banned" }, 403);
+      if (currentDevice?.deviceBanned) return json({ ok: false, error: "device_banned" }, 403);
       const state = await readState(env);
-      if (!state.settings.registrationEnabled) {
-        return json({ ok: false, error: "registration_disabled" }, 409);
-      }
+      if (!state.settings.registrationEnabled) return json({ ok: false, error: "registration_disabled" }, 409);
       if (state.settings.requireAdminRegistrationCode && !registrationCode) {
         return json({ ok: false, error: "registration_code_required" }, 400);
       }
-      const user = await readUser(env, identity.userId);
-      if (!user) return json({ ok: false, error: "account_not_found" }, 404);
-      if (user.accountType === "banned") {
-        return json({ ok: false, error: "account_banned" }, 403);
-      }
-      if (user.email) {
-        return json({ ok: false, error: "account_already_bound" }, 409);
-      }
-      const emailOwner = await db.prepare(
-        "SELECT id FROM users_mb WHERE email = ? AND id <> ?",
-      ).bind(email, identity.userId).first<Pick<UserRow, "id">>();
+      const emailOwner = await db.prepare("SELECT id FROM users_mb WHERE email = ?")
+        .bind(email).first<Pick<UserRow, "id">>();
       if (emailOwner) return json({ ok: false, error: "email_already_bound" }, 409);
 
-      if (registrationCode) {
-        const codeRow = await db.prepare(
-          "SELECT id FROM registration_codes_mb WHERE code = ? AND use_count < max_uses",
-        ).bind(registrationCode).first<{ id: number }>();
-        if (!codeRow) return json({ ok: false, error: "invalid_registration_code" }, 409);
-      }
-
+      const uid = randomPublicUid();
+      const now = beijingTimestamp();
       const passwordHash = await hashAccountPassword(password);
-      const boundAt = beijingTimestamp();
-      const bindingStatements = [
+      const registrationIp = normalizeClientIp(request.headers.get("CF-Connecting-IP") || "");
+      const statements = [
         db.prepare(
-          "UPDATE users_mb SET email = ?, password_hash = ? " +
-            "WHERE id = ? AND (email IS NULL OR email = '') " +
-            "AND (? IS NULL OR EXISTS (" +
-              "SELECT 1 FROM registration_codes_mb " +
-              "WHERE code = ? AND use_count < max_uses" +
-            "))",
-        ).bind(
-          email,
-          passwordHash,
-          identity.userId,
-          registrationCode || null,
-          registrationCode || null,
-        ),
+          `INSERT INTO users_mb (uid, nickname, email, password_hash, identity_type, created_at, registration_ip)
+           SELECT ?, ?, ?, ?, 'human', ?, ?
+           WHERE (? IS NULL OR EXISTS (
+             SELECT 1 FROM registration_codes_mb WHERE code = ? AND use_count < max_uses
+           ))
+           AND NOT EXISTS (
+             SELECT 1 FROM user_devices_mb d JOIN device_bans_mb b ON b.device_row_id = d.id
+             WHERE d.device_id = ? AND b.lifted_at IS NULL
+           )
+           AND NOT EXISTS (
+             SELECT 1 FROM user_devices_mb d JOIN users_mb u ON u.id = d.user_id
+             WHERE d.device_id = ? AND u.status = 'banned'
+           )`,
+        ).bind(uid, defaultNickname(uid), email, passwordHash, now, registrationIp,
+          registrationCode || null, registrationCode || null, deviceId, deviceId),
       ];
       if (registrationCode) {
-        bindingStatements.push(
-          db.prepare(
-            "INSERT INTO registration_code_usages_mb " +
-              "(registration_code_id, use_number, user_id, uid, used_at) " +
-              "SELECT id, use_count + 1, ?, ?, ? " +
-              "FROM registration_codes_mb " +
-              "WHERE code = ? AND use_count < max_uses AND changes() > 0",
-          ).bind(identity.userId, identity.uid, boundAt, registrationCode),
-        );
+        statements.push(db.prepare(
+          `INSERT INTO registration_code_usages_mb (registration_code_id, use_number, user_id, uid, used_at)
+           SELECT c.id, c.use_count + 1, u.id, u.uid, ?
+           FROM registration_codes_mb c JOIN users_mb u ON u.uid = ?
+           WHERE c.code = ? AND c.use_count < c.max_uses AND changes() > 0`,
+        ).bind(now, uid, registrationCode));
       }
-
-      // 绑定账号和记录注册码使用次数放在同一批事务里，避免超限时只完成一半。
-      const results = await db.batch(bindingStatements);
-      if (!results[0].meta || Number(results[0].meta.changes) < 1) {
-        if (registrationCode) {
-          const availableCode = await db.prepare(
-            "SELECT id FROM registration_codes_mb WHERE code = ? AND use_count < max_uses",
-          ).bind(registrationCode).first<{ id: number }>();
-          if (!availableCode) {
-            return json({ ok: false, error: "invalid_registration_code" }, 409);
-          }
-        }
-        return json({ ok: false, error: "account_not_found" }, 404);
+      statements.push(
+        db.prepare(
+          `INSERT INTO user_devices_mb
+             (user_id, device_id, brand, model, android_version, android_sdk, app_version, created_at, last_seen_at)
+           SELECT id, ?, ?, ?, ?, ?, ?, ?, ? FROM users_mb WHERE uid = ?
+           ON CONFLICT(device_id) DO UPDATE SET
+             user_id = excluded.user_id,
+             brand = CASE WHEN excluded.brand <> '' THEN excluded.brand ELSE brand END,
+             model = CASE WHEN excluded.model <> '' THEN excluded.model ELSE model END,
+             android_version = CASE WHEN excluded.android_version <> '' THEN excluded.android_version ELSE android_version END,
+             android_sdk = CASE WHEN excluded.android_sdk > 0 THEN excluded.android_sdk ELSE android_sdk END,
+             app_version = CASE WHEN excluded.app_version <> '' THEN excluded.app_version ELSE app_version END,
+             last_seen_at = excluded.last_seen_at
+           WHERE NOT EXISTS (
+             SELECT 1 FROM device_bans_mb b
+             WHERE b.device_row_id = user_devices_mb.id AND b.lifted_at IS NULL
+           )`,
+        ).bind(deviceId, cleanText(body?.brand).slice(0, 80), cleanText(body?.model).slice(0, 120),
+          cleanText(body?.androidVersion).slice(0, 80), normalizeAndroidSdk(body?.androidSdk),
+          cleanText(body?.appVersion).slice(0, 40), now, now, uid),
+        db.prepare(
+          `INSERT INTO device_account_links_mb (device_row_id, user_id, user_uid, first_bound_at, last_bound_at)
+           SELECT d.id, u.id, u.uid, ?, ? FROM user_devices_mb d
+           JOIN users_mb u ON u.id = d.user_id WHERE d.device_id = ? AND u.uid = ?
+           ON CONFLICT(device_row_id, user_uid) DO UPDATE SET
+             user_id = excluded.user_id, last_bound_at = excluded.last_bound_at`,
+        ).bind(now, now, deviceId, uid),
+      );
+      let results;
+      try {
+        results = await db.batch(statements);
+      } catch (error) {
+        const existingEmail = await db.prepare("SELECT id FROM users_mb WHERE email = ?")
+          .bind(email).first<Pick<UserRow, "id">>();
+        if (existingEmail) return json({ ok: false, error: "email_already_bound" }, 409);
+        throw error;
       }
-      if (registrationCode &&
-          (!results[1].meta || Number(results[1].meta.changes) < 1)) {
+      if (Number(results[0]?.meta?.changes || 0) < 1) {
+        const latestDevice = await readDeviceContextFromDb(db, deviceId);
+        if (latestDevice?.deviceBanned) return json({ ok: false, error: "device_banned" }, 403);
+        if (latestDevice?.userStatus === "banned") return json({ ok: false, error: "account_banned" }, 403);
         return json({ ok: false, error: "invalid_registration_code" }, 409);
       }
-
-      const updated = await readUserWithTraffic(env, identity.userId);
-      return json({ ok: true, account: publicAccount(updated) });
+      const identity = await readDeviceContextFromDb(db, deviceId);
+      if (!identity || identity.uid !== uid) throw new Error("account_create_failed");
+      observeRequestUser(env, identity);
+      return json({ ok: true, account: publicAccount(await readUserWithTraffic(env, identity.userId)) });
     }
 
     if (path === "/api/account/login" && request.method === "POST") {
@@ -399,7 +377,7 @@ export function createAccountRoutes(deps: Pick<
       const stored = await db.prepare(
         "SELECT email, password_hash FROM users_mb WHERE id = ?",
       ).bind(identity.userId).first<Pick<UserRow, "email" | "password_hash">>();
-      if (stored && cleanText(stored.email) &&
+      if (!stored || !cleanText(stored.email) ||
           !(await verifyAccountPassword(password, cleanText(stored.password_hash)))) {
         return json({ ok: false, error: "invalid_account_password" }, 401);
       }
