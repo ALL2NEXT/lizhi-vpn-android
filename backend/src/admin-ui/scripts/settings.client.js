@@ -251,7 +251,7 @@ function addSubscriptionGroup(group) {
   const selectedStatuses = statusFilterEnabled ? allowedStatuses : ['normal'];
   const selectedIdentityTypes = identityFilterEnabled ? allowedIdentityTypes : ['human'];
   const selectedMembershipTypes = membershipFilterEnabled ? allowedMembershipTypes : ['member'];
-  const membershipRadioGroup = 'subscription-membership-' + crypto.randomUUID();
+  const radioGroupId = 'subscription-filter-' + crypto.randomUUID();
   // 保留原有字段作为保存数据源，右侧编辑器只同步到这些字段，不改变接口结构。
   row.innerHTML = '<input class="subscription-group-enabled-data" data-field="groupEnabled" type="checkbox" ' + (group.enabled === false ? '' : 'checked') + ' hidden>' +
   '<input class="subscription-group-order-data" data-field="groupOrder" type="number" min="1" step="1" value="' + groupOrder + '" aria-label="分组排序序号">' +
@@ -268,22 +268,22 @@ function addSubscriptionGroup(group) {
     '<fieldset data-filter-section><legend>账号状态</legend>' +
       '<label class="permission-filter-toggle subscription-switch"><span>启用筛选</span><span class="subscription-switch-control"><input data-field="allowedStatusesFilterEnabled" data-filter-toggle type="checkbox" aria-label="启用账号状态筛选" ' + (statusFilterEnabled ? 'checked' : '') + '><span class="subscription-switch-track"><span></span></span></span></label>' +
       '<div class="permission-filter-options">' +
-      '<label class="check"><input data-field="allowedStatuses" data-filter-option type="checkbox" value="normal" ' + (selectedStatuses.includes('normal') ? 'checked' : '') + '>正常</label>' +
-      '<label class="check"><input data-field="allowedStatuses" data-filter-option type="checkbox" value="banned" ' + (selectedStatuses.includes('banned') ? 'checked' : '') + '>封禁</label>' +
+      '<label class="check"><input data-field="allowedStatuses" data-filter-option type="radio" name="' + radioGroupId + '-status" value="normal" ' + (selectedStatuses.includes('normal') ? 'checked' : '') + '>正常</label>' +
+      '<label class="check"><input data-field="allowedStatuses" data-filter-option type="radio" name="' + radioGroupId + '-status" value="banned" ' + (selectedStatuses.includes('banned') ? 'checked' : '') + '>封禁</label>' +
       '</div>' +
     '</fieldset>' +
     '<fieldset data-filter-section><legend>账号身份</legend>' +
       '<label class="permission-filter-toggle subscription-switch"><span>启用筛选</span><span class="subscription-switch-control"><input data-field="allowedIdentityTypesFilterEnabled" data-filter-toggle type="checkbox" aria-label="启用账号身份筛选" ' + (identityFilterEnabled ? 'checked' : '') + '><span class="subscription-switch-track"><span></span></span></span></label>' +
       '<div class="permission-filter-options">' +
-      '<label class="check"><input data-field="allowedIdentityTypes" data-filter-option type="checkbox" value="human" ' + (selectedIdentityTypes.includes('human') ? 'checked' : '') + '>真人</label>' +
-      '<label class="check"><input data-field="allowedIdentityTypes" data-filter-option type="checkbox" value="bot" ' + (selectedIdentityTypes.includes('bot') ? 'checked' : '') + '>机器人</label>' +
+      '<label class="check"><input data-field="allowedIdentityTypes" data-filter-option type="radio" name="' + radioGroupId + '-identity" value="human" ' + (selectedIdentityTypes.includes('human') ? 'checked' : '') + '>真人</label>' +
+      '<label class="check"><input data-field="allowedIdentityTypes" data-filter-option type="radio" name="' + radioGroupId + '-identity" value="bot" ' + (selectedIdentityTypes.includes('bot') ? 'checked' : '') + '>机器人</label>' +
       '</div>' +
     '</fieldset>' +
     '<fieldset data-filter-section><legend>会员状态</legend>' +
       '<label class="permission-filter-toggle subscription-switch"><span>启用筛选</span><span class="subscription-switch-control"><input data-field="allowedMembershipTypesFilterEnabled" data-filter-toggle type="checkbox" aria-label="启用会员状态筛选" ' + (membershipFilterEnabled ? 'checked' : '') + '><span class="subscription-switch-track"><span></span></span></span></label>' +
       '<div class="permission-filter-options">' +
-      '<label class="check"><input data-field="allowedMembershipTypes" data-filter-option type="radio" name="' + membershipRadioGroup + '" value="member" ' + (selectedMembershipTypes.includes('member') ? 'checked' : '') + '>会员</label>' +
-      '<label class="check"><input data-field="allowedMembershipTypes" data-filter-option type="radio" name="' + membershipRadioGroup + '" value="non_member" ' + (selectedMembershipTypes.includes('non_member') ? 'checked' : '') + '>非会员</label>' +
+      '<label class="check"><input data-field="allowedMembershipTypes" data-filter-option type="radio" name="' + radioGroupId + '-membership" value="member" ' + (selectedMembershipTypes.includes('member') ? 'checked' : '') + '>会员</label>' +
+      '<label class="check"><input data-field="allowedMembershipTypes" data-filter-option type="radio" name="' + radioGroupId + '-membership" value="non_member" ' + (selectedMembershipTypes.includes('non_member') ? 'checked' : '') + '>非会员</label>' +
       '</div>' +
     '</fieldset>' +
     '<fieldset class="subscription-version-range" data-filter-section><legend>App 版本区间（包含边界）</legend>' +
