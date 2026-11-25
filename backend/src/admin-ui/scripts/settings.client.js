@@ -241,6 +241,17 @@ function addSubscriptionGroup(group) {
   const allowedMembershipTypes = Array.isArray(group.allowedMembershipTypes)
     ? group.allowedMembershipTypes
     : ['member', 'non_member'];
+  const allowedStatusValues = ['normal', 'banned'];
+  const allowedIdentityValues = ['human', 'bot'];
+  const allowedMembershipValues = ['member', 'non_member'];
+  const statusFilterEnabled = allowedStatusValues.some(function(value) { return !allowedStatuses.includes(value); });
+  const identityFilterEnabled = allowedIdentityValues.some(function(value) { return !allowedIdentityTypes.includes(value); });
+  const membershipFilterEnabled = allowedMembershipValues.some(function(value) { return !allowedMembershipTypes.includes(value); });
+  const versionFilterEnabled = Boolean(group.minAppVersion || group.maxAppVersion);
+  const selectedStatuses = statusFilterEnabled ? allowedStatuses : ['normal'];
+  const selectedIdentityTypes = identityFilterEnabled ? allowedIdentityTypes : ['human'];
+  const selectedMembershipTypes = membershipFilterEnabled ? allowedMembershipTypes : ['member'];
+  const membershipRadioGroup = 'subscription-membership-' + crypto.randomUUID();
   // 保留原有字段作为保存数据源，右侧编辑器只同步到这些字段，不改变接口结构。
   row.innerHTML = '<input class="subscription-group-enabled-data" data-field="groupEnabled" type="checkbox" ' + (group.enabled === false ? '' : 'checked') + ' hidden>' +
   '<input class="subscription-group-order-data" data-field="groupOrder" type="number" min="1" step="1" value="' + groupOrder + '" aria-label="分组排序序号">' +
@@ -254,22 +265,34 @@ function addSubscriptionGroup(group) {
     '</fieldset>' +
     '<fieldset class="subscription-access-control"><legend>权限控制</legend>' +
       '<div class="subscription-access-control-fields">' +
-    '<fieldset><legend>账号状态</legend>' +
-      '<label class="check"><input data-field="allowedStatuses" type="checkbox" value="normal" ' + (allowedStatuses.includes('normal') ? 'checked' : '') + '>正常</label>' +
-      '<label class="check"><input data-field="allowedStatuses" type="checkbox" value="banned" ' + (allowedStatuses.includes('banned') ? 'checked' : '') + '>封禁</label>' +
+    '<fieldset data-filter-section><legend>账号状态</legend>' +
+      '<label class="permission-filter-toggle subscription-switch"><span>启用筛选</span><span class="subscription-switch-control"><input data-field="allowedStatusesFilterEnabled" data-filter-toggle type="checkbox" aria-label="启用账号状态筛选" ' + (statusFilterEnabled ? 'checked' : '') + '><span class="subscription-switch-track"><span></span></span></span></label>' +
+      '<div class="permission-filter-options">' +
+      '<label class="check"><input data-field="allowedStatuses" data-filter-option type="checkbox" value="normal" ' + (selectedStatuses.includes('normal') ? 'checked' : '') + '>正常</label>' +
+      '<label class="check"><input data-field="allowedStatuses" data-filter-option type="checkbox" value="banned" ' + (selectedStatuses.includes('banned') ? 'checked' : '') + '>封禁</label>' +
+      '</div>' +
     '</fieldset>' +
-    '<fieldset><legend>账号身份</legend>' +
-      '<label class="check"><input data-field="allowedIdentityTypes" type="checkbox" value="human" ' + (allowedIdentityTypes.includes('human') ? 'checked' : '') + '>真人</label>' +
-      '<label class="check"><input data-field="allowedIdentityTypes" type="checkbox" value="bot" ' + (allowedIdentityTypes.includes('bot') ? 'checked' : '') + '>机器人</label>' +
+    '<fieldset data-filter-section><legend>账号身份</legend>' +
+      '<label class="permission-filter-toggle subscription-switch"><span>启用筛选</span><span class="subscription-switch-control"><input data-field="allowedIdentityTypesFilterEnabled" data-filter-toggle type="checkbox" aria-label="启用账号身份筛选" ' + (identityFilterEnabled ? 'checked' : '') + '><span class="subscription-switch-track"><span></span></span></span></label>' +
+      '<div class="permission-filter-options">' +
+      '<label class="check"><input data-field="allowedIdentityTypes" data-filter-option type="checkbox" value="human" ' + (selectedIdentityTypes.includes('human') ? 'checked' : '') + '>真人</label>' +
+      '<label class="check"><input data-field="allowedIdentityTypes" data-filter-option type="checkbox" value="bot" ' + (selectedIdentityTypes.includes('bot') ? 'checked' : '') + '>机器人</label>' +
+      '</div>' +
     '</fieldset>' +
-    '<fieldset><legend>会员状态</legend>' +
-      '<label class="check"><input data-field="allowedMembershipTypes" type="checkbox" value="member" ' + (allowedMembershipTypes.includes('member') ? 'checked' : '') + '>会员</label>' +
-      '<label class="check"><input data-field="allowedMembershipTypes" type="checkbox" value="non_member" ' + (allowedMembershipTypes.includes('non_member') ? 'checked' : '') + '>非会员</label>' +
+    '<fieldset data-filter-section><legend>会员状态</legend>' +
+      '<label class="permission-filter-toggle subscription-switch"><span>启用筛选</span><span class="subscription-switch-control"><input data-field="allowedMembershipTypesFilterEnabled" data-filter-toggle type="checkbox" aria-label="启用会员状态筛选" ' + (membershipFilterEnabled ? 'checked' : '') + '><span class="subscription-switch-track"><span></span></span></span></label>' +
+      '<div class="permission-filter-options">' +
+      '<label class="check"><input data-field="allowedMembershipTypes" data-filter-option type="radio" name="' + membershipRadioGroup + '" value="member" ' + (selectedMembershipTypes.includes('member') ? 'checked' : '') + '>会员</label>' +
+      '<label class="check"><input data-field="allowedMembershipTypes" data-filter-option type="radio" name="' + membershipRadioGroup + '" value="non_member" ' + (selectedMembershipTypes.includes('non_member') ? 'checked' : '') + '>非会员</label>' +
+      '</div>' +
     '</fieldset>' +
-    '<fieldset class="subscription-version-range"><legend>App 版本区间（包含边界）</legend>' +
-      '<label><span>左侧 · 最低</span><input data-field="minAppVersion" type="text" list="subscriptionAppVersionOptions" placeholder="不限制"></label>' +
+    '<fieldset class="subscription-version-range" data-filter-section><legend>App 版本区间（包含边界）</legend>' +
+      '<label class="permission-filter-toggle subscription-switch"><span>启用筛选</span><span class="subscription-switch-control"><input data-field="versionFilterEnabled" data-filter-toggle type="checkbox" aria-label="启用 App 版本筛选" ' + (versionFilterEnabled ? 'checked' : '') + '><span class="subscription-switch-track"><span></span></span></span></label>' +
+      '<div class="permission-filter-options subscription-version-range-options">' +
+      '<label><span>左侧 · 最低</span><input data-field="minAppVersion" data-filter-option type="text" list="subscriptionAppVersionOptions" placeholder="不限制"></label>' +
       '<span aria-hidden="true">至</span>' +
-      '<label><span>右侧 · 最高</span><input data-field="maxAppVersion" type="text" list="subscriptionAppVersionOptions" placeholder="不限制"></label>' +
+      '<label><span>右侧 · 最高</span><input data-field="maxAppVersion" data-filter-option type="text" list="subscriptionAppVersionOptions" placeholder="不限制"></label>' +
+      '</div>' +
     '</fieldset>' +
       '</div>' +
     '</fieldset>' +
@@ -295,6 +318,12 @@ function addSubscriptionGroup(group) {
   el('subscriptionRows').appendChild(row);
   row.querySelector('[data-field="minAppVersion"]').addEventListener('change', updateSubscriptionAppVersionOptions);
   row.querySelector('[data-field="maxAppVersion"]').addEventListener('change', updateSubscriptionAppVersionOptions);
+  row.querySelectorAll('[data-filter-toggle]').forEach(function(toggle) {
+    toggle.addEventListener('change', function() {
+      syncSubscriptionFilterControls(row);
+    });
+  });
+  syncSubscriptionFilterControls(row);
   row.querySelector('[data-field="groupOrder"]').addEventListener('change', function() {
     moveSubscriptionGroupToOrder(row, this.value);
   });
@@ -378,6 +407,18 @@ function validateSubscriptionGroupVersions(groups) {
     const group = groups[index];
     if (!Number.isInteger(group.cacheMinutes) || group.cacheMinutes < 0 || group.cacheMinutes > 10080) {
       return '分组「' + group.name + '」的接口缓存时间需为 0 至 10080 的整数分钟';
+    }
+    if (!group.allowedStatuses.length) {
+      return '分组「' + group.name + '」启用账号状态筛选时至少选择一个状态';
+    }
+    if (!group.allowedIdentityTypes.length) {
+      return '分组「' + group.name + '」启用账号身份筛选时至少选择一种身份';
+    }
+    if (!group.allowedMembershipTypes.length) {
+      return '分组「' + group.name + '」启用会员状态筛选时至少选择一种状态';
+    }
+    if (group.versionFilterEnabled && !group.minAppVersion && !group.maxAppVersion) {
+      return '分组「' + group.name + '」启用 App 版本筛选时至少填写一个版本边界';
     }
     if (group.minAppVersion && compareAppVersions(group.minAppVersion, group.minAppVersion) === null) {
       return '分组「' + group.name + '」的左侧版本格式无效';
@@ -963,6 +1004,18 @@ function initializeSubscriptionManager() {
     updateSubscriptionList();
   });
 }
+function syncSubscriptionFilterControls(row) {
+  row.querySelectorAll('[data-filter-toggle]').forEach(function(toggle) {
+    const section = toggle.closest('[data-filter-section]');
+    if (!section) return;
+    const enabled = toggle.checked;
+    section.querySelectorAll('[data-filter-option]').forEach(function(control) {
+      control.disabled = !enabled;
+    });
+    const options = section.querySelector('.permission-filter-options');
+    if (options) options.classList.toggle('is-disabled', !enabled);
+  });
+}
 function updateSourceMode(row) {
   const type = row.querySelector('[data-field="sourceType"]').value;
   row.querySelectorAll('[data-source-mode]').forEach(function(panel) {
@@ -1025,6 +1078,12 @@ function readSubscriptionSource(row, index) {
       remark: row.querySelector('[data-field="remark"]').value.trim()
     };
 }
+function readEnabledSubscriptionFilter(group, toggleField, valuesField, allowedValues) {
+  const toggle = group.querySelector('[data-field="' + toggleField + '"]');
+  if (!toggle.checked) return allowedValues.slice();
+  return Array.from(group.querySelectorAll('[data-field="' + valuesField + '"]:checked'))
+    .map(function(input) { return input.value; });
+}
 function readSubscriptionGroups() {
   return getSubscriptionGroupRows().map(function(group, groupIndex) {
     const sources = Array.from(group.querySelectorAll('[data-group-sources] > .source-row'))
@@ -1034,16 +1093,16 @@ function readSubscriptionGroups() {
       id: group.dataset.groupId || String(groupIndex + 1),
       name: group.querySelector('[data-field="groupName"]').value.trim() || '分组' + (groupIndex + 1),
       enabled: group.querySelector('[data-field="groupEnabled"]').checked,
-      allowedStatuses: Array.from(group.querySelectorAll('[data-field="allowedStatuses"]:checked'))
-        .map(function(input) { return input.value; }),
-      allowedIdentityTypes: Array.from(group.querySelectorAll('[data-field="allowedIdentityTypes"]:checked'))
-        .map(function(input) { return input.value; }),
-      allowedMembershipTypes: Array.from(group.querySelectorAll('[data-field="allowedMembershipTypes"]:checked'))
-        .map(function(input) { return input.value; }),
+      allowedStatuses: readEnabledSubscriptionFilter(group, 'allowedStatusesFilterEnabled', 'allowedStatuses', ['normal', 'banned']),
+      allowedIdentityTypes: readEnabledSubscriptionFilter(group, 'allowedIdentityTypesFilterEnabled', 'allowedIdentityTypes', ['human', 'bot']),
+      allowedMembershipTypes: readEnabledSubscriptionFilter(group, 'allowedMembershipTypesFilterEnabled', 'allowedMembershipTypes', ['member', 'non_member']),
       updateEnabled: group.querySelector('[data-field="updateEnabled"]').checked,
       cacheMinutes: Number(group.querySelector('[data-field="groupCacheMinutes"]').value || 0),
-      minAppVersion: group.querySelector('[data-field="minAppVersion"]').value.trim(),
-      maxAppVersion: group.querySelector('[data-field="maxAppVersion"]').value.trim(),
+      versionFilterEnabled: group.querySelector('[data-field="versionFilterEnabled"]').checked,
+      minAppVersion: group.querySelector('[data-field="versionFilterEnabled"]').checked
+        ? group.querySelector('[data-field="minAppVersion"]').value.trim() : '',
+      maxAppVersion: group.querySelector('[data-field="versionFilterEnabled"]').checked
+        ? group.querySelector('[data-field="maxAppVersion"]').value.trim() : '',
       subscriptions: sources
     };
   });

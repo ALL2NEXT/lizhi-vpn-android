@@ -137,6 +137,10 @@
     .subscription-group-permissions fieldset { min-width: 0; margin: 0; padding: 6px 10px; border: 1px solid #dadce0; border-radius: 8px; }
     .subscription-access-control { grid-column: 1 / -1; }
     .subscription-access-control-fields { display: grid; grid-template-columns: repeat(2, minmax(150px, 1fr)); gap: 8px; }
+    .permission-filter-toggle { justify-content: space-between; width: 100%; min-height: 28px; margin: 0 0 8px; }
+    .permission-filter-options { display: flex; align-items: center; gap: 12px; }
+    .permission-filter-options .check { margin: 0; }
+    .permission-filter-options.is-disabled { opacity: .55; }
     .subscription-group-name-setting { grid-column: 1 / -1; display: grid; gap: 8px; }
     .subscription-group-name-setting label { display: grid; grid-template-columns: minmax(180px, max-content) minmax(140px, 240px); align-items: center; gap: 8px; color: #5f6368; font-size: 13px; }
     .subscription-group-name-setting input { min-height: 34px; padding: 7px 9px; }
@@ -144,11 +148,12 @@
     .subscription-group-permissions legend { padding: 0 4px; color: #5f6368; font-size: 13px; }
     .subscription-group-permissions .check { display: inline-flex; margin: 0 12px 0 0; white-space: nowrap; }
     .subscription-group-permissions .check input { margin-right: 6px; }
-    .subscription-version-range { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(140px, 1fr) auto minmax(140px, 1fr); align-items: center; gap: 8px; }
+    .subscription-version-range { grid-column: 1 / -1; display: grid; gap: 8px; }
     .subscription-version-range legend { grid-column: 1 / -1; }
-    .subscription-version-range label { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: center; gap: 8px; color: #5f6368; font-size: 13px; }
-    .subscription-version-range input { min-height: 34px; padding: 7px 9px; }
-    .subscription-version-range > span { color: #5f6368; }
+    .subscription-version-range-options { display: grid; grid-template-columns: minmax(140px, 1fr) auto minmax(140px, 1fr); align-items: center; gap: 8px; }
+    .subscription-version-range-options label { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: center; gap: 8px; color: #5f6368; font-size: 13px; }
+    .subscription-version-range-options input { min-height: 34px; padding: 7px 9px; }
+    .subscription-version-range-options > span { color: #5f6368; }
     .subscription-cache-setting { grid-column: 1 / -1; display: grid; gap: 8px; }
     .subscription-cache-setting label { display: grid; grid-template-columns: max-content minmax(120px, 200px); align-items: center; gap: 8px; color: #5f6368; font-size: 13px; }
     .subscription-cache-setting .subscription-update-toggle { display: inline-flex; width: max-content; min-height: 32px; align-items: center; gap: 8px; margin: 0; color: #3c4043; font-size: 13px; font-weight: 500; }
