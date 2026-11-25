@@ -259,12 +259,10 @@ function addSubscriptionGroup(group) {
     '<fieldset><legend>账号身份</legend>' +
       '<label class="check"><input data-field="allowedIdentityTypes" type="checkbox" value="human" ' + (allowedIdentityTypes.includes('human') ? 'checked' : '') + '>真人</label>' +
       '<label class="check"><input data-field="allowedIdentityTypes" type="checkbox" value="bot" ' + (allowedIdentityTypes.includes('bot') ? 'checked' : '') + '>机器人</label>' +
-      '<small>按用户管理中设置的账号身份限制订阅访问。</small>' +
     '</fieldset>' +
     '<fieldset><legend>会员状态</legend>' +
       '<label class="check"><input data-field="allowedMembershipTypes" type="checkbox" value="member" ' + (allowedMembershipTypes.includes('member') ? 'checked' : '') + '>会员</label>' +
       '<label class="check"><input data-field="allowedMembershipTypes" type="checkbox" value="non_member" ' + (allowedMembershipTypes.includes('non_member') ? 'checked' : '') + '>非会员</label>' +
-      '<small>会员状态根据账户 VIP 有效期判断。</small>' +
     '</fieldset>' +
     '<fieldset class="subscription-version-range"><legend>App 版本区间（包含边界）</legend>' +
       '<label><span>左侧 · 最低</span><input data-field="minAppVersion" type="text" list="subscriptionAppVersionOptions" placeholder="不限制"></label>' +
