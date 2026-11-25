@@ -19,7 +19,7 @@ class SubscriptionRequestsTest {
     @Test
     fun downloadRequestUsesCurrentDeviceAndPreservesOtherParameters() {
         val url = subscriptionRequestUrl(
-            "https://worker.example/api/subscription/lb/group?deviceId=old&refresh=1",
+            "https://worker.example/api/subscription/43?deviceId=old&refresh=1",
             "https://worker.example/", "current"
         ).toHttpUrl()
         assertEquals(listOf("current"), url.queryParameterValues("deviceId"))

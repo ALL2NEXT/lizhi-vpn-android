@@ -65,12 +65,12 @@ class SubscriptionListParserTest {
     fun filteredListPreservesBackendIdsRegardlessOfOrder() {
         val first = parser.parse("""{"subscriptions":[
             {"id":"42","name":"A","url":"https://worker.example/api/subscription/42"},
-            {"id":"load-balanced:vip","name":"B","url":"https://worker.example/api/subscription/lb/vip"}
+            {"id":"43","name":"B","url":"https://worker.example/api/subscription/43"}
         ]}""").getOrThrow()
         val filtered = parser.parse("""{"subscriptions":[
-            {"id":"load-balanced:vip","name":"B","url":"https://worker.example/api/subscription/lb/vip"}
+            {"id":"43","name":"B","url":"https://worker.example/api/subscription/43"}
         ]}""").getOrThrow()
-        assertEquals(listOf("42", "load-balanced:vip"), first.sources.map { it.id })
+        assertEquals(listOf("42", "43"), first.sources.map { it.id })
         assertEquals(first.sources.last().id, filtered.sources.single().id)
     }
 

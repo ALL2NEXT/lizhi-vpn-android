@@ -62,7 +62,7 @@ test("客户端按设备获取可用订阅，下载时再次校验完整权限",
       { id: "version", minAppVersion: "1.2", maxAppVersion: "1.2.0", subscriptions: [{ id: "55", name: "版本线路", content }] },
       { id: "disabled", enabled: false, subscriptions: [{ id: "66", content }] },
       { id: "disabled-source", subscriptions: [{ id: "77", enabled: false, content }] },
-      { id: "balanced", name: "均衡线路", groupType: "load_balanced", subscriptions: [{ id: "88", content }, { id: "89", content }] },
+      { id: "multi", name: "Multi-line", subscriptions: [{ id: "88", content }, { id: "89", content }] },
       { id: "banned", allowedStatuses: ["banned"], subscriptions: [{ id: "99", name: "封禁线路", content }] },
     ],
   };
@@ -79,15 +79,15 @@ test("客户端按设备获取可用订阅，下载时再次校验完整权限",
     await call("/api/client?deviceId=invalid", { status: 401 });
     await call(`/api/client?deviceId=${unregisteredDevice}`, { status: 403 });
     const result = await call(`/api/client?deviceId=${humanDevice}&identityType=bot&vipActive=true&accountType=formal`);
-    assert.deepEqual(result.data.subscriptions.map((source) => source.id), ["11", "44", "55", "load-balanced:balanced"]);
+    assert.deepEqual(result.data.subscriptions.map((source) => source.id), ["11", "44", "55", "88", "89"]);
     assert.equal(result.response.headers.get("cache-control"), "no-store");
   });
 
   await t.test("按真人、机器人、会员及版本筛选，身份和权限规则不下发", async () => {
     const human = await list(humanDevice);
     const robot = await list(robotDevice);
-    assert.deepEqual(human.subscriptions.map((source) => source.id), ["11", "44", "55", "load-balanced:balanced"]);
-    assert.deepEqual(robot.subscriptions.map((source) => source.id), ["22", "33", "44", "load-balanced:balanced"]);
+    assert.deepEqual(human.subscriptions.map((source) => source.id), ["11", "44", "55", "88", "89"]);
+    assert.deepEqual(robot.subscriptions.map((source) => source.id), ["22", "33", "44", "88", "89"]);
     for (const result of [human, robot]) {
       for (const source of result.subscriptions) {
         assert.deepEqual(Object.keys(source).sort(), ["enabled", "id", "name", "url"]);
@@ -128,7 +128,6 @@ test("客户端按设备获取可用订阅，下载时再次校验完整权限",
     const updated = { ...state, subscriptionGroups: state.subscriptionGroups.map((group) => ({ ...group, allowedIdentityTypes: [] })) };
     await call("/local-admin/api/state", { method: "PUT", admin: true, body: updated });
     await call(`/api/subscription/11?deviceId=${humanDevice}`, { status: 403 });
-    await call(`/api/subscription/lb/balanced?deviceId=${humanDevice}`, { status: 403 });
     const empty = await list(humanDevice);
     assert.deepEqual(empty.subscriptions, []);
     assert.equal(empty.settings.websiteUrl, "https://example.com");

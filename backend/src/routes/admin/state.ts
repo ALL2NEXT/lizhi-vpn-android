@@ -113,13 +113,7 @@ export function createAdminStateRoutes(deps: Pick<
       const failed = results.length - updated;
       if (updated > 0) {
         const updatedIds = new Set(results.filter((result) => result.ok).map((result) => result.id));
-        const updatedSubscriptionIds = state.subscriptionGroups.flatMap((group) => {
-          const updatedGroupSources = group.subscriptions.filter((source) => updatedIds.has(source.id));
-          if (!updatedGroupSources.length) return [];
-          return group.groupType === "load_balanced"
-            ? [`load-balanced:${group.id}`]
-            : updatedGroupSources.map((source) => source.id);
-        });
+        const updatedSubscriptionIds = [...updatedIds];
         await writeState(env, {
           ...state,
           subscriptionVersions: incrementSubscriptionVersions(

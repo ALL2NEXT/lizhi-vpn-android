@@ -171,7 +171,7 @@ const USER_EMAIL_REQUIRED_TRIGGERS = [
    BEGIN SELECT RAISE(ABORT, 'user_email_required'); END`,
 ];
 
-export const USER_SCHEMA_VERSION = 28;
+export const USER_SCHEMA_VERSION = 29;
 export const USER_SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS app_schema_mb (
     component TEXT PRIMARY KEY,
@@ -282,17 +282,6 @@ export const USER_SCHEMA_STATEMENTS = [
     ON user_usage_mb(user_id, ended_at DESC)`,
   `CREATE INDEX IF NOT EXISTS idx_user_usage_mb_day_user
     ON user_usage_mb(usage_day, user_id)`,
-  `CREATE TABLE IF NOT EXISTS subscription_group_assignments_mb (
-    group_id TEXT NOT NULL,
-    user_id INTEGER NOT NULL,
-    source_id TEXT NOT NULL,
-    source_key TEXT NOT NULL,
-    assigned_at INTEGER NOT NULL CHECK (assigned_at > 0),
-    PRIMARY KEY (group_id, user_id),
-    FOREIGN KEY (user_id) REFERENCES users_mb(id) ON DELETE CASCADE
-  )`,
-  `CREATE INDEX IF NOT EXISTS idx_subscription_group_assignments_capacity_mb
-    ON subscription_group_assignments_mb(group_id, source_key, assigned_at)`,
   `CREATE TABLE IF NOT EXISTS system_logs_mb (
     id INTEGER PRIMARY KEY,
     occurred_at TEXT NOT NULL,
@@ -542,6 +531,10 @@ export const USER_SCHEMA_MIGRATIONS: Record<number, string[]> = {
     `DELETE FROM device_account_links_mb WHERE user_uid IN (SELECT uid FROM users_mb WHERE email IS NULL OR trim(email) = '')`,
     `DELETE FROM users_mb WHERE email IS NULL OR trim(email) = ''`,
     ...USER_EMAIL_REQUIRED_TRIGGERS,
+  ],
+  29: [
+    `DROP INDEX IF EXISTS idx_subscription_group_assignments_capacity_mb`,
+    `DROP TABLE IF EXISTS subscription_group_assignments_mb`,
   ],
 };
 export function resolveAdminBasePath(value: unknown): string | null {

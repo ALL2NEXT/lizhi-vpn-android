@@ -12,7 +12,6 @@ export interface SubscriptionSource {
   url: string;
   sourceType?: "url" | "content";
   contentKey?: string;
-  assignmentKey?: string;
   enabled: boolean;
   autoRename: boolean;
   deduplicate: boolean;
@@ -23,7 +22,6 @@ export interface SubscriptionSource {
 export interface SubscriptionGroup {
   id: string;
   name: string;
-  groupType: "standard" | "load_balanced";
   enabled: boolean;
   allowedStatuses: SubscriptionAccountStatus[];
   allowedIdentityTypes: UserIdentityType[];
@@ -32,8 +30,6 @@ export interface SubscriptionGroup {
   cacheMinutes: number;
   minAppVersion: string;
   maxAppVersion: string;
-  maxUsersPerSubscription: number;
-  resetPeriodDays: number;
   subscriptions: SubscriptionSource[];
 }
 

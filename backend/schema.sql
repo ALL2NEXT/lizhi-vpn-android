@@ -191,19 +191,6 @@ ON user_usage_mb(user_id, ended_at DESC);
 CREATE INDEX idx_user_usage_mb_day_user
 ON user_usage_mb(usage_day, user_id);
 
-CREATE TABLE subscription_group_assignments_mb (
-  group_id TEXT NOT NULL,
-  user_id INTEGER NOT NULL,
-  source_id TEXT NOT NULL,
-  source_key TEXT NOT NULL,
-  assigned_at INTEGER NOT NULL CHECK (assigned_at > 0),
-  PRIMARY KEY (group_id, user_id),
-  FOREIGN KEY (user_id) REFERENCES users_mb(id) ON DELETE CASCADE
-);
-
-CREATE INDEX idx_subscription_group_assignments_capacity_mb
-ON subscription_group_assignments_mb(group_id, source_key, assigned_at);
-
 CREATE TABLE system_logs_mb (
   id INTEGER PRIMARY KEY,
   occurred_at TEXT NOT NULL,

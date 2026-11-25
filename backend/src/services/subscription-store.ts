@@ -5,7 +5,6 @@ import type { Database, PreparedStatement } from "../storage/contracts.ts";
 import {
   SUBSCRIPTION_CONTENT_KEY_PREFIX,
 } from "../config.ts";
-import { createSubscriptionAssignmentKey } from "./subscription-identity.ts";
 
 const LEGACY_IMPORT_KEY = "legacy_kv_imported";
 const MAX_JSON_BATCH_BYTES = 1_500_000;
@@ -13,7 +12,6 @@ interface GroupRow {
   id: string;
   group_order: number;
   name: string;
-  group_type: string;
   enabled: number;
   allowed_statuses_json: string;
   allowed_account_types_json?: string;
@@ -23,8 +21,6 @@ interface GroupRow {
   cache_minutes: number;
   min_app_version: string;
   max_app_version: string;
-  max_users_per_subscription: number;
-  reset_period_days: number;
 }
 
 interface SourceRow {
@@ -36,7 +32,6 @@ interface SourceRow {
   url: string;
   content: string;
   content_key: string;
-  assignment_key: string;
   enabled: number;
   auto_rename: number;
   deduplicate: number;
@@ -150,19 +145,17 @@ export async function loadSubscriptionGroups(env: Env, includeContent = false): 
 
   const sourceQuery = includeContent
     ? `SELECT id, group_id, source_order, name, source_type, url, content, content_key,
-         assignment_key,
          enabled, auto_rename, deduplicate, remark
        FROM subscription_sources ORDER BY group_id, source_order, id`
     : `SELECT id, group_id, source_order, name, source_type, url, '' AS content, content_key,
-         assignment_key,
          enabled, auto_rename, deduplicate, remark
        FROM subscription_sources ORDER BY group_id, source_order, id`;
   const [groupResult, sourceResult] = await db.batch([
-    db.prepare(`SELECT id, group_order, name, group_type, enabled,
+    db.prepare(`SELECT id, group_order, name, enabled,
         allowed_statuses_json, ${hasLegacyColumn ? "allowed_account_types_json," : ""} allowed_identity_types_json,
         allowed_membership_types_json,
         update_enabled, cache_minutes,
-        min_app_version, max_app_version, max_users_per_subscription, reset_period_days
+        min_app_version, max_app_version
       FROM subscription_groups ORDER BY group_order, id`),
     db.prepare(sourceQuery),
   ]);
@@ -177,7 +170,6 @@ export async function loadSubscriptionGroups(env: Env, includeContent = false): 
       url: row.url,
       sourceType: row.source_type === "content" ? "content" : "url",
       contentKey: row.content_key || undefined,
-      assignmentKey: row.assignment_key || undefined,
       enabled: row.enabled === 1,
       autoRename: row.auto_rename === 1,
       deduplicate: row.deduplicate === 1,
@@ -190,7 +182,6 @@ export async function loadSubscriptionGroups(env: Env, includeContent = false): 
   const groups = ((groupResult.results || []) as GroupRow[]).map((row) => ({
     id: row.id,
     name: row.name,
-    groupType: row.group_type === "load_balanced" ? "load_balanced" as const : "standard" as const,
     enabled: row.enabled === 1 &&
       (!hasLegacyColumn || parseJsonArray(row.allowed_account_types_json || "", ["formal"]).includes("formal")),
     allowedStatuses: parseJsonArray(row.allowed_statuses_json, ["normal", "banned"]) as SubscriptionGroup["allowedStatuses"],
@@ -200,8 +191,6 @@ export async function loadSubscriptionGroups(env: Env, includeContent = false): 
     cacheMinutes: row.cache_minutes,
     minAppVersion: row.min_app_version,
     maxAppVersion: row.max_app_version,
-    maxUsersPerSubscription: row.max_users_per_subscription,
-    resetPeriodDays: row.reset_period_days,
     subscriptions: sourcesByGroup.get(row.id) || [],
   }));
   if (includeContent && env.CONFIG) {
@@ -237,7 +226,6 @@ async function prepareSources(env: Env, groups: SubscriptionGroup[], importLegac
       id: group.id,
       group_order: groupIndex,
       name: group.name,
-      group_type: group.groupType,
       // Retain the legacy D1 column for deployed databases; all subscriptions are plaintext.
       encryption_mode: "none",
       enabled: group.enabled ? 1 : 0,
@@ -248,18 +236,13 @@ async function prepareSources(env: Env, groups: SubscriptionGroup[], importLegac
       cache_minutes: group.cacheMinutes,
       min_app_version: group.minAppVersion,
       max_app_version: group.maxAppVersion,
-      max_users_per_subscription: group.maxUsersPerSubscription,
-      reset_period_days: group.resetPeriodDays,
     });
 
     for (const [sourceIndex, source] of group.subscriptions.entries()) {
       const local = isLocalSource(source);
       let content = local ? source.content || "" : "";
       let contentKey = "";
-      let assignmentKey = "";
       if (local && content) {
-        assignmentKey = await createSubscriptionAssignmentKey({ ...source, assignmentKey: undefined });
-        source.assignmentKey = assignmentKey;
         contentKey = await subscriptionContentKey(source.id, content);
         if (source.contentKey !== contentKey) await config.put(contentKey, content);
         source.contentKey = contentKey;
@@ -268,10 +251,8 @@ async function prepareSources(env: Env, groups: SubscriptionGroup[], importLegac
       } else if (local && source.contentKey) {
         contentKey = source.contentKey;
         newKeys.add(contentKey);
-        assignmentKey = source.assignmentKey || "";
       } else if (local) {
         source.contentKey = undefined;
-        assignmentKey = source.assignmentKey || "";
       }
       sourceRows.push({
         id: source.id,
@@ -282,7 +263,6 @@ async function prepareSources(env: Env, groups: SubscriptionGroup[], importLegac
         url: local ? "" : source.url,
         content,
         content_key: contentKey,
-        assignment_key: assignmentKey,
         enabled: source.enabled ? 1 : 0,
         auto_rename: source.autoRename ? 1 : 0,
         deduplicate: source.deduplicate ? 1 : 0,
@@ -292,41 +272,38 @@ async function prepareSources(env: Env, groups: SubscriptionGroup[], importLegac
   }
 
   const groupInsertSql = `INSERT INTO subscription_groups
-    (id, group_order, name, group_type, encryption_mode, enabled, allowed_statuses_json,
+    (id, group_order, name, encryption_mode, enabled, allowed_statuses_json,
      ${hasLegacyColumn ? "allowed_account_types_json," : ""} allowed_identity_types_json, allowed_membership_types_json,
      update_enabled, cache_minutes, min_app_version,
-     max_app_version, max_users_per_subscription, reset_period_days)
+     max_app_version)
     SELECT json_extract(j.value, '$.id'), json_extract(j.value, '$.group_order'),
-      json_extract(j.value, '$.name'), json_extract(j.value, '$.group_type'),
-      json_extract(j.value, '$.encryption_mode'),
+      json_extract(j.value, '$.name'), json_extract(j.value, '$.encryption_mode'),
       json_extract(j.value, '$.enabled'), json_extract(j.value, '$.allowed_statuses_json'),
       ${hasLegacyColumn ? "'[\"formal\"]'," : ""}
       json_extract(j.value, '$.allowed_identity_types_json'),
       json_extract(j.value, '$.allowed_membership_types_json'), json_extract(j.value, '$.update_enabled'),
       json_extract(j.value, '$.cache_minutes'), json_extract(j.value, '$.min_app_version'),
-      json_extract(j.value, '$.max_app_version'), json_extract(j.value, '$.max_users_per_subscription'),
-      json_extract(j.value, '$.reset_period_days')
+      json_extract(j.value, '$.max_app_version')
     FROM json_each(?) AS j${importLegacyOnly ? ` WHERE ${pendingGuard}` : ""}`;
   const sourceInsertSql = `INSERT INTO subscription_sources
     (id, group_id, source_order, name, source_type, url, content, content_key,
-     assignment_key, enabled, auto_rename, deduplicate, remark)
+     enabled, auto_rename, deduplicate, remark)
     SELECT json_extract(j.value, '$.id'), json_extract(j.value, '$.group_id'),
       json_extract(j.value, '$.source_order'), json_extract(j.value, '$.name'),
       json_extract(j.value, '$.source_type'), json_extract(j.value, '$.url'),
       json_extract(j.value, '$.content'), json_extract(j.value, '$.content_key'),
-      json_extract(j.value, '$.assignment_key'), json_extract(j.value, '$.enabled'),
-      json_extract(j.value, '$.auto_rename'), json_extract(j.value, '$.deduplicate'),
+      json_extract(j.value, '$.enabled'), json_extract(j.value, '$.auto_rename'), json_extract(j.value, '$.deduplicate'),
       json_extract(j.value, '$.remark')
     FROM json_each(?) AS j${importLegacyOnly ? ` WHERE ${pendingGuard}` : ""}`;
   const directSourceSql = importLegacyOnly
     ? `INSERT INTO subscription_sources
         (id, group_id, source_order, name, source_type, url, content, content_key,
-         assignment_key, enabled, auto_rename, deduplicate, remark)
-       SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE ${pendingGuard}`
+         enabled, auto_rename, deduplicate, remark)
+       SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE ${pendingGuard}`
     : `INSERT INTO subscription_sources
         (id, group_id, source_order, name, source_type, url, content, content_key,
-         assignment_key, enabled, auto_rename, deduplicate, remark)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+         enabled, auto_rename, deduplicate, remark)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
   const statements = [
     ...jsonBatchStatements(db, groupInsertSql, groupRows),
     ...jsonBatchStatements(db, sourceInsertSql, sourceRows, (row) => db.prepare(directSourceSql).bind(
@@ -338,7 +315,6 @@ async function prepareSources(env: Env, groups: SubscriptionGroup[], importLegac
       row.url,
       row.content,
       row.content_key,
-      row.assignment_key,
       row.enabled,
       row.auto_rename,
       row.deduplicate,

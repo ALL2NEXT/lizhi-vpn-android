@@ -135,11 +135,10 @@
     .source-enabled-check:hover { color: var(--blue-ink); background: #dfe7f0; cursor: pointer; }
     .subscription-group-permissions { display: grid; grid-template-columns: repeat(2, minmax(150px, 1fr)); gap: 8px; margin: 10px 0 6px; }
     .subscription-group-permissions fieldset { min-width: 0; margin: 0; padding: 6px 10px; border: 1px solid #dadce0; border-radius: 8px; }
-    .subscription-group-name-setting, .subscription-group-type-setting, .subscription-load-balance-settings { grid-column: 1 / -1; display: grid; gap: 8px; }
-    .subscription-group-name-setting label, .subscription-group-type-setting label, .subscription-load-balance-settings label { display: grid; grid-template-columns: minmax(180px, max-content) minmax(140px, 240px); align-items: center; gap: 8px; color: #5f6368; font-size: 13px; }
-    .subscription-group-name-setting input, .subscription-group-type-setting select, .subscription-load-balance-settings input { min-height: 34px; padding: 7px 9px; }
-    .subscription-group-name-setting small, .subscription-group-type-setting small, .subscription-load-balance-settings small { grid-column: 1 / -1; color: #5f6368; }
-    .subscription-load-balance-settings[hidden] { display: none; }
+    .subscription-group-name-setting { grid-column: 1 / -1; display: grid; gap: 8px; }
+    .subscription-group-name-setting label { display: grid; grid-template-columns: minmax(180px, max-content) minmax(140px, 240px); align-items: center; gap: 8px; color: #5f6368; font-size: 13px; }
+    .subscription-group-name-setting input { min-height: 34px; padding: 7px 9px; }
+    .subscription-group-name-setting small { grid-column: 1 / -1; color: #5f6368; }
     .subscription-group-permissions legend { padding: 0 4px; color: #5f6368; font-size: 13px; }
     .subscription-group-permissions .check { display: inline-flex; margin: 0 12px 0 0; white-space: nowrap; }
     .subscription-group-permissions .check input { margin-right: 6px; }

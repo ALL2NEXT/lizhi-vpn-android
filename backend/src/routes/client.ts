@@ -1,8 +1,7 @@
 import type { Env } from "../types/env.ts";
 import type { RouteDependencies } from "../types/routes.ts";
-import type { SubscriptionGroup, SubscriptionSource } from "../types/models.ts";
+import type { SubscriptionSource } from "../types/models.ts";
 import { subscriptionGroupAccessError } from "../domain/subscription-access.ts";
-import { getOrAssignBalancedSubscription } from "../services/subscription-balancing.ts";
 import {
   markAllClientNotificationsRead,
   markClientNotificationRead,
@@ -35,7 +34,6 @@ export function createClientRoutes(deps: Pick<
   | "deduplicateSubscriptionContent"
   | "readState"
   | "writeState"
-  | "resolveUserIdentity"
   | "publicClientSettings"
   | "corsHeaders"
   | "json"
@@ -53,7 +51,6 @@ export function createClientRoutes(deps: Pick<
     deduplicateSubscriptionContent,
     readState,
     writeState,
-    resolveUserIdentity,
     publicClientSettings,
     corsHeaders,
     json,
@@ -104,11 +101,7 @@ async function handleClient(request: Request, env: Env) {
         }
       }));
     const dueIds = refreshDue.filter((id): id is string => Boolean(id));
-    if (group.groupType === "load_balanced" && dueIds.length) {
-      refreshDueSubscriptionIds.add(`load-balanced:${group.id}`);
-    } else {
-      dueIds.forEach((id) => refreshDueSubscriptionIds.add(id));
-    }
+    dueIds.forEach((id) => refreshDueSubscriptionIds.add(id));
   }));
   if (refreshDueSubscriptionIds.size > 0) {
     const latestState = await readState(env, { includeSubscriptionContent: true });
@@ -130,15 +123,6 @@ async function handleClient(request: Request, env: Env) {
     const sources = group.subscriptions.filter((source) =>
       source.enabled && hasSubscriptionData(source)
     );
-    if (!sources.length) return [];
-    if (group.groupType === "load_balanced") {
-      return [{
-        enabled: true,
-        id: `load-balanced:${group.id}`,
-        name: group.name,
-        url: `${origin}/api/subscription/lb/${encodeURIComponent(group.id)}`,
-      }];
-    }
     return sources.map((source) => ({
       enabled: true,
       id: source.id,
@@ -259,38 +243,15 @@ async function handleProxyAppList(env: Env) {
 
 async function handleManagedSubscription(path: string, request: Request, env: Env) {
   const suffix = path.slice("/api/subscription/".length);
-  const isLoadBalanced = suffix.startsWith("lb/");
-  let balancedGroupId = "";
-  if (isLoadBalanced) {
-    try {
-      balancedGroupId = decodeURIComponent(suffix.slice("lb/".length));
-    } catch {
-      return json({ error: "subscription_not_found" }, 404);
-    }
-  } else if (!/^\d+$/.test(suffix)) {
+  if (!/^\d+$/.test(suffix)) {
     return json({ error: "subscription_not_found" }, 404);
   }
 
   const state = await readState(env);
-  let group: SubscriptionGroup | undefined;
-  let source: SubscriptionSource | undefined;
-  if (isLoadBalanced) {
-    group = state.subscriptionGroups.find((item) =>
-      item.id === balancedGroupId && item.groupType === "load_balanced");
-    if (!group || !group.enabled || !group.subscriptions.some((item) =>
-      item.enabled && hasSubscriptionData(item)
-    )) {
-      return json({ error: "subscription_not_found" }, 404);
-    }
-  } else {
-    group = state.subscriptionGroups.find((item) =>
-      item.subscriptions.some((itemSource) => itemSource.id === suffix));
-    source = group?.subscriptions.find((item) => item.id === suffix);
-    if (!group || !group.enabled || !source || !source.enabled || !hasSubscriptionData(source)) {
-      return json({ error: "subscription_not_found" }, 404);
-    }
-  }
-  if (!group) {
+  const group = state.subscriptionGroups.find((item) =>
+    item.subscriptions.some((itemSource) => itemSource.id === suffix));
+  const source = group?.subscriptions.find((item) => item.id === suffix);
+  if (!group || !group.enabled || !source || !source.enabled || !hasSubscriptionData(source)) {
     return json({ error: "subscription_not_found" }, 404);
   }
 
@@ -332,18 +293,6 @@ async function handleManagedSubscription(path: string, request: Request, env: En
       currentVersion: access.appVersion || null,
     }, 403);
   }
-
-  if (isLoadBalanced) {
-    const identity = await resolveUserIdentity(env, deviceId);
-    if (!identity || identity.userId <= 0) {
-      return json({ ok: false, error: "account_access_denied" }, 403);
-    }
-    source = (await getOrAssignBalancedSubscription(env, group, identity.userId)) || undefined;
-    if (!source) {
-      return json({ ok: false, error: "subscription_capacity_exhausted" }, 503);
-    }
-  }
-  if (!source) return json({ error: "subscription_not_found" }, 404);
 
   let fetchedContent = "";
   try {

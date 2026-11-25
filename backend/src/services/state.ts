@@ -52,14 +52,6 @@ function subscriptionSignatures(groups: SubscriptionGroup[]) {
 }
 
 function groupSubscriptionSignatures(group: SubscriptionGroup) {
-  if (group.groupType === "load_balanced") {
-    return [[`load-balanced:${group.id}`, JSON.stringify({
-      groupId: group.id,
-      maxUsersPerSubscription: group.maxUsersPerSubscription,
-      resetPeriodDays: group.resetPeriodDays,
-      subscriptions: group.subscriptions.map(subscriptionSignatureSource),
-    })] as const];
-  }
   return group.subscriptions.map((source) => [
     source.id,
     JSON.stringify(subscriptionSignatureSource(source)),
@@ -69,7 +61,6 @@ function groupSubscriptionSignatures(group: SubscriptionGroup) {
 function subscriptionSignatureSource(source: SubscriptionSource) {
   const signatureSource = { ...source };
   delete signatureSource.contentKey;
-  delete signatureSource.assignmentKey;
   return signatureSource;
 }
 
@@ -105,7 +96,6 @@ function normalizeSubscriptionSource(item: JsonObject, id: number): Subscription
     url: sourceType === "content" ? "" : externalUrl,
     sourceType,
     ...(typeof item.contentKey === "string" && item.contentKey ? { contentKey: item.contentKey } : {}),
-    ...(typeof item.assignmentKey === "string" && item.assignmentKey ? { assignmentKey: item.assignmentKey } : {}),
     enabled: parseFlag(item.enabled, true),
     // 自动重命名只对外部订阅生效。
     autoRename: sourceType === "url" && parseFlag(item.autoRename ?? item.autoRenameNodes, false),
@@ -147,7 +137,6 @@ function normalizeSubscriptionGroup(
   return {
     id: cleanText(input.id).slice(0, 80) || String(index + 1),
     name: cleanText(input.name || input.title).slice(0, 80) || `分组${index + 1}`,
-    groupType: input.groupType === "load_balanced" ? "load_balanced" : "standard",
     // A legacy group that excluded registered users must not become accessible.
     enabled: parseFlag(input.enabled, true) &&
       (!Array.isArray(input.allowedAccountTypes) || input.allowedAccountTypes.includes("formal")),
@@ -162,17 +151,8 @@ function normalizeSubscriptionGroup(
     cacheMinutes,
     minAppVersion,
     maxAppVersion,
-    maxUsersPerSubscription: normalizeBoundedInteger(input.maxUsersPerSubscription, 10, 1, 1_000_000),
-    resetPeriodDays: normalizeBoundedInteger(input.resetPeriodDays, 30, 1, 3650),
     subscriptions: sources,
   };
-}
-
-function normalizeBoundedInteger(value: unknown, fallback: number, minimum: number, maximum: number) {
-  const number = Number(value);
-  return Number.isInteger(number) && number >= minimum && number <= maximum
-    ? number
-    : fallback;
 }
 
 export interface ReadStateOptions {
@@ -307,7 +287,6 @@ export function normalizeState(input: unknown): AppState {
         return [{
           id: String(index + 1),
           name: cleanText(item.groupName || item.name || item.title) || `分组${index + 1}`,
-          groupType: "standard",
           enabled: true,
           allowedStatuses: minimumType === "banned" ? ["normal", "banned"] : ["normal"],
           allowedIdentityTypes: ["human", "bot"],
@@ -316,8 +295,6 @@ export function normalizeState(input: unknown): AppState {
           cacheMinutes: normalizeSubscriptionCacheMinutes(source.url ? item.cacheMinutes : undefined),
           minAppVersion: normalizeMinimumAppVersion(item.minAppVersion ?? item.minimumAppVersion),
           maxAppVersion: "",
-          maxUsersPerSubscription: 10,
-          resetPeriodDays: 30,
           subscriptions: [source],
         }];
       });
