@@ -135,6 +135,8 @@
     .source-enabled-check:hover { color: var(--blue-ink); background: #dfe7f0; cursor: pointer; }
     .subscription-group-permissions { display: grid; grid-template-columns: repeat(2, minmax(150px, 1fr)); gap: 8px; margin: 10px 0 6px; }
     .subscription-group-permissions fieldset { min-width: 0; margin: 0; padding: 6px 10px; border: 1px solid #dadce0; border-radius: 8px; }
+    .subscription-access-control { grid-column: 1 / -1; }
+    .subscription-access-control-fields { display: grid; grid-template-columns: repeat(2, minmax(150px, 1fr)); gap: 8px; }
     .subscription-group-name-setting { grid-column: 1 / -1; display: grid; gap: 8px; }
     .subscription-group-name-setting label { display: grid; grid-template-columns: minmax(180px, max-content) minmax(140px, 240px); align-items: center; gap: 8px; color: #5f6368; font-size: 13px; }
     .subscription-group-name-setting input { min-height: 34px; padding: 7px 9px; }

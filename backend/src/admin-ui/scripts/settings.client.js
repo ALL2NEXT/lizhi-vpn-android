@@ -252,6 +252,8 @@ function addSubscriptionGroup(group) {
     '<fieldset class="subscription-group-name-setting"><legend>分组名称</legend>' +
       '<label><span>名称</span><input data-field="groupName" type="text" maxlength="80" placeholder="例如：标准线路"></label>' +
     '</fieldset>' +
+    '<fieldset class="subscription-access-control"><legend>权限控制</legend>' +
+      '<div class="subscription-access-control-fields">' +
     '<fieldset><legend>账号状态</legend>' +
       '<label class="check"><input data-field="allowedStatuses" type="checkbox" value="normal" ' + (allowedStatuses.includes('normal') ? 'checked' : '') + '>正常</label>' +
       '<label class="check"><input data-field="allowedStatuses" type="checkbox" value="banned" ' + (allowedStatuses.includes('banned') ? 'checked' : '') + '>封禁</label>' +
@@ -268,6 +270,8 @@ function addSubscriptionGroup(group) {
       '<label><span>左侧 · 最低</span><input data-field="minAppVersion" type="text" list="subscriptionAppVersionOptions" placeholder="不限制"></label>' +
       '<span aria-hidden="true">至</span>' +
       '<label><span>右侧 · 最高</span><input data-field="maxAppVersion" type="text" list="subscriptionAppVersionOptions" placeholder="不限制"></label>' +
+    '</fieldset>' +
+      '</div>' +
     '</fieldset>' +
     '<fieldset class="subscription-cache-setting"><legend>更新设置</legend>' +
       '<label class="subscription-switch subscription-update-toggle"><span class="subscription-switch-control"><input data-field="updateEnabled" type="checkbox" aria-label="启用远程订阅更新" ' + (group.updateEnabled === false ? '' : 'checked') + '><span class="subscription-switch-track"><span></span></span></span><span>启用更新</span></label>' +
