@@ -314,7 +314,7 @@ function addSubscriptionGroup(group) {
       '<button class="secondary" type="button" data-action="permissions-close">完成</button>' +
     '</div>' +
   '</dialog>' +
-  '<div class="source-list-header" aria-hidden="true"><span></span><span>订阅名称</span><span class="source-list-header-remark">备注</span><span class="source-list-header-type">订阅类型</span><span class="source-list-header-traffic">流量使用</span><span class="source-list-header-expiry">到期时间</span><span class="source-list-header-enabled">启用</span><span>设置</span></div>' +
+  '<div class="source-list-header" aria-hidden="true"><span></span><span>名称</span><span class="source-list-header-remark">备注</span><span class="source-list-header-type">类型</span><span class="source-list-header-traffic">流量使用</span><span class="source-list-header-expiry">到期时间</span><span class="source-list-header-enabled">启用</span><span>设置</span></div>' +
   '<div class="subscription-group-sources" data-group-sources>' +
     '<div class="subscription-group-empty" data-group-subscription-empty hidden>此分组暂无订阅</div>' +
   '</div>';
@@ -482,7 +482,7 @@ function addSource(groupRow, source) {
   row.innerHTML = '<input class="source-row-select" type="checkbox" data-source-select aria-label="选择订阅：' + esc(source.name || '未命名订阅') + '">' +
     '<span class="source-name-cell"><span class="source-name-line"><strong data-source-display-name>' + esc(source.name || '未命名订阅') + '</strong></span></span>' +
     '<span class="source-row-remark" data-source-display-remark>' + esc(source.remark || '—') + '</span>' +
-    '<span class="source-type-cell" data-source-display-type>' + (sourceType === 'content' ? '本地订阅' : '远程订阅') + '</span>' +
+    '<span class="source-type-cell" data-source-display-type>' + (sourceType === 'content' ? '本地' : '远程') + '</span>' +
     '<div class="source-traffic" data-source-traffic aria-live="polite"><div class="source-traffic-line"><span data-source-traffic-text>等待读取流量信息…</span></div><div class="source-traffic-track" data-source-traffic-track role="progressbar" aria-label="订阅流量使用比例" aria-valuemin="0" aria-valuemax="100" hidden><span class="source-traffic-progress" data-source-traffic-progress></span></div></div>' +
     '<div class="source-expiry-cell"><span class="source-expiry" data-source-expiry></span></div>' +
     '<label class="subscription-switch source-enabled-check"><span class="subscription-switch-control"><input data-field="enabled" type="checkbox" aria-label="启用订阅" ' + (source.enabled === false ? '' : 'checked') + '><span class="subscription-switch-track"><span></span></span></span></label>' +
@@ -534,7 +534,7 @@ function updateSourceRowsMeta() {
       const type = row.querySelector('[data-field="sourceType"]').value;
       const sourceName = nameInput.value.trim() || nameInput.placeholder;
       if (displayName) displayName.textContent = sourceName;
-      if (displayType) displayType.textContent = type === 'content' ? '本地订阅' : '远程订阅';
+      if (displayType) displayType.textContent = type === 'content' ? '本地' : '远程';
       const settingsButton = row.querySelector('[data-action="source-settings"]');
       if (settingsButton) {
         settingsButton.setAttribute('aria-label', '设置订阅：' + sourceName);
