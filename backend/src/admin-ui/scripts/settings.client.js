@@ -20,6 +20,17 @@ function getSubscriptionGroupRows() {
   return Array.from(el('subscriptionRows').querySelectorAll(':scope > .subscription-group'));
 }
 
+function getSubscriptionTargetGroup() {
+  let group = selectedSubscriptionRow && selectedSubscriptionRow.closest('.subscription-group');
+  if (!group && activeSubscriptionGroupId !== '__all__') {
+    group = getSubscriptionGroupRows().find(function(candidate) {
+      return candidate.dataset.groupId === activeSubscriptionGroupId;
+    });
+  }
+  if (!group) group = getSubscriptionGroupRows()[0];
+  return group || addSubscriptionGroup();
+}
+
 function setSourceTrafficMessage(row, message, error) {
   const host = row.querySelector('[data-source-traffic]');
   const text = row.querySelector('[data-source-traffic-text]');
@@ -163,6 +174,7 @@ async function loadSubscriptionTraffic(sourceIds) {
       (!requestedIds || requestedIds.has(row.dataset.sourceId)) &&
       row.querySelector('[data-field="sourceType"]').value === 'url' &&
       row.querySelector('[data-field="enabled"]').checked &&
+      row.querySelector('[data-field="url"]').value.trim() &&
       row.querySelector('[data-field="url"]').value.trim() === row.dataset.persistedUrl;
   });
   if (!activeRows.length) return;
@@ -948,13 +960,30 @@ function initializeSubscriptionManager() {
     button.addEventListener('click', function() { addSubscriptionGroup(); });
   });
   panel.querySelector('[data-action="add-subscription"]').addEventListener('click', function() {
-    let group = selectedSubscriptionRow && selectedSubscriptionRow.closest('.subscription-group');
-    if (!group && activeSubscriptionGroupId !== '__all__') {
-      group = getSubscriptionGroupRows().find(function(candidate) { return candidate.dataset.groupId === activeSubscriptionGroupId; });
+    openSubscriptionImport(getSubscriptionTargetGroup());
+  });
+  panel.querySelector('[data-action="create-empty-subscription"]').addEventListener('click', function() {
+    const group = getSubscriptionTargetGroup();
+    const row = addSource(group, {
+      name: '新建订阅',
+      sourceType: 'url',
+      url: '',
+      content: '',
+      enabled: true,
+      autoRename: false,
+      deduplicate: true,
+      remark: ''
+    });
+    selectSubscriptionGroup(group.dataset.groupId, false);
+    subscriptionCurrentPage = Math.ceil(group.querySelectorAll('.source-row').length / subscriptionPageSize);
+    updateSubscriptionList();
+    openSubscriptionEditor(row);
+    const nameField = el('subscriptionEditor').querySelector('[data-editor-field="name"]');
+    if (nameField) {
+      nameField.focus();
+      nameField.select();
     }
-    if (!group) group = getSubscriptionGroupRows()[0];
-    if (!group) group = addSubscriptionGroup();
-    openSubscriptionImport(group);
+    show('已新建空订阅草稿，点击「保存配置」后生效。');
   });
   panel.querySelector('[data-action="move-selected-subscriptions"]').addEventListener('click', openSubscriptionMoveDialog);
   panel.querySelector('[data-action="delete-selected-subscriptions"]').addEventListener('click', deleteSelectedSubscriptions);
@@ -1087,8 +1116,7 @@ function readEnabledSubscriptionFilter(group, toggleField, valuesField, allowedV
 function readSubscriptionGroups() {
   return getSubscriptionGroupRows().map(function(group, groupIndex) {
     const sources = Array.from(group.querySelectorAll('[data-group-sources] > .source-row'))
-      .map(readSubscriptionSource)
-      .filter(function(source) { return source.url || source.content; });
+      .map(readSubscriptionSource);
     return {
       id: group.dataset.groupId || String(groupIndex + 1),
       name: group.querySelector('[data-field="groupName"]').value.trim() || '分组' + (groupIndex + 1),

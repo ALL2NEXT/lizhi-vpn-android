@@ -85,6 +85,10 @@ el('subscriptionImportForm').onsubmit = async function(event) {
     el('subscriptionImportStatus').textContent = adminErrorMessage('managed_subscription_too_large');
     return;
   }
+  if (!input.trim()) {
+    el('subscriptionImportStatus').textContent = '请粘贴订阅地址或配置内容；空白线路请使用「新建订阅」按钮。';
+    return;
+  }
   const generation = subscriptionImportGeneration;
   subscriptionImportRequest = new AbortController();
   setSubscriptionImportBusy(true);

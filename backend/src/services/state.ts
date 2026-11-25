@@ -86,13 +86,14 @@ function normalizeSubscriptionSource(item: JsonObject, id: number): Subscription
     item.content ?? item.managedContent ?? item.nodesText,
   );
   const sourceType = item.sourceType === "content" || content ? "content" : "url";
-  const externalUrl = typeof item.url === "string" && /^https?:\/\//i.test(item.url.trim())
-    ? item.url.trim()
-    : "";
-  if (sourceType !== "content" && !externalUrl) return null;
+  const rawUrl = typeof item.url === "string" ? item.url.trim() : "";
+  const externalUrl = /^https?:\/\//i.test(rawUrl) ? rawUrl : "";
+  const name = cleanText(item.name || item.title);
+  // 保留有名称的空远程订阅，允许后台先建条目再补地址。
+  if (sourceType !== "content" && !externalUrl && (rawUrl || !name)) return null;
   return {
     id: String(id),
-    name: cleanText(item.name || item.title) || `线路${id}`,
+    name: name || `线路${id}`,
     url: sourceType === "content" ? "" : externalUrl,
     sourceType,
     ...(typeof item.contentKey === "string" && item.contentKey ? { contentKey: item.contentKey } : {}),
