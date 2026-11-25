@@ -919,29 +919,7 @@
     .security-risk-section { display: grid; min-width: 0; gap: 9px; }
     .security-risk-section-heading { display: flex; min-width: 0; align-items: center; gap: 9px; padding-top: 3px; }
     .security-risk-section-heading h3 { margin: 0; color: var(--ink); font-size: 16px; }
-    .security-risk-section-heading > span { padding: 3px 7px; color: var(--blue-ink); background: var(--surface-active); font-size: 12px; font-weight: 650; }
-    .security-risk-rule-results { display: grid; min-width: 0; gap: 8px; }
-    .security-risk-rule-card { min-width: 0; overflow: hidden; background: var(--surface); border: 1px solid #f3b5af; }
-    .security-risk-rule-summary { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 7px 14px; padding: 11px 13px; }
-    .security-risk-rule-identity { display: grid; min-width: 0; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 3px 9px; }
-    .security-risk-rule-identity strong { min-width: 0; color: var(--ink); font-size: 14px; overflow-wrap: anywhere; }
-    .security-risk-rule-identity strong code,
     .ai-risk-ip-identity strong code { color: #294967; font-family: ui-sans-serif, "Segoe UI", "Microsoft YaHei UI", sans-serif; font-size: 15px; font-weight: 650; font-variant-numeric: tabular-nums; letter-spacing: .015em; line-height: 1.4; }
-    .security-risk-rule-identity small { grid-column: 2; color: var(--ink-muted); font-size: 12px; }
-    .security-risk-rule-badge { padding: 4px 7px; color: #b3261e; background: #fce8e6; font-size: 12px; font-weight: 700; white-space: nowrap; }
-    .security-risk-rule-metric { display: grid; justify-items: end; gap: 2px; color: var(--ink-muted); font-size: 12px; }
-    .security-risk-rule-metric strong { color: #b3261e; font-size: 16px; font-variant-numeric: tabular-nums; }
-    .security-risk-rule-time { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 5px 12px; margin: 0; color: var(--ink-muted); font-size: 12px; }
-    .security-risk-rule-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 10px 13px 12px; border-top: 1px solid #edf1f6; }
-    .security-risk-rule-details section { display: grid; min-width: 0; align-content: start; gap: 6px; }
-    .security-risk-rule-details h4 { margin: 0; color: var(--ink-muted); font-size: 12px; font-weight: 650; }
-    .security-risk-path-list, .security-risk-account-list { display: grid; min-width: 0; gap: 5px; margin: 0; padding: 0; list-style: none; }
-    .security-risk-path-row, .security-risk-account-row { display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 3px 8px; padding: 7px 8px; background: #f7f9fc; font-size: 12px; }
-    .security-risk-path-row code, .security-risk-account-row code { min-width: 0; color: var(--ink); overflow-wrap: anywhere; }
-    .security-risk-path-row span, .security-risk-account-row span, .security-risk-path-row small, .security-risk-account-row small { color: var(--ink-muted); font-size: 12px; }
-    .security-risk-path-row small, .security-risk-account-row small { grid-column: 1 / -1; }
-    .security-risk-rule-note { margin: 0; color: var(--ink-muted); font-size: 12px; line-height: 1.5; }
-    .security-risk-rule-empty { padding: 13px; color: var(--ink-muted); background: #f7f9fc; font-size: 13px; text-align: center; }
     .ai-risk-analysis-summary { padding: 12px 14px; color: var(--blue-ink); background: #edf4ff; border: 1px solid #d7e6fc; border-radius: 10px; }
     .ai-risk-analysis-summary p { margin: 4px 0 0; color: var(--ink); font-size: 13px; line-height: 1.6; }
     .ai-risk-ip-list { display: grid; gap: 9px; }
@@ -1102,8 +1080,6 @@
       .ai-risk-detail-tabs { gap: 13px; }
       .ai-risk-account-row { grid-template-columns: minmax(0, 1fr) auto; }
       .ai-risk-account-row small { grid-column: 1 / -1; }
-      .security-risk-rule-details { grid-template-columns: minmax(0, 1fr); }
-      .security-risk-rule-summary { padding: 9px; }
     }
     .traffic-detail-wrap, .security-account-list, .system-logs-wrap,
     .table-wrap, .user-table-scroll, .security-device-wrap {
@@ -1912,12 +1888,6 @@ dialog::backdrop {
 
 /* 将剩余圆角卡片和分组控件调整为 Windows 10 风格。 */
 #dashboard .dashboard-workspace .ai-risk-page :is(
-  .security-risk-section-heading > span,
-  .security-risk-rule-card,
-  .security-risk-rule-badge,
-  .security-risk-path-row,
-  .security-risk-account-row,
-  .security-risk-rule-empty,
   .ai-risk-analysis-summary,
   .ai-risk-ip-card,
   .ai-risk-badge,

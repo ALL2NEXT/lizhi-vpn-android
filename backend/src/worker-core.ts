@@ -78,8 +78,6 @@ import {
   rowToUser,
   usersDb,
 } from "./services/user-store.ts";
-import { handleHoneypotRoute, isHoneypotPath } from "./services/honeypot.ts";
-import { pruneSecurityRuleHits, recordHoneypotRuleHit } from "./services/security-risk.ts";
 import { writeUserIpLink } from "./services/user-ip-links.ts";
 import type {
   SystemLogDraft,
@@ -258,10 +256,6 @@ async function dispatchWorkerRequest(request: Request, env: Env) {
         });
       }
 
-      if (isHoneypotPath(path) && path !== adminBasePath) {
-        return handleHoneypotRoute(request, json);
-      }
-
       if (path === "/" || path === "/health") {
         const usersSchemaVersion = env.USERS_DB
           ? await initializeUserSchema(env)
@@ -347,7 +341,6 @@ async function fetchObservedBackend(
     const url = new URL(request.url);
     const path = url.pathname.replace(/\/+$/, "") || "/";
     const adminBasePath = resolveAdminBasePath(env.ADMIN_PATH);
-    const isHoneypotRequest = isHoneypotPath(path) && path !== adminBasePath;
     const isAdminApi = Boolean(adminBasePath && path.startsWith(`${adminBasePath}/api/`));
     const requestId = request.headers.get("cf-ray") || crypto.randomUUID();
     let recordingSettings: SystemLogRecordingSettings | undefined;
@@ -452,16 +445,6 @@ async function fetchObservedBackend(
           status: response.status,
           occurredAt,
         }),
-        isHoneypotRequest
-          ? recordHoneypotRuleHit(env, {
-              method: request.method,
-              path,
-              status: response.status,
-              ip: requestIp(request),
-              requestId,
-              occurredAt,
-            })
-          : Promise.resolve(),
       ]);
     })();
     if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(persist);
@@ -470,5 +453,5 @@ async function fetchObservedBackend(
 }
 
 export function scheduledBackend(env: Env, ctx: BackendExecutionContext) {
-  ctx.waitUntil(Promise.all([pruneSystemLogs(env), pruneSecurityRuleHits(env)]));
+  ctx.waitUntil(pruneSystemLogs(env));
 }

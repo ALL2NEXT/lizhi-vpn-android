@@ -5,8 +5,6 @@ let aiRiskDefaultPromptTemplate = '';
 let aiRiskModels = [];
 let aiRiskDashboard = null;
 let aiRiskAnalysis = null;
-let securityRiskRuleHits = null;
-let securityRiskRuleHitsError = '';
 let aiRiskExpandedIp = '';
 let aiRiskSearchValue = '';
 let aiRiskSortValue = 'risk';
@@ -50,9 +48,6 @@ function aiRiskErrorText(code) {
     invalid_ai_risk_window: '分析时间窗无效。',
     invalid_ai_risk_date_range: '开始和结束时间无效，或时间范围超过 30 天。',
     ai_risk_dashboard_data_read_failed: '读取行为异常统计失败，请检查网络日志和数据库状态。',
-    security_rule_hits_read_failed: '读取后台规则命中失败，请检查数据库状态。',
-    invalid_security_risk_window: '后台规则查询时间窗无效。',
-    invalid_security_risk_date_range: '后台规则查询的开始或结束时间无效，或时间范围超过 30 天。',
     gemini_auth_failed: 'Gemini 认证失败，请检查 API Key 和模型权限。',
     gemini_rate_limited: 'Gemini 请求频率受限，请稍后再试。',
     gemini_unavailable: '无法连接 Gemini，请检查网络后重试。',
@@ -451,63 +446,6 @@ function aiRiskRenderCard(row, index) {
   '</article>';
 }
 
-function securityRiskRenderRuleHit(hit) {
-  const paths = (hit.paths || []).map(function(item) {
-    const status = Number.isInteger(item.status) ? 'HTTP ' + item.status : '状态未知';
-    return '<li class="security-risk-path-row"><code>' + esc((item.method || '—') + ' ' + (item.path || '—')) + '</code><span>' +
-      aiRiskFormatCount(item.hitCount) + ' 次 · ' + status + '</span><small>最近 ' + esc(aiRiskFormatTime(item.lastSeenAt)) + '</small></li>';
-  }).join('');
-  const accounts = (hit.accounts || []).map(function(account) {
-    return '<li class="security-risk-account-row"><code>' + esc(account.uid) + '</code><span>' +
-      esc(account.status || 'unknown') + ' · ' + aiRiskFormatCount(account.requestCount) + ' 次请求</span><small>最近 ' +
-      esc(aiRiskFormatTime(account.lastSeenAt)) + '</small></li>';
-  }).join('');
-  const coverage = securityRiskRuleHits && securityRiskRuleHits.coverage || {};
-  return '<article class="security-risk-rule-card"><div class="security-risk-rule-summary">' +
-    '<div class="security-risk-rule-identity"><span class="security-risk-rule-badge">公网扫描</span><strong><code>' + esc(hit.ip) +
-    '</code></strong><small>' + esc(hit.ruleName || '后台规则') + ' · 建议范围：仅 IP · 同 IP 关联 ' + aiRiskFormatCount((hit.accounts || []).length) + ' 个账户</small></div>' +
-    '<div class="security-risk-rule-metric"><span>命中次数</span><strong>' + aiRiskFormatCount(hit.hitCount) + '</strong></div>' +
-    '<p class="security-risk-rule-time"><span>首次命中 ' + esc(aiRiskFormatTime(hit.firstSeenAt)) + '</span><span>最近命中 ' + esc(aiRiskFormatTime(hit.lastSeenAt)) + '</span></p>' +
-    '</div><div class="security-risk-rule-details"><section><h4>命中蜜罐地址</h4><ul class="security-risk-path-list">' +
-    (paths || '<li class="security-risk-rule-note">暂无路径明细。</li>') + '</ul></section><section><h4>同 IP 关联账户（近 ' +
-    aiRiskFormatCount(coverage.accountAssociationDays || 30) + ' 天）</h4>' +
-    (accounts ? '<ul class="security-risk-account-list">' + accounts + '</ul>' : '<p class="security-risk-rule-note">近 30 天没有识别到同 IP 账户；蜜罐访问本身不会关联登录身份。</p>') +
-    '<p class="security-risk-rule-note">同 IP 账户仅为关联线索，不代表该账户访问过蜜罐地址。</p></section></div></article>';
-}
-
-function securityRiskRenderRuleHits() {
-  const host = el('securityRuleHitResults');
-  const count = el('securityRuleHitCount');
-  if (!securityRiskRuleHits) {
-    count.textContent = '—';
-    host.innerHTML = '<div class="security-risk-rule-empty">' + esc(securityRiskRuleHitsError || '正在读取后台规则命中…') + '</div>';
-    return;
-  }
-  const hits = Array.isArray(securityRiskRuleHits.ruleHits) ? securityRiskRuleHits.ruleHits : [];
-  count.textContent = hits.length + ' 个 IP';
-  const query = aiRiskSearchValue.trim().toLowerCase();
-  const visible = hits.filter(function(hit) {
-    if (!query) return true;
-    return String(hit.ip || '').toLowerCase().includes(query) ||
-      String(hit.ruleName || '').toLowerCase().includes(query) ||
-      (hit.paths || []).some(function(path) { return String(path.path || '').toLowerCase().includes(query); }) ||
-      (hit.accounts || []).some(function(account) { return String(account.uid || '').toLowerCase().includes(query); });
-  }).sort(function(left, right) {
-    if (aiRiskSortValue === 'requests') return (Number(right.hitCount) || 0) - (Number(left.hitCount) || 0) || String(right.lastSeenAt || '').localeCompare(String(left.lastSeenAt || ''));
-    return String(right.lastSeenAt || '').localeCompare(String(left.lastSeenAt || ''));
-  });
-  if (!visible.length) {
-    host.innerHTML = '<div class="security-risk-rule-empty">' + (query
-      ? '没有符合搜索条件的后台规则命中。'
-      : '当前时间窗内没有蜜罐后台地址命中。') + '</div>';
-    return;
-  }
-  host.innerHTML = visible.map(securityRiskRenderRuleHit).join('');
-  if (securityRiskRuleHits.coverage && (securityRiskRuleHits.coverage.ruleHitRowsTruncated || securityRiskRuleHits.coverage.accountRowsTruncated)) {
-    host.innerHTML += '<p class="security-risk-rule-note">命中或账户关联结果较多，当前列表已按上限截取。</p>';
-  }
-}
-
 function renderAiRiskFindings(result) {
   aiRiskAnalysis = result || null;
   aiRiskRenderDashboard();
@@ -555,33 +493,14 @@ async function loadAiRiskDashboard(clearAnalysis) {
   aiRiskSetStatus('aiRiskAnalysisStatus', '正在读取风险数据…', false);
   try {
     const query = '?' + new URLSearchParams(dateRange).toString();
-    const results = await Promise.allSettled([
-      aiRiskRequest('/ai-risk/dashboard-data' + query),
-      aiRiskRequest('/security-risk/rule-hits' + query),
-    ]);
-    const dashboardResult = results[0];
-    const ruleHitsResult = results[1];
-    if (dashboardResult.status === 'fulfilled') aiRiskDashboard = dashboardResult.value.dataset || null;
-    else aiRiskDashboard = null;
-    if (ruleHitsResult.status === 'fulfilled') {
-      securityRiskRuleHits = ruleHitsResult.value;
-      securityRiskRuleHitsError = '';
-    } else {
-      securityRiskRuleHits = null;
-      securityRiskRuleHitsError = aiRiskErrorText(ruleHitsResult.reason && ruleHitsResult.reason.message);
-    }
+    const result = await aiRiskRequest('/ai-risk/dashboard-data' + query);
+    aiRiskDashboard = result.dataset || null;
     aiRiskExpandedIp = '';
     aiRiskRenderDashboard();
-    securityRiskRenderRuleHits();
-    const failure = dashboardResult.status === 'rejected' ? dashboardResult.reason :
-      ruleHitsResult.status === 'rejected' ? ruleHitsResult.reason : null;
-    aiRiskSetStatus('aiRiskAnalysisStatus', failure ? aiRiskErrorText(failure.message) : '', Boolean(failure));
+    aiRiskSetStatus('aiRiskAnalysisStatus', '', false);
   } catch (error) {
     aiRiskDashboard = null;
     aiRiskRenderDashboard();
-    securityRiskRuleHits = null;
-    securityRiskRuleHitsError = aiRiskErrorText(error.message);
-    securityRiskRenderRuleHits();
     aiRiskSetStatus('aiRiskAnalysisStatus', aiRiskErrorText(error.message), true);
   } finally {
     aiRiskOperationInFlight = false;
@@ -788,12 +707,10 @@ el('aiRiskPreview').addEventListener('click', previewAiRiskData);
 el('aiRiskSearch').addEventListener('input', function() {
   aiRiskSearchValue = el('aiRiskSearch').value || '';
   aiRiskRenderDashboard();
-  securityRiskRenderRuleHits();
 });
 el('aiRiskSort').addEventListener('change', function() {
   aiRiskSortValue = el('aiRiskSort').value || 'risk';
   aiRiskRenderDashboard();
-  securityRiskRenderRuleHits();
 });
 el('aiRiskPage').addEventListener('click', aiRiskHandlePageClick);
 el('aiRiskClearKeys').addEventListener('change', function() {

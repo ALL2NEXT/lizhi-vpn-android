@@ -203,8 +203,7 @@ test("本地 Worker 的账号、订阅和管理接口", async (t) => {
     assert.deepEqual((await call("/local-admin/api/users", { admin: true })).data.users, []);
   });
 
-  await t.test("蜜罐固定拒绝登录，旧登录记录接口已移除", async () => {
-    await call("/admin/login", { method: "POST", body: {}, status: 401 });
+  await t.test("旧登录记录接口已移除", async () => {
     await call("/local-admin/api/admin-login-records", { admin: true, status: 404 });
   });
 });

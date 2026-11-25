@@ -31,4 +31,4 @@ npm.cmd test
 npm.cmd run build:tiered
 ```
 
-`npm test` 包含主 Worker 类型检查、dry-run 和一组本地测试。验证账号注册、密码绑定与登录、一次性注册码、会话流量去重、管理查询与编辑、封禁关联设备、导航输入校验、订阅解码及重命名、旧 KV 状态双写、调试地址过滤、蜜罐和 CORS。Miniflare 使用临时本地数据库和命名空间；测试与 build 命令不会发布 Worker。
+`npm test` 包含主 Worker 类型检查、dry-run 和一组本地测试。验证账号注册、密码绑定与登录、一次性注册码、会话流量去重、管理查询与编辑、封禁关联设备、导航输入校验、订阅解码及重命名、旧 KV 状态双写、调试地址过滤和 CORS。Miniflare 使用临时本地数据库和命名空间；测试与 build 命令不会发布 Worker。

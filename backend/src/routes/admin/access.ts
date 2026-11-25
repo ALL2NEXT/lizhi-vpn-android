@@ -11,11 +11,10 @@ import {
   testGeminiConnection,
   updateAiRiskSettings,
 } from "../../services/ai-risk.ts";
-import { readSecurityRuleHits } from "../../services/security-risk.ts";
 
 /* System log query route. */
 
-function requestedRiskRange(url: URL) {
+function requestedAiRiskRange(url: URL) {
   const startDate = url.searchParams.get("startDate");
   const endDate = url.searchParams.get("endDate");
   if (startDate !== null || endDate !== null) return { startDate, endDate };
@@ -48,19 +47,6 @@ export function createAdminAccessRoutes(deps: Pick<
   } = deps;
 
   return async function handleAdminAccess(path: string, request: Request, env: Env) {
-    if (path === "/api/security-risk/rule-hits" && request.method === "GET") {
-      try {
-        return json(await readSecurityRuleHits(env, requestedRiskRange(new URL(request.url))));
-      } catch (error) {
-        const errorCode = error instanceof Error ? error.message : "";
-        const invalidWindow = errorCode === "invalid_security_risk_window" || errorCode === "invalid_security_risk_date_range";
-        return json({
-          ok: false,
-          error: invalidWindow ? errorCode : "security_rule_hits_read_failed",
-        }, invalidWindow ? 400 : 500);
-      }
-    }
-
     if (path === "/api/ai-risk/settings" && request.method === "GET") {
       return json({ ok: true, settings: await readAiRiskSettings(env) });
     }
@@ -98,7 +84,7 @@ export function createAdminAccessRoutes(deps: Pick<
 
     if (path === "/api/ai-risk/data" && request.method === "GET") {
       try {
-        return json({ ok: true, dataset: await readAiRiskDataset(env, requestedRiskRange(new URL(request.url))) });
+        return json({ ok: true, dataset: await readAiRiskDataset(env, requestedAiRiskRange(new URL(request.url))) });
       } catch (error) {
         const status = error instanceof AiRiskError ? error.status : 500;
         const code = error instanceof AiRiskError ? error.code : "ai_risk_data_read_failed";
@@ -108,7 +94,7 @@ export function createAdminAccessRoutes(deps: Pick<
 
     if (path === "/api/ai-risk/dashboard-data" && request.method === "GET") {
       try {
-        return json({ ok: true, dataset: await readAiRiskDashboardData(env, requestedRiskRange(new URL(request.url))) });
+        return json({ ok: true, dataset: await readAiRiskDashboardData(env, requestedAiRiskRange(new URL(request.url))) });
       } catch (error) {
         const status = error instanceof AiRiskError ? error.status : 500;
         const code = error instanceof AiRiskError ? error.code : "ai_risk_dashboard_data_read_failed";

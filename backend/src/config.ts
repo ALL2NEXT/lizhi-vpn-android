@@ -102,23 +102,6 @@ const SYSTEM_LOG_REQUEST_INDEX = `CREATE INDEX IF NOT EXISTS idx_system_logs_mb_
 const SYSTEM_LOG_IP_INDEX = `CREATE INDEX IF NOT EXISTS idx_system_logs_mb_ip_occurred
   ON system_logs_mb(ip, occurred_at DESC)
   WHERE category = 'request' AND user_uid <> '' AND device_id <> ''`;
-const SECURITY_RISK_RULE_HITS_SCHEMA_STATEMENTS = [
-  `CREATE TABLE IF NOT EXISTS security_risk_rule_hits_mb (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    occurred_at TEXT NOT NULL,
-    rule_id TEXT NOT NULL,
-    method TEXT NOT NULL,
-    path TEXT NOT NULL,
-    status INTEGER NOT NULL,
-    ip TEXT NOT NULL,
-    request_id TEXT NOT NULL DEFAULT ''
-  )`,
-  `CREATE INDEX IF NOT EXISTS idx_security_risk_rule_hits_mb_rule_time
-    ON security_risk_rule_hits_mb(rule_id, occurred_at DESC, ip)`,
-  `CREATE INDEX IF NOT EXISTS idx_security_risk_rule_hits_mb_ip_time
-    ON security_risk_rule_hits_mb(ip, occurred_at DESC)`,
-];
-
 const NOTIFICATION_SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS notifications_mb (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -171,7 +154,7 @@ const USER_EMAIL_REQUIRED_TRIGGERS = [
    BEGIN SELECT RAISE(ABORT, 'user_email_required'); END`,
 ];
 
-export const USER_SCHEMA_VERSION = 29;
+export const USER_SCHEMA_VERSION = 30;
 export const USER_SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS app_schema_mb (
     component TEXT PRIMARY KEY,
@@ -309,7 +292,6 @@ export const USER_SCHEMA_STATEMENTS = [
   SYSTEM_LOG_PAYLOADS_INDEX,
   SYSTEM_LOG_USER_INDEX,
   SYSTEM_LOG_IP_INDEX,
-  ...SECURITY_RISK_RULE_HITS_SCHEMA_STATEMENTS,
   ...NOTIFICATION_SCHEMA_STATEMENTS,
   ...USER_IP_LINKS_SCHEMA_STATEMENTS,
   CLIENT_SECURITY_REPORTS_SCHEMA,
@@ -512,7 +494,7 @@ export const USER_SCHEMA_MIGRATIONS: Record<number, string[]> = {
     SYSTEM_LOG_REQUEST_INDEX,
   ],
   23: NOTIFICATION_SCHEMA_STATEMENTS,
-  24: [SYSTEM_LOG_IP_INDEX, ...SECURITY_RISK_RULE_HITS_SCHEMA_STATEMENTS],
+  24: [SYSTEM_LOG_IP_INDEX],
   25: [CLIENT_SECURITY_REPORTS_SCHEMA, CLIENT_SECURITY_REPORTS_INDEX],
   26: [
     `ALTER TABLE users_mb ADD COLUMN registration_ip TEXT NOT NULL DEFAULT ''`,
@@ -535,6 +517,12 @@ export const USER_SCHEMA_MIGRATIONS: Record<number, string[]> = {
   29: [
     `DROP INDEX IF EXISTS idx_subscription_group_assignments_capacity_mb`,
     `DROP TABLE IF EXISTS subscription_group_assignments_mb`,
+  ],
+  30: [
+    // 删除已停用的蜜罐路径命中表及其索引。
+    `DROP INDEX IF EXISTS idx_security_risk_rule_hits_mb_rule_time`,
+    `DROP INDEX IF EXISTS idx_security_risk_rule_hits_mb_ip_time`,
+    `DROP TABLE IF EXISTS security_risk_rule_hits_mb`,
   ],
 };
 export function resolveAdminBasePath(value: unknown): string | null {
