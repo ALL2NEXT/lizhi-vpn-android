@@ -629,20 +629,20 @@ export async function validateAndWarmSubscriptionSources(env: Env, groups: Subsc
       if (source.enabled === false) continue;
       // 后台直接维护的文本订阅原样保存，不要求内容匹配特定节点协议。
       if (source.url && !source.content) {
-        if (!group.updateEnabled) {
+        if (!source.updateEnabled) {
           if (!env.CONFIG) throw new Error("Missing KV binding CONFIG");
           const cached = await readSubscriptionCache(env, source);
           if (typeof cached.content !== "string") {
             // 尚无可用快照时尝试预热一次；失败不阻止关闭后续更新。
             try {
-              await readExternalSubscription(env, source, group.cacheMinutes, true);
+              await readExternalSubscription(env, source, source.cacheMinutes, true);
             } catch {
               // 无快照时客户端会收到明确的缓存缺失错误。
             }
           }
           continue;
         }
-        await readExternalSubscription(env, source, group.cacheMinutes, group.updateEnabled);
+        await readExternalSubscription(env, source, source.cacheMinutes, source.updateEnabled);
       }
     }
   }

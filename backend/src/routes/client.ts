@@ -93,8 +93,8 @@ async function handleClient(request: Request, env: Env) {
           return await isExternalSubscriptionRefreshDue(
             env,
             source,
-            group.cacheMinutes,
-            group.updateEnabled,
+            source.cacheMinutes,
+            source.updateEnabled,
           ) ? source.id : null;
         } catch {
           return null;
@@ -302,8 +302,8 @@ async function handleManagedSubscription(path: string, request: Request, env: En
       fetchedContent = await readExternalSubscription(
         env,
         source,
-        group.cacheMinutes,
-        group.updateEnabled,
+        source.cacheMinutes,
+        source.updateEnabled,
       );
     }
   } catch (error) {

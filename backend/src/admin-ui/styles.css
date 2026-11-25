@@ -159,6 +159,9 @@
     .subscription-cache-setting .subscription-update-toggle { display: inline-flex; width: max-content; min-height: 32px; align-items: center; gap: 8px; margin: 0; color: #3c4043; font-size: 13px; font-weight: 500; }
     .subscription-cache-setting input { min-height: 34px; padding: 7px 9px; }
     .subscription-cache-setting small { grid-column: 1 / -1; color: #5f6368; }
+    .subscription-source-update-settings { min-width: 0; margin: 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); background: var(--surface); }
+    .subscription-source-update-settings legend { padding: 0 4px; color: var(--ink-muted); font-size: 13px; }
+    .subscription-source-update-settings[hidden] { display: none !important; }
     /* 分组权限集中在同一个弹窗里编辑，卡片上只保留权限摘要。 */
     .subscription-permissions-dialog { box-sizing: border-box; width: min(620px, calc(100% - 32px)); max-height: calc(100vh - 48px); margin: auto; padding: 24px; overflow-y: auto; color: #202124; background: #ffffff; border: 1px solid #dadce0; border-radius: 14px; }
     .subscription-permissions-dialog::backdrop { background: rgb(0 0 0 / 65%); }

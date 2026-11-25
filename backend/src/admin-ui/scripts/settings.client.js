@@ -308,11 +308,6 @@ function addSubscriptionGroup(group) {
     '</fieldset>' +
       '</div>' +
     '</fieldset>' +
-    '<fieldset class="subscription-cache-setting"><legend>更新设置</legend>' +
-      '<label class="subscription-switch subscription-update-toggle"><span class="subscription-switch-control"><input data-field="updateEnabled" type="checkbox" aria-label="启用远程订阅更新" ' + (group.updateEnabled === false ? '' : 'checked') + '><span class="subscription-switch-track"><span></span></span></span><span>启用更新</span></label>' +
-      '<label><span>接口缓存时间（分钟）</span><input data-field="groupCacheMinutes" type="number" min="0" max="10080" step="1"></label>' +
-      '<small>该时间应用于本分组的所有外部接口订阅；启用更新时设为 0 表示每次请求上游。关闭更新后使用最近成功获取的内容；若无快照，保存时会尝试获取一次。</small>' +
-    '</fieldset>' +
     '</div>' +
     '<div class="source-settings-dialog-actions subscription-permissions-dialog-actions">' +
       '<button class="danger" type="button" data-action="group-delete">删除分组</button>' +
@@ -324,7 +319,6 @@ function addSubscriptionGroup(group) {
     '<div class="subscription-group-empty" data-group-subscription-empty hidden>此分组暂无订阅</div>' +
   '</div>';
   row.querySelector('[data-field="groupName"]').value = String(group.name || '');
-  row.querySelector('[data-field="groupCacheMinutes"]').value = String(group.cacheMinutes == null ? 30 : group.cacheMinutes);
   row.querySelector('[data-field="minAppVersion"]').value = String(group.minAppVersion || '');
   row.querySelector('[data-field="maxAppVersion"]').value = String(group.maxAppVersion || '');
   el('subscriptionRows').appendChild(row);
@@ -417,9 +411,11 @@ function compareAppVersions(left, right) {
 function validateSubscriptionGroupVersions(groups) {
   for (let index = 0; index < groups.length; index += 1) {
     const group = groups[index];
-    if (!Number.isInteger(group.cacheMinutes) || group.cacheMinutes < 0 || group.cacheMinutes > 10080) {
-      return '分组「' + group.name + '」的接口缓存时间需为 0 至 10080 的整数分钟';
-    }
+    const invalidCacheSource = group.subscriptions.find(function(source) {
+      return source.sourceType === 'url' &&
+        (!Number.isInteger(source.cacheMinutes) || source.cacheMinutes < 0 || source.cacheMinutes > 10080);
+    });
+    if (invalidCacheSource) return '订阅「' + invalidCacheSource.name + '」的接口缓存时间需为 0 至 10080 的整数分钟';
     if (!group.allowedStatuses.length) {
       return '分组「' + group.name + '」启用账号状态筛选时至少选择一个状态';
     }
@@ -497,6 +493,8 @@ function addSource(groupRow, source) {
       '<select data-field="sourceType"><option value="url" ' + (sourceType === 'url' ? 'selected' : '') + '>远程订阅</option><option value="content" ' + (sourceType === 'content' ? 'selected' : '') + '>本地文本</option></select>' +
       '<div class="source-mode" data-source-mode="url"><input data-field="url" type="url" value="' + esc(source.url) + '" placeholder="https://example.com/sub"><label class="check"><input data-field="autoRename" type="checkbox" ' + (source.autoRename === true ? 'checked' : '') + '>自动重命名节点</label></div>' +
       '<input data-field="deduplicate" type="checkbox" ' + (source.deduplicate !== false ? 'checked' : '') + '>' +
+      '<input data-field="updateEnabled" type="checkbox" ' + (source.updateEnabled === true ? 'checked' : '') + '>' +
+      '<input data-field="cacheMinutes" type="number" value="' + esc(source.cacheMinutes == null ? 30 : source.cacheMinutes) + '">' +
       '<div class="source-mode" data-source-mode="content"><textarea data-field="content" placeholder="vless://...&#10;hy2://...&#10;ss://...">' + esc(source.content) + '</textarea></div>' +
     '</div>';
   row.querySelector('[data-field="sourceType"]').onchange = function() {
@@ -683,7 +681,7 @@ function selectSubscriptionSource(row) {
     return;
   }
   row.classList.add('selected');
-  ['name', 'url', 'remark', 'sourceType', 'content', 'autoRename', 'deduplicate'].forEach(function(field) {
+  ['name', 'url', 'remark', 'sourceType', 'content', 'autoRename', 'deduplicate', 'updateEnabled', 'cacheMinutes'].forEach(function(field) {
     const sourceControl = row.querySelector('[data-field="' + field + '"]');
     const editorControl = editor.querySelector('[data-editor-field="' + field + '"]');
     if (!sourceControl || !editorControl) return;
@@ -774,8 +772,13 @@ function updateSubscriptionEditorType(type) {
   const autoRenameField = editor.querySelector('[data-editor-auto-rename]');
   const autoRenameControl = editor.querySelector('[data-editor-field="autoRename"]');
   const isRemoteSource = type === 'url';
+  const updateSettings = editor.querySelector('[data-editor-update-settings]');
   if (autoRenameField) autoRenameField.hidden = !isRemoteSource;
   if (autoRenameControl) autoRenameControl.disabled = !isRemoteSource;
+  if (updateSettings) updateSettings.hidden = !isRemoteSource;
+  editor.querySelectorAll('[data-editor-update-settings] [data-editor-field]').forEach(function(control) {
+    control.disabled = !isRemoteSource;
+  });
   const fieldName = type === 'content' ? 'content' : 'url';
   const sourceField = selectedSubscriptionRow && selectedSubscriptionRow.querySelector('[data-field="' + fieldName + '"]');
   infoField.dataset.editorField = fieldName;
@@ -1097,7 +1100,10 @@ function readSubscriptionSource(row, index) {
       contentKey: row.dataset.contentKey || undefined,
       name: row.querySelector('[data-field="name"]').value.trim() || '订阅' + (index + 1),
       url: sourceType === 'url' ? url : '',
+      sourceType: sourceType,
       enabled: row.querySelector('[data-field="enabled"]').checked,
+      updateEnabled: sourceType === 'url' && row.querySelector('[data-field="updateEnabled"]').checked,
+      cacheMinutes: sourceType === 'url' ? Number(row.querySelector('[data-field="cacheMinutes"]').value || 30) : 30,
       autoRename: sourceType === 'url' && row.querySelector('[data-field="autoRename"]').checked,
       deduplicate: row.querySelector('[data-field="deduplicate"]').checked,
       content: sourceType === 'content' ? content : '',
@@ -1121,8 +1127,6 @@ function readSubscriptionGroups() {
       allowedStatuses: readEnabledSubscriptionFilter(group, 'allowedStatusesFilterEnabled', 'allowedStatuses', ['normal', 'banned']),
       allowedIdentityTypes: readEnabledSubscriptionFilter(group, 'allowedIdentityTypesFilterEnabled', 'allowedIdentityTypes', ['human', 'bot']),
       allowedMembershipTypes: readEnabledSubscriptionFilter(group, 'allowedMembershipTypesFilterEnabled', 'allowedMembershipTypes', ['member', 'non_member']),
-      updateEnabled: group.querySelector('[data-field="updateEnabled"]').checked,
-      cacheMinutes: Number(group.querySelector('[data-field="groupCacheMinutes"]').value || 0),
       versionFilterEnabled: group.querySelector('[data-field="versionFilterEnabled"]').checked,
       minAppVersion: group.querySelector('[data-field="versionFilterEnabled"]').checked
         ? group.querySelector('[data-field="minAppVersion"]').value.trim() : '',

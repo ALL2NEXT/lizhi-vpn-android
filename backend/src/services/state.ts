@@ -81,7 +81,11 @@ function normalizeSelection<T extends string>(value: unknown, allowed: readonly 
     typeof item === "string" && allowed.includes(item as T))));
 }
 
-function normalizeSubscriptionSource(item: JsonObject, id: number): SubscriptionSource | null {
+function normalizeSubscriptionSource(
+  item: JsonObject,
+  id: number,
+  legacyDefaults: { updateEnabled?: boolean; cacheMinutes?: unknown } = {},
+): SubscriptionSource | null {
   const content = normalizeManagedContent(
     item.content ?? item.managedContent ?? item.nodesText,
   );
@@ -98,6 +102,8 @@ function normalizeSubscriptionSource(item: JsonObject, id: number): Subscription
     sourceType,
     ...(typeof item.contentKey === "string" && item.contentKey ? { contentKey: item.contentKey } : {}),
     enabled: parseFlag(item.enabled, true),
+    updateEnabled: sourceType === "url" && parseFlag(item.updateEnabled, legacyDefaults.updateEnabled ?? false),
+    cacheMinutes: normalizeSubscriptionCacheMinutes(item.cacheMinutes ?? legacyDefaults.cacheMinutes),
     // 自动重命名只对外部订阅生效。
     autoRename: sourceType === "url" && parseFlag(item.autoRename ?? item.autoRenameNodes, false),
     deduplicate: parseFlag(item.deduplicate, true),
@@ -122,14 +128,13 @@ function normalizeSubscriptionGroup(
 ): SubscriptionGroup {
   const rawSources = input.subscriptions ?? input.sources;
   const sourceInputs = (Array.isArray(rawSources) ? rawSources : []).filter(plainObject);
+  const legacyDefaults = {
+    updateEnabled: parseFlag(input.updateEnabled, false),
+    cacheMinutes: input.cacheMinutes,
+  };
   const sources = sourceInputs
-    .map((item) => normalizeSubscriptionSource(item, nextSourceId(item.id)))
+    .map((item) => normalizeSubscriptionSource(item, nextSourceId(item.id), legacyDefaults))
     .filter((item): item is SubscriptionSource => item !== null);
-  // 旧配置把缓存时间存在订阅行；迁移时采用组内第一条外部订阅的旧值。
-  const legacyCacheMinutes = sourceInputs.find((item) =>
-    typeof item.url === "string" && item.url.trim() && !item.content &&
-    item.cacheMinutes !== undefined && item.cacheMinutes !== null && item.cacheMinutes !== "")?.cacheMinutes;
-  const cacheMinutes = normalizeSubscriptionCacheMinutes(input.cacheMinutes ?? legacyCacheMinutes);
   const minAppVersion = normalizeMinimumAppVersion(input.minAppVersion ?? input.minimumAppVersion);
   const maxAppVersion = normalizeMinimumAppVersion(input.maxAppVersion ?? input.maximumAppVersion);
   if (minAppVersion && maxAppVersion && !isAppVersionAtLeast(maxAppVersion, minAppVersion)) {
@@ -148,8 +153,6 @@ function normalizeSubscriptionGroup(
       SUBSCRIPTION_MEMBERSHIP_TYPES,
       ["member", "non_member"],
     ),
-    updateEnabled: parseFlag(input.updateEnabled, true),
-    cacheMinutes,
     minAppVersion,
     maxAppVersion,
     subscriptions: sources,
@@ -292,8 +295,6 @@ export function normalizeState(input: unknown): AppState {
           allowedStatuses: minimumType === "banned" ? ["normal", "banned"] : ["normal"],
           allowedIdentityTypes: ["human", "bot"],
           allowedMembershipTypes: ["member", "non_member"],
-          updateEnabled: true,
-          cacheMinutes: normalizeSubscriptionCacheMinutes(source.url ? item.cacheMinutes : undefined),
           minAppVersion: normalizeMinimumAppVersion(item.minAppVersion ?? item.minimumAppVersion),
           maxAppVersion: "",
           subscriptions: [source],

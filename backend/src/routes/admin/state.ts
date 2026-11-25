@@ -38,28 +38,23 @@ export function createAdminStateRoutes(deps: Pick<
       const state = await readState(env);
       const requestedIds = new URL(request.url).searchParams.getAll("id");
       const requestedIdSet = new Set(requestedIds);
-      const sources = state.subscriptionGroups.flatMap((group) => group.subscriptions.map((source) => ({
-        source,
-        cacheMinutes: group.cacheMinutes,
-        updateEnabled: group.updateEnabled,
-      }))).filter(({ source }) =>
-        requestedIds.length === 0 || requestedIdSet.has(source.id)
-      );
+      const sources = state.subscriptionGroups.flatMap((group) => group.subscriptions)
+        .filter((source) => requestedIds.length === 0 || requestedIdSet.has(source.id));
       const items = sources.map((source) => ({
-        id: source.source.id,
+        id: source.id,
         traffic: null as Awaited<ReturnType<typeof readExternalSubscriptionTraffic>>,
         unavailable: false,
       }));
       const activeSources = sources
         .map((source, index) => ({ source, item: items[index] }))
-        .filter(({ source }) => source.source.url && source.source.enabled !== false);
+        .filter(({ source }) => source.url && source.enabled !== false);
 
       for (let index = 0; index < activeSources.length; index += 4) {
         await Promise.all(activeSources.slice(index, index + 4).map(async ({ source, item }) => {
           try {
             item.traffic = await readExternalSubscriptionTraffic(
               env,
-              source.source,
+              source,
               source.cacheMinutes,
               source.updateEnabled,
             );
@@ -141,7 +136,8 @@ export function createAdminStateRoutes(deps: Pick<
           group.subscriptions.map((source) => [source.id, {
             url: source.url,
             enabled: source.enabled,
-            updateEnabled: group.updateEnabled,
+            updateEnabled: source.updateEnabled,
+            cacheMinutes: source.cacheMinutes,
           }] as const)));
         const sourcesToWarm = next.subscriptionGroups.map((group) => ({
           ...group,
@@ -149,7 +145,8 @@ export function createAdminStateRoutes(deps: Pick<
             if (!source.url || source.enabled === false) return false;
             const previous = currentSources.get(source.id);
             return !previous || previous.url !== source.url || !previous.enabled ||
-              previous.updateEnabled !== group.updateEnabled;
+              previous.updateEnabled !== source.updateEnabled ||
+              previous.cacheMinutes !== source.cacheMinutes;
           }),
         })).filter((group) => group.subscriptions.length > 0);
         if (sourcesToWarm.length) {

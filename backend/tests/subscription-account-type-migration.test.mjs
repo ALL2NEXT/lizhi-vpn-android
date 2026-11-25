@@ -49,6 +49,11 @@ test("旧分组权限在移除账户类型字段前后保持一致", async (t) =
         (id, group_id, source_order, name, source_type, content, enabled, auto_rename)
         VALUES (?, ?, 0, ?, 'content', 'vless://id@example.com:443#test', 1, 0)`).bind(String(index + 1), id, id),
     ]);
+    if (index === 0) {
+      await db.prepare(`INSERT INTO subscription_sources
+        (id, group_id, source_order, name, source_type, url, enabled, auto_rename, deduplicate)
+        VALUES ('100', ?, 1, 'Remote', 'url', 'https://example.com/sub', 0, 0, 1)`).bind(id).run();
+    }
   }
 
   async function state(method = "GET", body) {
@@ -61,12 +66,6 @@ test("旧分组权限在移除账户类型字段前后保持一致", async (t) =
     assert.equal(response.status, 200, JSON.stringify(data));
     return method === "GET" ? data : data.state;
   }
-  const before = await state();
-  assert.deepEqual(before.subscriptionGroups.map((group) => group.enabled), [true, false, false, false]);
-  assert.ok(before.subscriptionGroups.every((group) => !Object.hasOwn(group, "allowedAccountTypes")));
-
-  // The new Worker must also save safely while the old schema is still deployed.
-  await state("PUT", before);
   for (const [id, allowed] of groups.slice(1)) {
     await db.prepare("UPDATE subscription_groups SET enabled = 1, allowed_account_types_json = ? WHERE id = ?")
       .bind(allowed, id).run();
@@ -74,8 +73,15 @@ test("旧分组权限在移除账户类型字段前后保持一致", async (t) =
   await apply(migrations.find((name) => name.startsWith("0009")));
   const columns = (await db.prepare("PRAGMA table_info(subscription_groups)").all()).results;
   assert.equal(columns.some((column) => column.name === "allowed_account_types_json"), false);
+
+  for (const name of migrations.filter((name) => name > "0009")) await apply(name);
   const after = await state();
   assert.deepEqual(after.subscriptionGroups.map((group) => group.enabled), [true, false, false, false]);
+  assert.ok(after.subscriptionGroups.every((group) => !Object.hasOwn(group, "allowedAccountTypes")));
+  const migratedRemote = after.subscriptionGroups[0].subscriptions.find((source) => source.id === "100");
+  assert.equal(migratedRemote.updateEnabled, true);
+  assert.equal(migratedRemote.cacheMinutes, 30);
+  assert.equal(after.subscriptionGroups[0].subscriptions[0].updateEnabled, false);
   await state("PUT", after);
   assert.deepEqual((await state()).subscriptionGroups.map((group) => group.enabled), [true, false, false, false]);
 });
