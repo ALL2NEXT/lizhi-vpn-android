@@ -424,14 +424,12 @@
                 <label class="subscription-editor-field">订阅信息 <span class="required-mark">*</span><span class="subscription-editor-copy-field"><textarea data-editor-source-info data-editor-field="url" rows="3" placeholder="https://example.com/sub"></textarea><button class="secondary" type="button" data-action="copy-subscription-info" aria-label="复制订阅信息"><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-copy"></use></svg></button></span></label>
                 <label class="subscription-editor-field">备注<textarea data-editor-field="remark" maxlength="200" rows="3" placeholder="仅后台保存"></textarea></label>
               </section>
-              <section class="subscription-editor-section">
-                <label class="check subscription-editor-check" data-editor-auto-rename title="仅对远程订阅生效"><input data-editor-field="autoRename" type="checkbox">自动重命名节点</label>
-                <label class="check subscription-editor-check"><input data-editor-field="deduplicate" type="checkbox">节点去重</label>
-              </section>
               <fieldset class="subscription-cache-setting subscription-source-update-settings" data-editor-update-settings hidden>
                 <legend>更新设置</legend>
                 <label class="subscription-switch subscription-update-toggle"><span>启用更新</span><span class="subscription-switch-control"><input data-editor-field="updateEnabled" type="checkbox" aria-label="启用远程订阅自动更新"><span class="subscription-switch-track"><span></span></span></span></label>
                 <label><span>接口缓存时间（分钟）</span><input data-editor-field="cacheMinutes" type="number" min="0" max="10080" step="1" value="30"></label>
+                <label class="check subscription-editor-check subscription-update-option"><input data-editor-field="autoRename" type="checkbox">自动重命名节点</label>
+                <label class="check subscription-editor-check subscription-update-option"><input data-editor-field="deduplicate" type="checkbox">节点去重</label>
                 <small>关闭自动更新后使用最近成功获取的内容；没有缓存时，保存订阅会尝试获取一次。启用更新后，达到缓存时间才请求上游；设为 0 时每次请求上游。</small>
               </fieldset>
             </div>

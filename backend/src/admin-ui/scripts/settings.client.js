@@ -491,8 +491,8 @@ function addSource(groupRow, source) {
       '<input data-field="name" type="text" value="' + esc(source.name) + '">' +
       '<input data-field="remark" type="text" value="' + esc(source.remark) + '">' +
       '<select data-field="sourceType"><option value="url" ' + (sourceType === 'url' ? 'selected' : '') + '>远程订阅</option><option value="content" ' + (sourceType === 'content' ? 'selected' : '') + '>本地文本</option></select>' +
-      '<div class="source-mode" data-source-mode="url"><input data-field="url" type="url" value="' + esc(source.url) + '" placeholder="https://example.com/sub"><label class="check"><input data-field="autoRename" type="checkbox" ' + (source.autoRename === true ? 'checked' : '') + '>自动重命名节点</label></div>' +
-      '<input data-field="deduplicate" type="checkbox" ' + (source.deduplicate !== false ? 'checked' : '') + '>' +
+      '<div class="source-mode" data-source-mode="url"><input data-field="url" type="url" value="' + esc(source.url) + '" placeholder="https://example.com/sub"><label class="check"><input data-field="autoRename" type="checkbox" ' + (sourceType === 'url' && source.autoRename === true ? 'checked' : '') + '>自动重命名节点</label></div>' +
+      '<input data-field="deduplicate" type="checkbox" ' + (sourceType === 'url' && source.deduplicate !== false ? 'checked' : '') + '>' +
       '<input data-field="updateEnabled" type="checkbox" ' + (source.updateEnabled === true ? 'checked' : '') + '>' +
       '<input data-field="cacheMinutes" type="number" value="' + esc(source.cacheMinutes == null ? 30 : source.cacheMinutes) + '">' +
       '<div class="source-mode" data-source-mode="content"><textarea data-field="content" placeholder="vless://...&#10;hy2://...&#10;ss://...">' + esc(source.content) + '</textarea></div>' +
@@ -769,12 +769,8 @@ function moveSelectedSubscriptions(targetGroupId) {
 function updateSubscriptionEditorType(type) {
   const editor = el('subscriptionEditor');
   const infoField = editor.querySelector('[data-editor-source-info]');
-  const autoRenameField = editor.querySelector('[data-editor-auto-rename]');
-  const autoRenameControl = editor.querySelector('[data-editor-field="autoRename"]');
   const isRemoteSource = type === 'url';
   const updateSettings = editor.querySelector('[data-editor-update-settings]');
-  if (autoRenameField) autoRenameField.hidden = !isRemoteSource;
-  if (autoRenameControl) autoRenameControl.disabled = !isRemoteSource;
   if (updateSettings) updateSettings.hidden = !isRemoteSource;
   editor.querySelectorAll('[data-editor-update-settings] [data-editor-field]').forEach(function(control) {
     control.disabled = !isRemoteSource;
@@ -1105,7 +1101,7 @@ function readSubscriptionSource(row, index) {
       updateEnabled: sourceType === 'url' && row.querySelector('[data-field="updateEnabled"]').checked,
       cacheMinutes: sourceType === 'url' ? Number(row.querySelector('[data-field="cacheMinutes"]').value || 30) : 30,
       autoRename: sourceType === 'url' && row.querySelector('[data-field="autoRename"]').checked,
-      deduplicate: row.querySelector('[data-field="deduplicate"]').checked,
+      deduplicate: sourceType === 'url' && row.querySelector('[data-field="deduplicate"]').checked,
       content: sourceType === 'content' ? content : '',
       remark: row.querySelector('[data-field="remark"]').value.trim()
     };

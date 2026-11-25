@@ -106,7 +106,7 @@ function normalizeSubscriptionSource(
     cacheMinutes: normalizeSubscriptionCacheMinutes(item.cacheMinutes ?? legacyDefaults.cacheMinutes),
     // 自动重命名只对外部订阅生效。
     autoRename: sourceType === "url" && parseFlag(item.autoRename ?? item.autoRenameNodes, false),
-    deduplicate: parseFlag(item.deduplicate, true),
+    deduplicate: sourceType === "url" && parseFlag(item.deduplicate, true),
     content,
     remark: cleanText(item.remark || item.note).slice(0, 500),
   };

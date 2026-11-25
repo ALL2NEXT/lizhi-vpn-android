@@ -157,7 +157,9 @@
     .subscription-cache-setting { grid-column: 1 / -1; display: grid; gap: 8px; }
     .subscription-cache-setting label { display: grid; grid-template-columns: max-content minmax(120px, 200px); align-items: center; gap: 8px; color: #5f6368; font-size: 13px; }
     .subscription-cache-setting .subscription-update-toggle { display: inline-flex; width: max-content; min-height: 32px; align-items: center; gap: 8px; margin: 0; color: #3c4043; font-size: 13px; font-weight: 500; }
+    .subscription-cache-setting .subscription-update-option { display: flex; grid-column: 1 / -1; width: max-content; align-items: center; gap: 8px; color: var(--ink); font-size: 13px; font-weight: 500; }
     .subscription-cache-setting input { min-height: 34px; padding: 7px 9px; }
+    .subscription-cache-setting .subscription-update-option input { min-height: 0; padding: 0; }
     .subscription-cache-setting small { grid-column: 1 / -1; color: #5f6368; }
     .subscription-source-update-settings { min-width: 0; margin: 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); background: var(--surface); }
     .subscription-source-update-settings legend { padding: 0 4px; color: var(--ink-muted); font-size: 13px; }

@@ -313,7 +313,7 @@ async function handleManagedSubscription(path: string, request: Request, env: En
     return json({ error: "subscription_fetch_failed" }, 502);
   }
   // 纯文本节点由后台直接维护，自动重命名只对外部接口生效。
-  const uniqueContent = source.deduplicate
+  const uniqueContent = !isLocalSubscription(source) && source.deduplicate
     ? deduplicateSubscriptionContent(fetchedContent)
     : fetchedContent;
   const plaintextContent = source.autoRename && !isLocalSubscription(source)

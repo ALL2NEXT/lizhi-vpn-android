@@ -172,8 +172,8 @@ export async function loadSubscriptionGroups(env: Env, includeContent = false): 
       enabled: row.enabled === 1,
       updateEnabled: row.update_enabled === 1,
       cacheMinutes: row.cache_minutes,
-      autoRename: row.auto_rename === 1,
-      deduplicate: row.deduplicate === 1,
+      autoRename: row.source_type === "url" && row.auto_rename === 1,
+      deduplicate: row.source_type === "url" && row.deduplicate === 1,
       content: row.content || "",
       remark: row.remark || "",
     });
