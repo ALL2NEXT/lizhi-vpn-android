@@ -12,7 +12,7 @@
 
 Clash `fingerprint` 是证书指纹，`client-fingerprint` 才是浏览器指纹。两者分别保存在 URI 中。当前固定的 sing-box 1.14.4 支持证书 PEM 和公钥 SHA-256，整张证书 SHA-256 固定明确提示使用 Xray；不会把它错误映射为公钥指纹。
 
-内核按协议设置，可选择官方 sing-box 或 Xray。Cloudflare WARP MASQUE 默认使用 Xray；XHTTP 和 VLESS `encryption` 等 Xray 支持的扩展参数也由 Xray 处理。AmneziaWG 参数、非 Cloudflare MASQUE profile 和当前没有核心支持的 TLS 扩展会在连接前被拒绝。升级前保存的已移除核心选择会忽略，并按协议使用新的默认核心。
+内核按协议设置，可选择官方 sing-box 或 Xray。VLESS、VMess 和 Cloudflare WARP MASQUE 默认使用 Xray，其他协议默认使用 sing-box；XHTTP 和 VLESS `encryption` 等 Xray 支持的扩展参数也由 Xray 处理。AmneziaWG 参数、非 Cloudflare MASQUE profile 和当前没有核心支持的 TLS 扩展会在连接前被拒绝。升级前保存的已移除核心选择会忽略，并按协议使用新的默认核心。
 
 更新 APK 后，需要刷新或重新导入带 ECH 的 YAML 订阅，以补回旧版本导入时丢失的字段。
 

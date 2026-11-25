@@ -19,7 +19,7 @@ HEV tun2socks
 
 sing-box 和 Xray 都编译为 Android PIE 可执行文件，在独立进程中运行。HEV 独占 Android TUN；核心只提供本地 SOCKS5 入站。核心进程崩溃时，应用服务会检测退出并回收会话。
 
-普通协议默认使用官方 sing-box。Cloudflare WARP MASQUE 默认使用 Xray；XHTTP 和 VLESS `encryption` 等 Xray 支持的扩展参数也会选择 Xray。AmneziaWG 参数、非 Cloudflare MASQUE profile，以及当前两个核心均不支持的 TLS 扩展会在连接前被拒绝。
+VLESS、VMess 和 Cloudflare WARP MASQUE 默认使用 Xray，其他协议默认使用官方 sing-box。XHTTP 和 VLESS `encryption` 等 Xray 支持的扩展参数也会选择 Xray。AmneziaWG 参数、非 Cloudflare MASQUE profile，以及当前两个核心均不支持的 TLS 扩展会在连接前被拒绝。
 
 Xray-core `v26.10.10` 支持 Cloudflare WARP MASQUE。应用将 `masque://` URI 转成 Xray outbound 配置，并从 URI 读取密钥、客户端地址、服务器、公钥、SNI 和传输选项。
 

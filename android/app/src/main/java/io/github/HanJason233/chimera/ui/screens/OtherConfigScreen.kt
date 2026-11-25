@@ -133,7 +133,7 @@ fun ProtocolCoreSettingsScreen(
         ) {
             SettingsListSectionHeader("按协议选择核心")
             Text(
-                text = "可为支持的协议选择 sing-box 或 Xray。XHTTP 和 Cloudflare WARP MASQUE 使用 Xray；不支持的扩展参数会在连接前提示。",
+                text = "可为支持的协议选择 sing-box 或 Xray。VLESS、VMess 和 Cloudflare WARP MASQUE 默认使用 Xray；XHTTP、VLESS encryption 等扩展会使用 Xray，不支持的扩展参数会在连接前提示。",
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 13.sp

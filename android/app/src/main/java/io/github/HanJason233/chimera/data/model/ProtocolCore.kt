@@ -14,7 +14,7 @@ data class ProtocolCoreSettings(
 ) {
     fun coreFor(type: NodeType): ProxyCore =
         assignments[type] ?: when (type) {
-            NodeType.MASQUE -> ProxyCore.XRAY
+            NodeType.VLESS, NodeType.VMESS, NodeType.MASQUE -> ProxyCore.XRAY
             else -> ProxyCore.SING_BOX
         }
 

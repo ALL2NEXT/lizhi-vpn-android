@@ -7,11 +7,14 @@ import org.junit.Test
 
 class ProtocolCoreSettingsTest {
     @Test
-    fun defaultsMasqueToXrayAndOtherProtocolsToSingBox() {
+    fun defaultsVlessVmessAndMasqueToXray() {
         val settings = ProtocolCoreSettings()
 
         ProtocolCoreSettings.DISPLAY_PROTOCOLS.forEach { nodeType ->
-            val expected = if (nodeType == NodeType.MASQUE) ProxyCore.XRAY else ProxyCore.SING_BOX
+            val expected = when (nodeType) {
+                NodeType.VLESS, NodeType.VMESS, NodeType.MASQUE -> ProxyCore.XRAY
+                else -> ProxyCore.SING_BOX
+            }
             assertEquals(expected, settings.coreFor(nodeType))
         }
     }
@@ -40,17 +43,19 @@ class ProtocolCoreSettingsTest {
     }
 
     @Test
-    fun selectsXrayOnlyForExplicitAssignments() {
+    fun explicitAssignmentsOverrideProtocolDefaults() {
         val settings = ProtocolCoreSettings(
             assignments = mapOf(
-                NodeType.VLESS to ProxyCore.XRAY,
+                NodeType.VLESS to ProxyCore.SING_BOX,
+                NodeType.VMESS to ProxyCore.SING_BOX,
                 NodeType.HYSTERIA2 to ProxyCore.XRAY
             )
         )
 
-        assertTrue(settings.usesXray(NodeType.VLESS))
+        assertFalse(settings.usesXray(NodeType.VLESS))
         assertFalse(settings.usesXray(NodeType.VMESS))
         assertTrue(settings.usesXray(NodeType.HYSTERIA2))
+        assertTrue(settings.usesXray(NodeType.MASQUE))
         assertFalse(settings.usesXray(NodeType.ANYTLS))
     }
 }
