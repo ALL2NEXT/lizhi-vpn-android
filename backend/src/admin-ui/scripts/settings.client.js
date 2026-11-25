@@ -5,7 +5,6 @@ let selectedSubscriptionRow = null;
 const selectedSubscriptionRows = new Set();
 let subscriptionCurrentPage = 1;
 let subscriptionPageSize = 20;
-let subscriptionView = 'list';
 function subscriptionIcon(name, extraClass) {
   return '<svg class="subscription-icon' + (extraClass ? ' ' + extraClass : '') + '" aria-hidden="true" focusable="false"><use href="#subscription-icon-' + name + '"></use></svg>';
 }
@@ -257,15 +256,8 @@ function addSubscriptionGroup(group) {
     ? group.allowedMembershipTypes
     : ['member', 'non_member'];
   // 保留原有字段作为保存数据源，右侧编辑器只同步到这些字段，不改变接口结构。
-  row.innerHTML = '<div class="subscription-group-heading">' +
-    '<div class="subscription-group-title">' +
-      '<span class="subscription-folder-icon" aria-hidden="true">' + subscriptionIcon('folder') + '</span>' +
-      '<h2 class="subscription-group-name" data-group-name-display></h2>' +
-      '<small data-group-count>0 条订阅</small>' +
-    '</div>' +
-    '<input class="subscription-group-enabled-data" data-field="groupEnabled" type="checkbox" ' + (group.enabled === false ? '' : 'checked') + ' hidden>' +
-    '<input class="subscription-group-order-data" data-field="groupOrder" type="number" min="1" step="1" value="' + groupOrder + '" aria-label="分组排序序号">' +
-  '</div>' +
+  row.innerHTML = '<input class="subscription-group-enabled-data" data-field="groupEnabled" type="checkbox" ' + (group.enabled === false ? '' : 'checked') + ' hidden>' +
+  '<input class="subscription-group-order-data" data-field="groupOrder" type="number" min="1" step="1" value="' + groupOrder + '" aria-label="分组排序序号">' +
   '<dialog class="subscription-permissions-dialog" data-group-permissions-dialog aria-label="分组设置">' +
     '<div class="source-settings-dialog-header"><div><h3>分组设置</h3></div>' +
       '<button class="secondary" type="button" data-action="permissions-close">关闭</button>' +
@@ -315,7 +307,7 @@ function addSubscriptionGroup(group) {
   '</dialog>' +
   '<div class="source-list-header" aria-hidden="true"><span></span><span></span><span>#</span><span>订阅名称</span><span class="source-list-header-remark">备注</span><span class="source-list-header-type">订阅类型</span><span class="source-list-header-traffic">流量使用</span><span class="source-list-header-expiry">到期时间</span><span class="source-list-header-enabled">启用</span><span>设置</span></div>' +
   '<div class="subscription-group-sources" data-group-sources>' +
-    '<div class="subscription-group-empty" data-group-subscription-empty hidden>没有符合条件的订阅</div>' +
+    '<div class="subscription-group-empty" data-group-subscription-empty hidden>此分组暂无订阅</div>' +
   '</div>';
   row.querySelector('[data-field="groupName"]').value = String(group.name || '');
   row.querySelector('[data-field="groupCacheMinutes"]').value = String(group.cacheMinutes == null ? 30 : group.cacheMinutes);
@@ -532,10 +524,7 @@ function updateSourceRowsMeta() {
     const rows = Array.from(container.children).filter(function(row) {
       return row.classList.contains('source-row');
     });
-    const count = group.querySelector('[data-group-count]');
-    const enabledCount = rows.filter(function(row) { return row.querySelector('[data-field="enabled"]').checked; }).length;
-    if (count) count.textContent = rows.length + ' 条订阅 · ' + enabledCount + ' 条启用';
-    rows.forEach(function(row, index) {
+    rows.forEach(function(row) {
       const nameInput = row.querySelector('[data-field="name"]');
       if (nameInput) nameInput.placeholder = '订阅' + sourceOrder(row);
       const displayName = row.querySelector('[data-source-display-name]');
@@ -556,7 +545,7 @@ function updateSourceRowsMeta() {
     });
   });
   updateSubscriptionGroupNavigation();
-  applySubscriptionFilters();
+  updateSubscriptionList();
 }
 
 function renderSubscriptionGroupNavigation() {
@@ -635,8 +624,6 @@ function updateSubscriptionGroupNavigation() {
     if (!group) return;
     const index = groups.indexOf(group);
     const groupName = group.querySelector('[data-field="groupName"]').value.trim() || '分组' + (index + 1);
-    const nameDisplay = group.querySelector('[data-group-name-display]');
-    if (nameDisplay) nameDisplay.textContent = groupName;
     button.querySelector('.subscription-nav-name').textContent = groupName;
     button.querySelector('.subscription-nav-count').textContent = String(group.querySelectorAll('[data-group-sources] > .source-row').length);
     const enabledInput = Array.from(nav.querySelectorAll('[data-group-enabled-for]')).find(function(input) {
@@ -672,7 +659,7 @@ function selectSubscriptionGroup(groupId, resetPage) {
     group.classList.toggle('active', group.dataset.groupId === activeSubscriptionGroupId);
   });
   updateSubscriptionGroupNavigation();
-  applySubscriptionFilters();
+  updateSubscriptionList();
   if (selectedSubscriptionRow && activeSubscriptionGroupId !== '__all__' &&
       (!selectedSubscriptionRow.closest('.subscription-group') ||
        selectedSubscriptionRow.closest('.subscription-group').dataset.groupId !== activeSubscriptionGroupId)) {
@@ -802,56 +789,36 @@ function updateSubscriptionEditorType(type) {
     : 'https://example.com/sub';
 }
 
-function applySubscriptionFilters() {
+function updateSubscriptionList() {
   const groups = getSubscriptionGroupRows();
   const rows = getSourceRows();
-  const localSearch = (document.querySelector('[data-source-search]') || {}).value || '';
-  const localQuery = localSearch.trim().toLocaleLowerCase();
-  const typeFilter = (document.querySelector('[data-source-type-filter]') || {}).value || 'all';
-  const sort = (document.querySelector('[data-source-sort]') || {}).value || 'custom';
-  const matches = rows.filter(function(row) {
+  const visibleRows = rows.filter(function(row) {
     const group = row.closest('.subscription-group');
-    if (activeSubscriptionGroupId !== '__all__' && group.dataset.groupId !== activeSubscriptionGroupId) return false;
-    const type = row.querySelector('[data-field="sourceType"]').value;
-    const text = [row.querySelector('[data-field="name"]').value, row.querySelector('[data-field="remark"]').value,
-      row.querySelector('[data-field="url"]').value].join(' ').toLocaleLowerCase();
-    return (!localQuery || text.includes(localQuery)) &&
-      (typeFilter === 'all' || type === typeFilter);
+    return activeSubscriptionGroupId === '__all__' || group.dataset.groupId === activeSubscriptionGroupId;
   });
-  matches.sort(function(left, right) {
-    const groupOrder = groups.indexOf(left.closest('.subscription-group')) -
-      groups.indexOf(right.closest('.subscription-group'));
-    if (groupOrder !== 0) return groupOrder;
-    if (sort === 'name' || sort === 'name-desc') {
-      const compared = left.querySelector('[data-field="name"]').value.localeCompare(right.querySelector('[data-field="name"]').value, 'zh-CN');
-      return sort === 'name-desc' ? -compared : compared;
-    }
-    return sourceOrder(left) - sourceOrder(right);
-  });
-  const pageCount = Math.max(1, Math.ceil(matches.length / subscriptionPageSize));
+  const pageCount = Math.max(1, Math.ceil(visibleRows.length / subscriptionPageSize));
   subscriptionCurrentPage = Math.min(Math.max(1, subscriptionCurrentPage), pageCount);
   const start = (subscriptionCurrentPage - 1) * subscriptionPageSize;
-  const pageRows = matches.slice(start, start + subscriptionPageSize);
+  const pageRows = visibleRows.slice(start, start + subscriptionPageSize);
   const pageSet = new Set(pageRows);
-  const matchSet = new Set(matches);
   rows.forEach(function(row) {
     row.hidden = !pageSet.has(row);
-    row.style.order = String(matches.indexOf(row));
+    row.style.removeProperty('order');
   });
   groups.forEach(function(group) {
     const active = activeSubscriptionGroupId === '__all__' || group.dataset.groupId === activeSubscriptionGroupId;
-    const hasMatches = Array.from(group.querySelectorAll('.source-row')).some(function(row) { return matchSet.has(row); });
-    group.hidden = !active || (activeSubscriptionGroupId === '__all__' && !hasMatches);
+    const hasRows = group.querySelectorAll('.source-row').length > 0;
+    group.hidden = !active || (activeSubscriptionGroupId === '__all__' && !hasRows);
     const groupEmpty = group.querySelector('[data-group-subscription-empty]');
-    const showGroupEmpty = active && activeSubscriptionGroupId !== '__all__' && !hasMatches;
+    const showGroupEmpty = active && activeSubscriptionGroupId !== '__all__' && !hasRows;
     if (groupEmpty) groupEmpty.hidden = !showGroupEmpty;
     const groupSources = group.querySelector('[data-group-sources]');
     if (groupSources) groupSources.classList.toggle('is-empty', showGroupEmpty);
   });
   const empty = document.querySelector('[data-subscription-empty]');
-  if (empty) empty.hidden = matches.length > 0 || activeSubscriptionGroupId !== '__all__';
-  const count = document.querySelector('[data-subscription-filtered-count]');
-  if (count) count.textContent = '共 ' + matches.length + ' 条';
+  if (empty) empty.hidden = visibleRows.length > 0 || activeSubscriptionGroupId !== '__all__';
+  const count = document.querySelector('[data-subscription-count]');
+  if (count) count.textContent = '共 ' + visibleRows.length + ' 条';
   const pageNumber = document.querySelector('[data-subscription-page-number]');
   if (pageNumber) pageNumber.textContent = String(subscriptionCurrentPage);
   const previous = document.querySelector('[data-subscription-page-prev]');
@@ -873,8 +840,6 @@ function applySubscriptionFilters() {
   document.querySelectorAll('[data-action="refresh-subscriptions"]').forEach(function(button) {
     button.disabled = subscriptionRefreshInFlight || selectedSubscriptionRows.size === 0;
   });
-  const workspace = document.querySelector('.subscription-group-workspace');
-  if (workspace) workspace.classList.toggle('grid-view', subscriptionView === 'grid');
 }
 
 function deleteSelectedSubscriptions() {
@@ -883,7 +848,7 @@ function deleteSelectedSubscriptions() {
   });
   const rows = Array.from(selectedSubscriptionRows);
   if (!rows.length) {
-    applySubscriptionFilters();
+    updateSubscriptionList();
     return;
   }
   if (!window.confirm('确定删除已选中的 ' + rows.length + ' 条订阅吗？此操作无法撤销。')) return;
@@ -926,7 +891,7 @@ async function refreshSubscriptions(button) {
   const sourceIds = Array.from(new Set(remoteSources.map(function(source) { return String(source.id); })));
   if (!sourceIds.length) {
     show('选中的订阅中没有可更新的已保存远程订阅', true);
-    applySubscriptionFilters();
+    updateSubscriptionList();
     return;
   }
   subscriptionRefreshInFlight = true;
@@ -968,7 +933,7 @@ async function refreshSubscriptions(button) {
     subscriptionRefreshInFlight = false;
     button.removeAttribute('aria-busy');
     if (label) label.textContent = '更新订阅';
-    applySubscriptionFilters();
+    updateSubscriptionList();
   }
 }
 
@@ -1033,17 +998,13 @@ function initializeSubscriptionManager() {
     try { await navigator.clipboard.writeText(input.value); show('订阅信息已复制'); }
     catch (_) { input.focus(); input.select(); show('无法自动复制，请手动复制订阅信息', true); }
   });
-  panel.querySelector('[data-source-search]').addEventListener('input', function() { subscriptionCurrentPage = 1; applySubscriptionFilters(); });
-  ['[data-source-type-filter]', '[data-source-sort]'].forEach(function(selector) {
-    panel.querySelector(selector).addEventListener('change', function() { subscriptionCurrentPage = 1; applySubscriptionFilters(); });
-  });
   panel.querySelector('[data-subscription-page-size]').addEventListener('change', function() {
     subscriptionPageSize = Number(this.value) || 20;
     subscriptionCurrentPage = 1;
-    applySubscriptionFilters();
+    updateSubscriptionList();
   });
-  panel.querySelector('[data-subscription-page-prev]').addEventListener('click', function() { subscriptionCurrentPage -= 1; applySubscriptionFilters(); });
-  panel.querySelector('[data-subscription-page-next]').addEventListener('click', function() { subscriptionCurrentPage += 1; applySubscriptionFilters(); });
+  panel.querySelector('[data-subscription-page-prev]').addEventListener('click', function() { subscriptionCurrentPage -= 1; updateSubscriptionList(); });
+  panel.querySelector('[data-subscription-page-next]').addEventListener('click', function() { subscriptionCurrentPage += 1; updateSubscriptionList(); });
   panel.querySelector('.subscription-select-page').addEventListener('change', function() {
     const pageSize = subscriptionPageSize;
     const rows = getSourceRows().filter(function(row) { return !row.hidden; }).slice(0, pageSize);
@@ -1052,25 +1013,14 @@ function initializeSubscriptionManager() {
       else selectedSubscriptionRows.delete(row);
       row.querySelector('[data-source-select]').checked = this.checked;
     }, this);
-    applySubscriptionFilters();
-  });
-  panel.querySelectorAll('[data-subscription-view]').forEach(function(button) {
-    button.addEventListener('click', function() {
-      subscriptionView = button.dataset.subscriptionView;
-      panel.querySelectorAll('[data-subscription-view]').forEach(function(viewButton) {
-        const active = viewButton === button;
-        viewButton.classList.toggle('active', active);
-        viewButton.setAttribute('aria-pressed', active ? 'true' : 'false');
-      });
-      applySubscriptionFilters();
-    });
+    updateSubscriptionList();
   });
   el('subscriptionRows').addEventListener('change', function(event) {
     const row = event.target.closest('.source-row');
     if (!row || !event.target.matches('[data-source-select]')) return;
     if (event.target.checked) selectedSubscriptionRows.add(row);
     else selectedSubscriptionRows.delete(row);
-    applySubscriptionFilters();
+    updateSubscriptionList();
   });
 }
 function updateSubscriptionSourceOrder(group) {

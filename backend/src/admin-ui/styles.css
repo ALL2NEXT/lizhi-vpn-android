@@ -131,11 +131,6 @@
     button.danger { background: #fce8e6; color: #b3261e; }
     .check { display: flex; align-items: center; margin: 8px 0; }
     .subscription-group { margin: 12px 0 16px; padding: 12px; background: #ffffff; border: 1px solid #dadce0; border-radius: 12px; }
-    .subscription-group-heading { display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding-bottom: 8px; border-bottom: 1px solid #dadce0; }
-    .subscription-group-title { display: grid; flex: 1 1 260px; grid-template-columns: auto minmax(180px, 1fr); align-items: end; gap: 12px; color: #202124; font-weight: 700; }
-    .subscription-group-leading-controls { display: flex; flex: 0 0 auto; align-items: center; gap: 6px; }
-    .subscription-order-field { display: grid; grid-template-columns: max-content 48px; align-items: center; gap: 5px; color: #5f6368; font-size: 13px; font-weight: 500; }
-    .subscription-order-field input { box-sizing: border-box; width: 48px; min-height: 32px; padding: 5px 3px; text-align: center; }
     .source-enabled-check { box-sizing: border-box; min-height: 32px; margin: 0; padding: 7px 10px; color: #3c4043; background: var(--surface-soft); border: 1px solid transparent; border-radius: 8px; font-weight: 500; white-space: nowrap; }
     .source-enabled-check:hover { color: var(--blue-ink); background: #dfe7f0; cursor: pointer; }
     .subscription-group-permissions { display: grid; grid-template-columns: repeat(2, minmax(150px, 1fr)); gap: 8px; margin: 10px 0 6px; }
@@ -1232,45 +1227,6 @@
       border-radius: 12px;
       box-shadow: 0 2px 8px rgb(32 33 36 / 7%);
     }
-    .subscription-group-heading {
-      display: grid;
-      grid-template-columns: 127px minmax(250px, 1fr) auto;
-      grid-template-rows: auto;
-      align-items: center;
-      gap: 8px 14px;
-      padding-bottom: 14px;
-    }
-    .subscription-group-leading-controls {
-      display: grid;
-      grid-template-columns: minmax(72px, 1fr) 46px;
-      grid-column: 1;
-      grid-row: 1;
-      align-content: center;
-      gap: 4px;
-    }
-    .subscription-group-leading-controls .subscription-order-field { grid-column: 1; grid-row: 1; grid-template-columns: max-content minmax(0, 1fr); gap: 3px; }
-    .subscription-group-leading-controls .subscription-order-field input { width: 100%; min-width: 0; }
-    .subscription-group-leading-controls .subscription-switch { grid-column: 2; grid-row: 1; }
-    .subscription-group-title {
-      grid-column: 2;
-      grid-row: 1;
-      min-width: 0;
-      grid-template-columns: auto minmax(0, 1fr);
-      grid-template-rows: auto;
-      align-items: end;
-      gap: 6px 10px;
-    }
-    .subscription-group-title > span { align-self: end; padding-left: 4px; }
-    .subscription-group-title .subscription-group-name {
-      grid-column: 2;
-      grid-row: 1;
-      min-width: 0;
-      margin: 0;
-      overflow: hidden;
-      font-size: 13px;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
     .subscription-switch {
       display: inline-flex;
       align-items: center;
@@ -1460,24 +1416,10 @@
     .subscription-nav-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .subscription-nav-count { color: #718096; font-size: 13px; font-variant-numeric: tabular-nums; }
     .subscription-group-workspace { display: flex; flex-direction: column; padding: 12px; overflow: hidden; }
-    .subscription-list-toolbar { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid #e7edf4; }
-    .subscription-list-search { flex: 1 1 200px; min-width: 130px; height: 40px; }
-    .subscription-list-toolbar > select { width: auto; min-width: 112px; min-height: 40px; padding: 7px 28px 7px 11px; color: #38465a; background-color: #fff; border-color: #dbe3ed; font-size: 13px; }
-    .subscription-list-toolbar > select[data-source-sort] { min-width: 150px; }
-    .subscription-view-toggle { display: inline-flex; flex: 0 0 auto; gap: 2px; padding: 3px; background: #f0f4fa; border-radius: 8px; }
-    .subscription-view-toggle button { display: grid; place-items: center; width: 38px; min-width: 38px; min-height: 34px; margin: 0; padding: 0; color: #69778c; background: transparent; }
-    .subscription-view-toggle button .subscription-icon { width: 19px; height: 19px; }
-    .subscription-view-toggle button.active { color: #1558c0; background: #e3edff; box-shadow: none; }
     .subscription-groups-host { flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-width: thin; }
     .subscription-group { display: flex; flex-direction: column; min-height: auto; margin: 0; padding: 0; overflow: visible; background: #fff; border: 0; border-radius: 0; box-shadow: none; }
     .subscription-group.active { min-height: 100%; }
     .subscription-group[hidden], .source-row[hidden] { display: none !important; }
-    .subscription-group-heading { display: flex; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: 10px; min-height: 82px; padding: 8px 2px 12px; border-bottom: 1px solid #e4eaf2; }
-    .subscription-group-title { display: grid; flex: 1 1 auto; grid-template-columns: 34px minmax(0, 1fr); align-items: center; gap: 10px; min-width: 0; color: #111827; }
-    .subscription-folder-icon { display: flex; align-items: center; color: #1a73e8; }
-    .subscription-folder-icon .subscription-icon { width: 32px; height: 32px; flex-basis: 32px; fill: currentColor; stroke: none; }
-    .subscription-group-name { min-width: 0; margin: 0; overflow: hidden; color: #111827; font-size: 24px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
-    .subscription-group-title small { grid-column: 2; margin-top: -8px; color: #718096; font-size: 13px; font-weight: 400; }
     .subscription-group-order-data { display: none !important; }
     .subscription-group-enabled-data { display: none !important; }
     .source-list-header, .source-row {
@@ -1518,19 +1460,6 @@
     .source-row-remark { overflow: hidden; color: #536178; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
     .source-enabled-check { display: flex; justify-content: center; padding: 0; }
     .source-row-fields { display: none !important; }
-    .subscription-group-workspace.grid-view .source-list-header { display: none; }
-    .subscription-group-workspace.grid-view .subscription-group-sources { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding-top: 10px; }
-    .subscription-group-workspace.grid-view .source-row { grid-template-columns: 18px 22px minmax(0, 1fr) 64px; grid-template-areas: "drag select name settings" "order order traffic settings"; padding: 10px; border: 1px solid #e3e9f1; border-radius: 9px; }
-    .subscription-group-workspace.grid-view .source-row-drag { grid-area: drag; }
-    .subscription-group-workspace.grid-view .source-row-select { grid-area: select; }
-    .subscription-group-workspace.grid-view .source-row-sort-controls { grid-area: order; }
-    .subscription-group-workspace.grid-view .source-name-cell { grid-area: name; }
-    .subscription-group-workspace.grid-view .source-traffic { grid-area: traffic; }
-    .subscription-group-workspace.grid-view .source-settings-button { grid-area: settings; }
-    .subscription-group-workspace.grid-view .source-expiry-cell,
-    .subscription-group-workspace.grid-view .source-row-remark,
-    .subscription-group-workspace.grid-view .source-type-cell,
-    .subscription-group-workspace.grid-view .source-enabled-check { display: none; }
     .subscription-list-empty { display: grid; flex: 1 1 auto; min-height: 120px; place-items: center; color: #758198; font-size: 14px; }
     .subscription-list-empty[hidden] { display: none !important; }
     .subscription-list-footer { display: flex; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: 12px; min-height: 58px; color: #64748b; font-size: 13px; }
@@ -1574,8 +1503,6 @@
     .subscription-editor-section > button { justify-self: start; margin: 0; color: #1a5fbd; background: #edf4ff; }
     @media (max-width: 1280px) {
       .subscription-manager-layout { grid-template-columns: 250px minmax(0, 1fr); }
-      .subscription-list-toolbar { flex-wrap: wrap; }
-      .subscription-list-search { flex-basis: 100%; }
       .system-logs-toolbar { flex-wrap: wrap; }
       .system-logs-toolbar input[type="search"] { flex: 1 1 100%; }
       .system-logs-toolbar select { flex: 1 1 130px; }
@@ -1593,7 +1520,6 @@
     }
     @media (max-width: 1050px) {
       .subscription-manager-layout { grid-template-columns: 250px minmax(0, 1fr); }
-      .subscription-list-toolbar > select { flex: 1 1 115px; }
       .source-list-header, .source-row { grid-template-columns: 15px 18px 27px minmax(80px, 1fr) minmax(68px, .7fr) minmax(85px, .9fr) 42px 64px; }
       .user-admin-layout { grid-template-columns: minmax(0, 1fr) minmax(250px, 290px); gap: 12px; }
     }
@@ -1644,17 +1570,11 @@
       .subscription-group-sidebar-heading { padding-bottom: 6px; }
       .subscription-group-workspace { min-height: 520px; padding: 10px; }
       .subscription-editor { width: calc(100vw - 16px); max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); }
-      .subscription-list-toolbar > select { min-width: 100px; }
-      .subscription-list-toolbar > select[data-source-sort] { min-width: 128px; }
       .source-list-header, .source-row { grid-template-columns: 14px 18px 25px minmax(64px, 1fr) minmax(54px, .75fr) 42px 64px; column-gap: 5px; }
       .source-list-header-traffic, .source-row > .source-traffic,
       .source-list-header-expiry, .source-row > .source-expiry-cell,
       .source-list-header-remark, .source-row > .source-row-remark { display: none; }
       .source-list-header-enabled { display: block; }
-      .subscription-group-title { grid-template-columns: 28px minmax(0, 1fr); gap: 6px; }
-      .subscription-group-title small { grid-column: 2; }
-      .subscription-folder-icon .subscription-icon { width: 25px; height: 25px; flex-basis: 25px; }
-      .subscription-group-name { font-size: 19px; }
       .subscription-list-footer { align-items: flex-start; flex-direction: column; padding: 10px 0; }
       .subscription-list-footer-actions { width: 100%; align-items: flex-end; flex-direction: column; gap: 10px; }
       .subscription-pagination { width: 100%; justify-content: flex-end; }
@@ -1949,7 +1869,7 @@ dialog a,
   color: var(--blue);
 }
 
-#dashboard .dashboard-workspace :is(.growth-period-switch, .subscription-view-toggle) {
+#dashboard .dashboard-workspace .growth-period-switch {
   border-radius: 2px;
 }
 
