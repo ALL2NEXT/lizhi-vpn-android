@@ -241,10 +241,7 @@
    if (error === 'invalid_batch_device_update') return '设备批量封禁参数无效，单次最多选择 100 台设备';
      if (error === 'invalid_batch_user_delete') return '批量删除参数无效，最多选择 100 个用户';
     if (error === 'subscription_must_be_plaintext_nodes') return '订阅没有可用节点，支持 URI、Base64、Clash、sing-box 和 Xray 格式';
-    if (error === 'subscription_import_no_nodes') return '未识别到可用节点或订阅地址，请检查输入内容';
-    if (error === 'invalid_subscription_import_input') return '请输入有效的订阅内容';
     if (error === 'invalid_subscription_url') return '请填写有效的 HTTP 或 HTTPS 订阅地址';
-    if (error === 'subscription_import_too_many_urls') return '每次最多导入 20 个远程订阅地址，请分批导入';
     if (error === 'managed_subscription_too_large') return '订阅内容或文件不能超过 2 MB';
     if (error === 'invalid_min_app_version') return '最低应用版本格式无效，请填写类似 2.40 的数字版本';
    if (error === 'external_subscription_unreachable') return '外部订阅接口无法访问或请求超时';

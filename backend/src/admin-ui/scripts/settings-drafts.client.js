@@ -173,7 +173,7 @@ function initializeSettingsDrafts() {
 
   ['input', 'change'].forEach(function(type) {
     document.addEventListener(type, function(event) {
-      if (!event.target.closest || event.target.id === 'registrationCodeCount' || event.target.id === 'registrationCodeMaxUses' || event.target.closest('#subscriptionImportDialog')) return;
+      if (!event.target.closest || event.target.id === 'registrationCodeCount' || event.target.id === 'registrationCodeMaxUses') return;
       const panel = event.target.closest('.tab-panel[data-panel]');
       if (panel) {
         if (panel.dataset.panel === 'subscriptions' && !event.target.matches('[data-field], [data-editor-field]')) return;

@@ -408,7 +408,7 @@
             <label class="subscription-selection-count"><input class="subscription-select-page" type="checkbox" aria-label="选择当前页订阅"><span data-subscription-selection-meta>已选择 0 项</span></label>
             <div class="subscription-list-footer-actions">
               <div class="subscription-pagination"><span data-subscription-count>共 0 条</span><button class="secondary" type="button" data-subscription-page-prev aria-label="上一页" disabled><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-prev"></use></svg></button><span data-subscription-page-number>1</span><button class="secondary" type="button" data-subscription-page-next aria-label="下一页" disabled><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-next"></use></svg></button><select data-subscription-page-size aria-label="每页显示条数"><option value="20" selected>20 条/页</option><option value="50">50 条/页</option><option value="100">100 条/页</option></select></div>
-              <div class="subscription-group-add-row"><button class="secondary" type="button" data-action="move-selected-subscriptions" aria-label="移动已选订阅" disabled><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-folder"></use></svg> 移动订阅</button><button class="danger subscription-delete-selected" type="button" data-action="delete-selected-subscriptions" aria-label="删除已选订阅" disabled><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-close"></use></svg> 删除订阅</button><button class="secondary" type="button" data-action="refresh-subscriptions" aria-label="更新已选订阅" disabled><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-refresh"></use></svg><span data-refresh-label>更新订阅</span></button><button class="secondary" type="button" data-action="create-empty-subscription" aria-label="新建订阅"><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-plus"></use></svg> 新建订阅</button><button type="button" data-action="add-subscription"><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-plus"></use></svg> 智能导入</button></div>
+              <div class="subscription-group-add-row"><button class="secondary" type="button" data-action="move-selected-subscriptions" aria-label="移动已选订阅" disabled><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-folder"></use></svg> 移动订阅</button><button class="danger subscription-delete-selected" type="button" data-action="delete-selected-subscriptions" aria-label="删除已选订阅" disabled><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-close"></use></svg> 删除订阅</button><button class="secondary" type="button" data-action="refresh-subscriptions" aria-label="更新已选订阅" disabled><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-refresh"></use></svg><span data-refresh-label>更新订阅</span></button><button class="secondary" type="button" data-action="create-empty-subscription" aria-label="新建订阅"><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-plus"></use></svg> 新建订阅</button></div>
             </div>
           </footer>
         </section>
@@ -443,28 +443,6 @@
       </div>
     </div>
     <datalist id="subscriptionAppVersionOptions"></datalist>
-    <dialog id="subscriptionImportDialog" aria-labelledby="subscriptionImportTitle" class="subscription-import-dialog">
-      <form id="subscriptionImportForm">
-        <h2 id="subscriptionImportTitle">智能导入订阅</h2>
-        <p id="subscriptionImportTier"></p>
-        <label class="field" for="subscriptionImportInput">智能识别
-          <textarea id="subscriptionImportInput" rows="8" placeholder="粘贴订阅地址、节点 URI、Base64、Clash YAML 或 sing-box / Xray JSON。支持多个地址与配置混合导入。"></textarea>
-        </label>
-        <div class="subscription-import-tools">
-          <button class="secondary" type="button" id="subscriptionImportClipboard">从剪贴板粘贴</button>
-          <button class="secondary" type="button" id="subscriptionImportFileButton">选择文件</button>
-          <input id="subscriptionImportFile" type="file" accept=".txt,.conf,.yaml,.yml,.json,text/plain,application/json" hidden>
-        </div>
-        <small>远程订阅分别添加为线路，本地节点合并为「导入内容」；可将多条线路放在同一分组中。输入和文件最大 2 MB。空白线路请使用「新建订阅」按钮创建。</small>
-        <p id="subscriptionImportStatus" role="status" aria-live="polite"></p>
-        <div id="subscriptionImportPreview" class="subscription-import-preview"></div>
-        <div class="subscription-import-actions">
-          <button class="secondary" type="button" id="subscriptionImportCancel">取消</button>
-          <button type="submit" id="subscriptionImportRecognize">识别并预览</button>
-          <button type="button" id="subscriptionImportAdd" disabled>添加到线路列表</button>
-        </div>
-      </form>
-    </dialog>
    </section>
 
   <section class="card tab-panel" role="tabpanel" data-panel="notifications">

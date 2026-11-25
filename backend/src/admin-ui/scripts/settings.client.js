@@ -959,9 +959,6 @@ function initializeSubscriptionManager() {
   panel.querySelectorAll('[data-action="add-group"]').forEach(function(button) {
     button.addEventListener('click', function() { addSubscriptionGroup(); });
   });
-  panel.querySelector('[data-action="add-subscription"]').addEventListener('click', function() {
-    openSubscriptionImport(getSubscriptionTargetGroup());
-  });
   panel.querySelector('[data-action="create-empty-subscription"]').addEventListener('click', function() {
     const group = getSubscriptionTargetGroup();
     const row = addSource(group, {

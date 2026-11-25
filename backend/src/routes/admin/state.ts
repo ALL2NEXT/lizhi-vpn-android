@@ -6,7 +6,6 @@ import type { RouteDependencies } from "../../types/routes.ts";
  */
 
 import { readJsonObject } from "../../http/request.ts";
-import { importSubscriptionSources } from "../../services/subscription-import.ts";
 import {
   incrementSubscriptionVersions,
   reconcileSubscriptionVersions,
@@ -35,16 +34,6 @@ export function createAdminStateRoutes(deps: Pick<
   } = deps;
 
   return async function handleAdminState(path: string, request: Request, env: Env) {
-    if (path === "/api/subscriptions/import" && request.method === "POST") {
-      try {
-        const incoming = await readJsonObject(request);
-        const result = await importSubscriptionSources(incoming.input, env);
-        return json({ ok: result.sources.length > 0, ...result }, result.sources.length ? 200 : 422);
-      } catch (error) {
-        return json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 400);
-      }
-    }
-
     if (path === "/api/subscriptions/traffic" && request.method === "GET") {
       const state = await readState(env);
       const requestedIds = new URL(request.url).searchParams.getAll("id");

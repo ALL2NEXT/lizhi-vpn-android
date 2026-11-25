@@ -10,8 +10,8 @@ import {
   TEXT_ENCODER,
 } from "../config.ts";
 import { cleanText } from "../lib/values.ts";
-import { normalizeRemoteUrl, toStandardUris } from "../domain/subscription-import/index.ts";
-import { decodeBase64, encodeBase64 } from "../domain/subscription-import/text.ts";
+import { normalizeRemoteUrl, toStandardUris } from "../domain/subscription-format/index.ts";
+import { decodeBase64, encodeBase64 } from "../domain/subscription-format/text.ts";
 import {
   loadSubscriptionCacheMetadata,
   saveSubscriptionCacheMetadata,

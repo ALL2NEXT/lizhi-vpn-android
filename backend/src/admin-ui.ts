@@ -13,7 +13,6 @@ import usersScript from "./admin-ui/scripts/users.client.js";
 import userManagementScript from "./admin-ui/scripts/user-management.client.js";
 import settingsScript from "./admin-ui/scripts/settings.client.js";
 import settingsDraftsScript from "./admin-ui/scripts/settings-drafts.client.js";
-import subscriptionImportScript from "./admin-ui/scripts/subscription-import.client.js";
 
 const adminScript = [
   coreScript,
@@ -29,7 +28,6 @@ const adminScript = [
   userManagementScript,
   settingsDraftsScript,
   settingsScript,
-  subscriptionImportScript,
 ].join("\n");
 
 export function adminHtml(basePath: string): string {
