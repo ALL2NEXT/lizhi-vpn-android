@@ -172,16 +172,11 @@ function renderApiStatistics() {
   if (!apiStatisticsData) return;
   const groups = apiStatisticsData;
   [
-    {category: 'request', key: 'catalog', listId: 'apiStatisticsConfiguredList', summaryId: 'apiStatisticsConfiguredSummary'},
-    {category: 'unconfigured', key: 'unconfigured', listId: 'apiStatisticsUnconfiguredList', summaryId: 'apiStatisticsUnconfiguredSummary'},
+    {category: 'request', key: 'catalog', listId: 'apiStatisticsConfiguredList'},
+    {category: 'unconfigured', key: 'unconfigured', listId: 'apiStatisticsUnconfiguredList'},
   ].forEach(function(item) {
     const list = el(item.listId);
-    const count = el(item.summaryId);
     const rows = Array.isArray(groups[item.key]) ? groups[item.key] : [];
-    const logRecordCount = rows.reduce(function(total, row) {
-      return total + (Number(row.requestCount) || 0);
-    }, 0);
-    if (count) count.textContent = logRecordCount.toLocaleString() + ' \u6761\u65e5\u5fd7\u8bb0\u5f55';
     if (!list) return;
     if (!rows.length) {
       list.innerHTML = '<div class="api-statistics-endpoint-state">\u6682\u65e0\u6570\u636e</div>';
