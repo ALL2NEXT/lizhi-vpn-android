@@ -336,7 +336,7 @@
   <section class="card tab-panel" role="tabpanel" data-panel="api-statistics" aria-labelledby="dashboardTitle">
     <section class="security-risk-section api-statistics-section" aria-labelledby="apiStatisticsTitle">
       <div class="security-risk-section-heading api-statistics-heading">
-        <div><h3 id="apiStatisticsTitle">请求端点统计</h3><p>默认统计最近 30 天；点击端点可查看对应网络日志。</p></div>
+        <div><h3 id="apiStatisticsTitle">API &#x7edf;&#x8ba1;</h3><p>&#x6309;&#x9884;&#x8bbe;&#x8def;&#x7531;&#x5c55;&#x793a;&#x5168;&#x90e8; API &#x7aef;&#x70b9;&#x3002;&#x8bf7;&#x6c42;&#x6570;&#x4ece;&#x65e5;&#x5fd7;&#x6c47;&#x603b;&#x3002;&#x6ca1;&#x6709;&#x65e5;&#x5fd7;&#x7684;&#x7aef;&#x70b9;&#x4e5f;&#x4f1a;&#x663e;&#x793a;&#x4e3a; 0&#x3002;</p></div>
       </div>
       <div class="api-statistics-toolbar">
         <input id="apiStatisticsSearch" type="search" placeholder="搜索方法或端点路径…" aria-label="搜索 API 端点">
@@ -348,13 +348,10 @@
       <p id="apiStatisticsSummary" class="api-statistics-summary" role="status" aria-live="polite">进入 API 统计后读取端点数据</p>
       <div id="apiStatisticsGrid" class="api-statistics-grid">
         <section class="api-statistics-category" aria-labelledby="apiStatisticsInboundTitle">
-          <header class="api-statistics-category-heading"><h4 id="apiStatisticsInboundTitle">入站端点</h4><span id="apiStatisticsInboundSummary"></span></header>
-          <nav id="apiStatisticsInboundList" class="api-statistics-endpoint-tree" aria-label="入站 API 端点"><div class="api-statistics-endpoint-state">打开此页面后读取统计</div></nav>
+          <header class="api-statistics-category-heading"><h4 id="apiStatisticsInboundTitle">&#x9884;&#x8bbe; API &#x7aef;&#x70b9;</h4><span id="apiStatisticsInboundSummary"></span></header>
+          <nav id="apiStatisticsInboundList" class="api-statistics-endpoint-tree" aria-label="入站 API 端点"><div class="api-statistics-endpoint-state">&#x6253;&#x5f00;&#x9875;&#x9762;&#x540e;&#x8bfb;&#x53d6;&#x7edf;&#x8ba1;</div></nav>
         </section>
-        <section class="api-statistics-category" aria-labelledby="apiStatisticsOutboundTitle">
-          <header class="api-statistics-category-heading"><h4 id="apiStatisticsOutboundTitle">出站端点</h4><span id="apiStatisticsOutboundSummary"></span></header>
-          <nav id="apiStatisticsOutboundList" class="api-statistics-endpoint-tree" aria-label="出站 API 端点"><div class="api-statistics-endpoint-state">打开此页面后读取统计</div></nav>
-        </section>
+        <section class="api-statistics-category" aria-labelledby="apiStatisticsUnconfiguredTitle"><header class="api-statistics-category-heading"><h4 id="apiStatisticsUnconfiguredTitle">&#x672a;&#x9884;&#x8bbe;&#x7aef;&#x70b9;</h4><span id="apiStatisticsUnconfiguredSummary"></span></header><nav id="apiStatisticsUnconfiguredList" class="api-statistics-endpoint-tree" aria-label="&#x672a;&#x9884;&#x8bbe;&#x7aef;&#x70b9;"><div class="api-statistics-endpoint-state">&#x6253;&#x5f00;&#x9875;&#x9762;&#x540e;&#x8bfb;&#x53d6;&#x7edf;&#x8ba1;</div></nav></section>
       </div>
     </section>
   </section>
@@ -551,6 +548,7 @@
         <section class="system-logs-browser" aria-label="网络日志列表">
           <div class="system-logs-toolbar">
             <input id="systemLogSearch" type="search" placeholder="⌕ 搜索路径、说明、IP、请求关联 ID、User-Agent…" aria-label="搜索网络日志">
+            <select id="systemLogCategory" aria-label="&#x7f51;&#x7edc;&#x65b9;&#x5411;"><option value="all">&#x5168;&#x90e8;&#x7f51;&#x7edc;</option><option value="request">&#x5165;&#x7ad9;&#x7f51;&#x7edc;</option><option value="outbound">&#x51fa;&#x7ad9;&#x7f51;&#x7edc;</option></select>
             <select id="systemLogStatus" aria-label="状态码"><option value="">全部状态码</option><option value="success">2xx 成功</option><option value="redirect">3xx 重定向</option><option value="client-error">4xx 客户端错误</option><option value="server-error">5xx 服务端错误</option><option value="none">无状态码</option></select>
             <label class="system-logs-date-filter"><span class="sr-only">开始时间</span><input id="systemLogStartDate" type="datetime-local" step="60" aria-label="开始时间"></label><span class="system-logs-date-separator">至</span>
             <label class="system-logs-date-filter"><span class="sr-only">结束时间</span><input id="systemLogEndDate" type="datetime-local" step="60" aria-label="结束时间"></label>

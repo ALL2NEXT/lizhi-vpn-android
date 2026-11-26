@@ -3,7 +3,7 @@
   let systemLogsData = null;
   let systemLogsLoading = false;
   let systemLogsOffset = 0;
-  let systemLogsCategory = 'request';
+  let systemLogsCategory = '';
  let growthPeriod = 'day';
  let growthRequestId = 0;
  let activityPeriod = 'day';
@@ -282,7 +282,8 @@
    systemLogsData = null;
    systemLogsLoading = false;
    systemLogsOffset = 0;
-   systemLogsCategory = 'request';
+   systemLogsCategory = '';
+   el('systemLogCategory').value = 'all';
    systemLogsEndpointPath = '';
    systemLogsEndpointMethod = '';
    if (typeof apiStatisticsData !== 'undefined') apiStatisticsData = null;

@@ -18,10 +18,6 @@ function systemLogCategoryName(category) {
   return ({request: '入站网络', outbound: '出站网络'})[category] || '系统';
 }
 
-function systemLogIpLabel(category) {
-  return category === 'outbound' ? '触发 IP' : '客户端 IP';
-}
-
 function systemLogDateTime(value) {
   const text = String(value || '-');
   if (text.indexOf('T') < 0) return text;
@@ -134,10 +130,9 @@ function renderSystemLogs() {
     return;
   }
 
-  const ipLabel = systemLogIpLabel(records[0].category);
   host.innerHTML = '<table class="system-logs-table"><thead><tr>' +
-    '<th class="system-log-select-cell"><input type="checkbox" class="system-logs-select-checkbox" data-system-log-select-page aria-label="全选当前页网络日志"></th>' +
-    '<th>时间</th><th>方法</th><th>路径</th><th>状态</th><th>耗时</th><th>' + esc(ipLabel) + '</th><th>更多</th>' +
+    '<th class="system-log-select-cell"><input type="checkbox" class="system-logs-select-checkbox" data-system-log-select-page aria-label="&#x5168;&#x9009;&#x5f53;&#x524d;&#x9875;&#x7f51;&#x7edc;&#x65e5;&#x5fd7;"></th>' +
+    '<th>&#x65f6;&#x95f4;</th><th>&#x65b9;&#x5411;</th><th>&#x65b9;&#x6cd5;</th><th>&#x8def;&#x5f84;</th><th>&#x72b6;&#x6001;</th><th>&#x8017;&#x65f6;</th><th>IP</th><th>&#x66f4;&#x591a;</th>' +
     '</tr></thead><tbody>' + records.map(function(record) {
       const status = record.status == null ? '-' : String(record.status);
       const duration = record.durationMs == null ? '-' : Number(record.durationMs).toLocaleString() + ' ms';
@@ -147,6 +142,7 @@ function renderSystemLogs() {
       return '<tr class="' + (selected ? 'selected' : '') + '">' +
         '<td class="system-log-select-cell"><input type="checkbox" class="system-logs-select-checkbox" data-system-log-select-id="' + Number(record.id) + '" aria-label="选择网络日志 ' + Number(record.id) + '"></td>' +
         '<td class="system-logs-time">' + esc(systemLogDateTime(record.occurredAt)) + '</td>' +
+        '<td><span class="system-log-direction ' + (record.category === 'outbound' ? 'outbound' : 'request') + '">' + (record.category === 'outbound' ? '&#x51fa;&#x7ad9;' : '&#x5165;&#x7ad9;') + '</span></td>' +
         '<td><span class="system-log-method">' + esc(method) + '</span></td>' +
         '<td class="system-logs-path-cell"><span class="system-log-path-text" title="' + esc(path) + '">' + esc(path) + '</span></td>' +
         '<td><span class="system-log-status ' + systemLogStatusClass(record.status) + '">' + esc(status) + '</span></td>' +
@@ -466,7 +462,8 @@ function setDefaultSystemLogDateRange() {
 function resetSystemLogFilters() {
   el('systemLogSearch').value = '';
   el('systemLogStatus').value = '';
-  systemLogsCategory = 'request';
+  el('systemLogCategory').value = 'all';
+  systemLogsCategory = '';
   systemLogsEndpointPath = '';
   systemLogsEndpointMethod = '';
   setDefaultSystemLogDateRange();
@@ -475,6 +472,7 @@ function resetSystemLogFilters() {
 
 function showSystemLogsForApiEndpoint(category, method, path, startDate, endDate) {
   systemLogsCategory = category === 'outbound' ? 'outbound' : 'request';
+  el('systemLogCategory').value = systemLogsCategory;
   systemLogsEndpointMethod = String(method || '');
   systemLogsEndpointPath = String(path || '');
   el('systemLogSearch').value = '';
@@ -810,6 +808,12 @@ el('systemLogSearch').addEventListener('input', function() {
 });
 
 el('systemLogStatus').addEventListener('change', applySystemLogFilters);
+el('systemLogCategory').addEventListener('change', function() {
+  systemLogsCategory = el('systemLogCategory').value === 'all' ? '' : el('systemLogCategory').value;
+  systemLogsEndpointPath = '';
+  systemLogsEndpointMethod = '';
+  applySystemLogFilters();
+});
 
 function scheduleSystemLogRangeUpdate() {
   if (systemLogsRangeTimer) clearTimeout(systemLogsRangeTimer);

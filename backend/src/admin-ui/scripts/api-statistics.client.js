@@ -3,20 +3,115 @@ let apiStatisticsLoading = false;
 let apiStatisticsReloadQueued = false;
 let apiStatisticsRequestId = 0;
 let apiStatisticsFilterTimer = null;
-let apiStatisticsExpandedPaths = new Set(['request:/', 'request:/api', 'outbound:/']);
+let apiStatisticsExpandedPaths = new Set(['request:/', 'request:/api', 'unconfigured:/']);
+
+const API_ENDPOINT_INVENTORY = [
+  ['GET', '/api/transport/key'],
+  ['POST', '/api/transport'],
+  ['GET', '/api/client'],
+  ['GET', '/api/app/update'],
+  ['GET', '/api/app/proxy-packages'],
+  ['GET', '/api/subscription/:id'],
+  ['GET', '/api/client/notifications'],
+  ['POST', '/api/client/notifications/read-all'],
+  ['POST', '/api/client/notifications/:id/read'],
+  ['POST', '/api/account/sync'],
+  ['POST', '/api/account/register'],
+  ['POST', '/api/account/login'],
+  ['POST', '/api/account/activate-vip'],
+  ['POST', '/api/account/delete'],
+  ['PATCH', '/api/account/profile'],
+  ['POST', '/api/account/security-report'],
+  ['POST', '/api/account/report'],
+  ['GET', '/api/system-log-settings', true],
+  ['PUT', '/api/system-log-settings', true],
+  ['GET', '/api/system-logs/payload', true],
+  ['GET', '/api/system-logs', true],
+  ['DELETE', '/api/system-logs', true],
+  ['GET', '/api/users/growth', true],
+  ['GET', '/api/users/traffic', true],
+  ['GET', '/api/users/activity', true],
+  ['GET', '/api/dashboard/devices', true],
+  ['GET', '/api/registration-codes', true],
+  ['POST', '/api/registration-codes', true],
+  ['GET', '/api/registration-codes/:id/usages', true],
+  ['GET', '/api/vip-codes', true],
+  ['POST', '/api/vip-codes', true],
+  ['GET', '/api/users', true],
+  ['PATCH', '/api/users/batch', true],
+  ['DELETE', '/api/users/batch', true],
+  ['POST', '/api/users/:uid/ban', true],
+  ['DELETE', '/api/users/:uid/ban', true],
+  ['DELETE', '/api/users/:uid', true],
+  ['PATCH', '/api/users/:uid', true],
+  ['GET', '/api/notifications', true],
+  ['POST', '/api/notifications', true],
+  ['PUT', '/api/notifications/:id', true],
+  ['GET', '/api/security/client-reports', true],
+  ['POST', '/api/security/client-reports/:id/review', true],
+  ['GET', '/api/ip-relations', true],
+  ['GET', '/api/device-relations', true],
+  ['PATCH', '/api/devices/batch', true],
+  ['GET', '/api/devices', true],
+  ['GET', '/api/security/accounts', true],
+  ['GET', '/api/subscriptions/traffic', true],
+  ['POST', '/api/subscriptions/refresh', true],
+  ['GET', '/api/state', true],
+  ['PUT', '/api/state', true],
+];
+
+function apiStatisticsCatalog() {
+  const adminPrefix = ADMIN_API_BASE.replace(/\/api$/, '');
+  return API_ENDPOINT_INVENTORY.map(function(item) {
+    return {method: item[0], path: item[2] ? adminPrefix + item[1] : item[1], requestCount: 0};
+  });
+}
+
+function apiStatisticsEscapeRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function apiStatisticsMatchPattern(path) {
+  return new RegExp('^' + path.split('/').map(function(segment) {
+    return /^:[A-Za-z][A-Za-z0-9_]*$/.test(segment) ? '[^/]+' : apiStatisticsEscapeRegex(segment);
+  }).join('/') + '$');
+}
+
+function apiStatisticsApplyCounts(loggedEndpoints) {
+  const catalog = apiStatisticsCatalog();
+  const patterns = catalog.map(function(endpoint) {
+    return {endpoint: endpoint, pattern: apiStatisticsMatchPattern(endpoint.path)};
+  });
+  const unconfigured = new Map();
+  (Array.isArray(loggedEndpoints) ? loggedEndpoints : []).forEach(function(logged) {
+    const method = String(logged.method || '-').toUpperCase();
+    const path = String(logged.path || '/');
+    const count = Number(logged.requestCount) || 0;
+    const match = patterns.find(function(item) {
+      return item.endpoint.method === method && item.pattern.test(path);
+    });
+    if (match) {
+      match.endpoint.requestCount += count;
+      return;
+    }
+    const key = method + '\n' + path;
+    const row = unconfigured.get(key) || {method: method, path: path, requestCount: 0};
+    row.requestCount += count;
+    unconfigured.set(key, row);
+  });
+  return {catalog: catalog, unconfigured: Array.from(unconfigured.values())};
+}
 
 function apiStatisticsCreateNode(name, path) {
   return {name: name, path: path, requestCount: 0, routes: [], children: new Map()};
 }
 
-function apiStatisticsBuildTree(endpoints, category) {
+function apiStatisticsBuildTree(endpoints) {
   const root = apiStatisticsCreateNode('/', '/');
   (Array.isArray(endpoints) ? endpoints : []).forEach(function(endpoint) {
     const method = String(endpoint.method || '-').toUpperCase();
     const rawPath = String(endpoint.path || '/');
-    const path = category === 'outbound'
-      ? rawPath
-      : (rawPath.charAt(0) === '/' ? rawPath : '/' + rawPath);
+    const path = rawPath.charAt(0) === '/' ? rawPath : '/' + rawPath;
     const route = {method: method, path: path, requestCount: Number(endpoint.requestCount) || 0};
     const segments = path.split('/').filter(Boolean);
     let node = root;
@@ -47,7 +142,7 @@ function apiStatisticsRouteMarkup(route, category) {
     ' data-api-statistics-endpoint-category="' + category + '"' +
     ' data-api-statistics-endpoint-method="' + esc(route.method) + '"' +
     ' data-api-statistics-endpoint-path="' + esc(route.path) + '"' +
-    ' title="点击查看此端点的网络日志"><span class="api-statistics-endpoint-method">' + esc(route.method) +
+    ' title="\u70b9\u51fb\u67e5\u770b\u6b64\u7aef\u70b9\u7684\u7f51\u7edc\u65e5\u5fd7"><span class="api-statistics-endpoint-method">' + esc(route.method) +
     '</span><span class="api-statistics-endpoint-path">' + esc(route.path) + '</span><span class="api-statistics-endpoint-count">' +
     route.requestCount.toLocaleString() + '</span></button>';
 }
@@ -64,13 +159,12 @@ function apiStatisticsEntriesMarkup(node, query, category) {
   }).forEach(function(child) {
     if (child.children.size) {
       entries.push({kind: 'folder', count: child.requestCount, name: child.name, node: child});
-    } else {
-      child.routes.filter(function(route) {
-        return !query || (route.method + ' ' + route.path).toLowerCase().includes(query);
-      }).forEach(function(route) {
-        entries.push({kind: 'route', count: route.requestCount, name: route.path, markup: apiStatisticsRouteMarkup(route, category)});
-      });
     }
+    child.routes.filter(function(route) {
+      return !query || (route.method + ' ' + route.path).toLowerCase().includes(query);
+    }).forEach(function(route) {
+      entries.push({kind: 'route', count: route.requestCount, name: route.path, markup: apiStatisticsRouteMarkup(route, category)});
+    });
   });
   entries.sort(function(left, right) {
     return right.count - left.count || left.name.localeCompare(right.name);
@@ -88,7 +182,7 @@ function apiStatisticsFolderMarkup(node, query, root, category) {
   const groupId = 'apiStatisticsTreeChildren_' + category + '_' + encodeURIComponent(node.path).replace(/%/g, '_');
   const label = root ? '/' : node.name;
   const folderButton = root
-    ? '<div class="api-statistics-endpoint-root-row"><button type="button" class="api-statistics-tree-toggle" data-api-statistics-tree-toggle="' + esc(node.path) + '" data-api-statistics-tree-category="' + category + '" aria-expanded="' + expanded + '" aria-controls="' + groupId + '" aria-label="' + (expanded ? '收起' : '展开') + '根目录"><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-next"></use></svg></button><button type="button" class="api-statistics-tree-root" data-api-statistics-root-category="' + category + '" title="点击查看全部' + (category === 'outbound' ? '出站' : '入站') + '网络日志"><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-all"></use></svg><span>' + label + '</span><span class="api-statistics-endpoint-count">' + node.requestCount.toLocaleString() + '</span></button></div>'
+    ? '<div class="api-statistics-endpoint-root-row"><button type="button" class="api-statistics-tree-toggle" data-api-statistics-tree-toggle="' + esc(node.path) + '" data-api-statistics-tree-category="' + category + '" aria-expanded="' + expanded + '" aria-controls="' + groupId + '" aria-label="' + (expanded ? '\u6536\u8d77' : '\u5c55\u5f00') + '\u6839\u76ee\u5f55"><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-next"></use></svg></button><button type="button" class="api-statistics-tree-root" data-api-statistics-root-category="' + category + '" title="\u70b9\u51fb\u67e5\u770b' + (category === 'unconfigured' ? '\u672a\u9884\u8bbe' : '\u9884\u8bbe') + '\u7aef\u70b9\u65e5\u5fd7"><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-all"></use></svg><span>' + label + '</span><span class="api-statistics-endpoint-count">' + node.requestCount.toLocaleString() + '</span></button></div>'
     : '<button type="button" class="api-statistics-tree-folder" data-api-statistics-tree-toggle="' + esc(node.path) + '" data-api-statistics-tree-category="' + category + '" aria-expanded="' + expanded + '" aria-controls="' + groupId + '"><svg class="subscription-icon api-statistics-tree-caret" aria-hidden="true"><use href="#subscription-icon-next"></use></svg><svg class="subscription-icon api-statistics-tree-folder-icon" aria-hidden="true"><use href="#subscription-icon-folder"></use></svg><span class="api-statistics-tree-name" title="' + esc(node.path) + '">' + esc(label) + '</span><span class="api-statistics-endpoint-count">' + node.requestCount.toLocaleString() + '</span></button>';
   const entries = apiStatisticsEntriesMarkup(node, query, category);
   return '<div class="api-statistics-tree-branch' + (root ? ' root' : '') + '">' + folderButton +
@@ -99,44 +193,45 @@ function apiStatisticsSummaryText(groups) {
   const start = el('apiStatisticsStartDate').value;
   const end = el('apiStatisticsEndDate').value;
   const range = start || end
-    ? (start ? start.replace('T', ' ') : '最早') + ' 至 ' + (end ? end.replace('T', ' ') : '现在')
-    : '最近 30 天';
-  const summaryFor = function(category) {
-    const endpoints = groups[category] || [];
-    const requests = endpoints.reduce(function(total, endpoint) {
-      return total + (Number(endpoint.requestCount) || 0);
-    }, 0);
-    return endpoints.length + ' 个端点 · ' + requests.toLocaleString() + ' 次请求';
-  };
-  return range + ' · 入站 ' + summaryFor('request') + ' · 出站 ' + summaryFor('outbound');
+    ? (start ? start.replace('T', ' ') : '\u6700\u65e9') + ' \u81f3 ' + (end ? end.replace('T', ' ') : '\u73b0\u5728')
+    : '\u6700\u8fd1 30 \u5929';
+  const requestCount = groups.catalog.reduce(function(total, endpoint) {
+    return total + (Number(endpoint.requestCount) || 0);
+  }, 0);
+  const unconfiguredCount = groups.unconfigured.reduce(function(total, endpoint) {
+    return total + (Number(endpoint.requestCount) || 0);
+  }, 0);
+  return range + ' \u00b7 \u9884\u8bbe API \u7aef\u70b9 ' + groups.catalog.length.toLocaleString() + ' \u4e2a \u00b7 ' +
+    requestCount.toLocaleString() + ' \u6b21\u8bf7\u6c42 \u00b7 \u672a\u9884\u8bbe\u7aef\u70b9 ' + groups.unconfigured.length.toLocaleString() +
+    ' \u4e2a \u00b7 ' + unconfiguredCount.toLocaleString() + ' \u6b21\u8bf7\u6c42';
 }
 
 function renderApiStatistics() {
   const query = String(el('apiStatisticsSearch').value || '').trim().toLowerCase();
   const summary = el('apiStatisticsSummary');
   if (!apiStatisticsData) return;
-  const groups = apiStatisticsData.endpointsByCategory || {request: [], outbound: []};
+  const groups = apiStatisticsData;
   if (summary) summary.textContent = apiStatisticsSummaryText(groups);
   [
-    {category: 'request', listId: 'apiStatisticsInboundList', summaryId: 'apiStatisticsInboundSummary'},
-    {category: 'outbound', listId: 'apiStatisticsOutboundList', summaryId: 'apiStatisticsOutboundSummary'},
+    {category: 'request', key: 'catalog', listId: 'apiStatisticsInboundList', summaryId: 'apiStatisticsInboundSummary'},
+    {category: 'unconfigured', key: 'unconfigured', listId: 'apiStatisticsUnconfiguredList', summaryId: 'apiStatisticsUnconfiguredSummary'},
   ].forEach(function(item) {
     const list = el(item.listId);
     const count = el(item.summaryId);
-    const rows = Array.isArray(groups[item.category]) ? groups[item.category] : [];
+    const rows = Array.isArray(groups[item.key]) ? groups[item.key] : [];
     const visibleCount = rows.filter(function(route) {
       return !query || (String(route.method || '') + ' ' + String(route.path || '/')).toLowerCase().includes(query);
     }).length;
     if (count) count.textContent = query
-      ? visibleCount.toLocaleString() + ' / ' + rows.length.toLocaleString() + ' 个端点'
-      : rows.length.toLocaleString() + ' 个端点';
+      ? visibleCount.toLocaleString() + ' / ' + rows.length.toLocaleString() + ' \u4e2a\u7aef\u70b9'
+      : rows.length.toLocaleString() + ' \u4e2a\u7aef\u70b9';
     if (!list) return;
     if (!rows.length) {
-      list.innerHTML = '<div class="api-statistics-endpoint-state">当前时间范围暂无' + (item.category === 'outbound' ? '出站' : '入站') + '端点</div>';
+      list.innerHTML = '<div class="api-statistics-endpoint-state">\u6682\u65e0\u6570\u636e</div>';
     } else if (!visibleCount) {
-      list.innerHTML = '<div class="api-statistics-endpoint-state">没有匹配的端点</div>';
+      list.innerHTML = '<div class="api-statistics-endpoint-state">\u6ca1\u6709\u5339\u914d\u7684\u7aef\u70b9</div>';
     } else {
-      list.innerHTML = apiStatisticsFolderMarkup(apiStatisticsBuildTree(rows, item.category), query, true, item.category);
+      list.innerHTML = apiStatisticsFolderMarkup(apiStatisticsBuildTree(rows), query, true, item.category);
     }
   });
 }
@@ -152,9 +247,9 @@ async function loadApiStatistics(force) {
   }
   apiStatisticsLoading = true;
   const requestId = ++apiStatisticsRequestId;
-  ['apiStatisticsInboundList', 'apiStatisticsOutboundList'].forEach(function(id) {
+  ['apiStatisticsInboundList', 'apiStatisticsUnconfiguredList'].forEach(function(id) {
     const list = el(id);
-    if (list) list.innerHTML = '<div class="loading-state">正在统计端点…</div>';
+    if (list) list.innerHTML = '<div class="loading-state">\u6b63\u5728\u7edf\u8ba1\u7aef\u70b9\u2026</div>';
   });
   try {
     const query = new URLSearchParams({includeEndpoints: 'true', limit: '1', offset: '0'});
@@ -163,29 +258,26 @@ async function loadApiStatistics(force) {
     if (startDate) query.set('startDate', startDate);
     if (endDate) query.set('endDate', endDate);
     const response = await fetch(ADMIN_API_BASE + '/system-logs?' + query.toString(), {
-      method: 'GET',
-      headers: headers(),
-      cache: 'no-store'
+      method: 'GET', headers: headers(), cache: 'no-store'
     });
     const data = parseResponseJson(await response.text());
-    if (!response.ok) throw new Error(adminErrorMessage(data.error, 'API统计读取失败（HTTP ' + response.status + '）'));
+    if (!response.ok) throw new Error(adminErrorMessage(data.error, 'API\u7edf\u8ba1\u8bfb\u53d6\u5931\u8d25\uff08HTTP ' + response.status + '\uff09'));
     if (requestId !== apiStatisticsRequestId) return false;
     const groups = data.endpointsByCategory;
-    apiStatisticsData = {
-      endpointsByCategory: groups && Array.isArray(groups.request) && Array.isArray(groups.outbound)
-        ? groups
-        : {request: Array.isArray(data.endpoints) ? data.endpoints : [], outbound: []}
-    };
+    const loggedEndpoints = groups && Array.isArray(groups.request)
+      ? groups.request
+      : Array.isArray(data.endpoints) ? data.endpoints : [];
+    apiStatisticsData = apiStatisticsApplyCounts(loggedEndpoints);
     renderApiStatistics();
     return true;
   } catch (error) {
     if (requestId === apiStatisticsRequestId) {
-      const message = esc(error.message || 'API统计读取失败');
-      ['apiStatisticsInboundList', 'apiStatisticsOutboundList'].forEach(function(id) {
+      const message = esc(error.message || 'API\u7edf\u8ba1\u8bfb\u53d6\u5931\u8d25');
+      ['apiStatisticsInboundList', 'apiStatisticsUnconfiguredList'].forEach(function(id) {
         const list = el(id);
         if (list) list.innerHTML = '<div class="api-statistics-endpoint-state error">' + message + '</div>';
       });
-      if (el('apiStatisticsSummary')) el('apiStatisticsSummary').textContent = 'API 统计读取失败';
+      if (el('apiStatisticsSummary')) el('apiStatisticsSummary').textContent = 'API\u7edf\u8ba1\u8bfb\u53d6\u5931\u8d25';
     }
     return false;
   } finally {
@@ -213,7 +305,7 @@ function resetApiStatisticsFilters() {
   el('apiStatisticsSearch').value = '';
   el('apiStatisticsStartDate').value = '';
   el('apiStatisticsEndDate').value = '';
-  apiStatisticsExpandedPaths = new Set(['request:/', 'request:/api', 'outbound:/']);
+  apiStatisticsExpandedPaths = new Set(['request:/', 'request:/api', 'unconfigured:/']);
   apiStatisticsRequestId += 1;
   apiStatisticsData = null;
   loadApiStatistics(true);
@@ -229,33 +321,27 @@ el('apiStatisticsGrid').addEventListener('click', function(event) {
   const toggle = event.target.closest('[data-api-statistics-tree-toggle]');
   if (toggle) {
     const path = toggle.dataset.apiStatisticsTreeToggle || '/';
-    const category = toggle.dataset.apiStatisticsTreeCategory === 'outbound' ? 'outbound' : 'request';
+    const category = toggle.dataset.apiStatisticsTreeCategory || 'request';
     const key = category + ':' + path;
     const expanded = toggle.getAttribute('aria-expanded') === 'true';
     const nextExpanded = !expanded;
     if (nextExpanded) apiStatisticsExpandedPaths.add(key);
     else apiStatisticsExpandedPaths.delete(key);
     toggle.setAttribute('aria-expanded', String(nextExpanded));
-    toggle.setAttribute('aria-label', (nextExpanded ? '收起' : '展开') + (path === '/' ? '根目录' : path));
+    toggle.setAttribute('aria-label', (nextExpanded ? '\u6536\u8d77' : '\u5c55\u5f00') + (path === '/' ? '\u6839\u76ee\u5f55' : path));
     const children = el(toggle.getAttribute('aria-controls'));
     if (children) children.hidden = !nextExpanded;
     return;
   }
   const root = event.target.closest('[data-api-statistics-root-category]');
   if (root) {
-    showSystemLogsForApiEndpoint(
-      root.dataset.apiStatisticsRootCategory,
-      '',
-      '',
-      el('apiStatisticsStartDate').value,
-      el('apiStatisticsEndDate').value,
-    );
+    showSystemLogsForApiEndpoint('request', '', '', el('apiStatisticsStartDate').value, el('apiStatisticsEndDate').value);
     return;
   }
   const endpoint = event.target.closest('[data-api-statistics-endpoint-path]');
   if (endpoint) {
     showSystemLogsForApiEndpoint(
-      endpoint.dataset.apiStatisticsEndpointCategory,
+      'request',
       endpoint.dataset.apiStatisticsEndpointMethod || '',
       endpoint.dataset.apiStatisticsEndpointPath || '',
       el('apiStatisticsStartDate').value,

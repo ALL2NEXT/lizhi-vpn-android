@@ -284,7 +284,7 @@
      .api-statistics-date-separator { padding-bottom: 12px; color: #718099; }
      .api-statistics-toolbar > button { min-height: 40px; margin: 0; }
      .api-statistics-summary { margin: 0; color: #718099; font-size: 13px; }
-     .api-statistics-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; min-width: 0; }
+     .api-statistics-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; min-width: 0; }
      .api-statistics-category { display: flex; flex-direction: column; min-width: 0; min-height: 400px; padding: 12px; overflow: hidden; border: 1px solid #e1e8f0; border-radius: 12px; background: #fff; box-shadow: 0 2px 8px rgb(40 62 92 / 3%); }
      .api-statistics-category-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 2px 8px; }
      .api-statistics-category-heading h4 { margin: 0; color: #526078; font-size: 14px; font-weight: 700; }
@@ -390,6 +390,9 @@
      .system-log-category { display: inline-flex; align-items: center; padding: 4px 7px; border-radius: 6px; color: #156cc2; background: #e9f3ff; font-size: 12px; white-space: nowrap; }
      .system-log-category.outbound { color: #087e8b; background: #e0f7fa; }
      .system-log-method { display: inline-flex; flex: 0 0 auto; align-items: center; padding: 4px 7px; border-radius: 5px; color: #34445b; background: #eef2f7; font-size: 12px; font-weight: 700; }
+     .system-log-direction { display: inline-flex; align-items: center; padding: 3px 7px; border-radius: 6px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+     .system-log-direction.request { color: #1769d2; background: #eaf2ff; }
+     .system-log-direction.outbound { color: #6941c6; background: #f1edff; }
      .system-logs-path-cell { min-width: 240px; max-width: 420px; }
      .system-log-path-text, .system-log-ip { display: block; min-width: 0; overflow: hidden; max-width: 100%; text-overflow: ellipsis; white-space: nowrap; }
      .system-log-path-text { flex: 1 1 auto; }
@@ -1223,7 +1226,6 @@
       .api-statistics-toolbar > input[type="search"], .api-statistics-toolbar > label,
       .api-statistics-toolbar > button { flex: 1 1 100%; width: 100%; }
       .api-statistics-date-separator { display: none; }
-      .api-statistics-grid { grid-template-columns: minmax(0, 1fr); }
       .api-statistics-category { min-height: 320px; }
       .system-logs-date-separator { display: none; }
       .system-logs-wrap { max-height: 60vh; }

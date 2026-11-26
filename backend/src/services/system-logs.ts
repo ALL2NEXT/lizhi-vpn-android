@@ -432,8 +432,22 @@ export async function readSystemLogs(
     conditions.push("category IN ('request', 'outbound')");
   }
   if (endpointPath) {
-    conditions.push("path = ?");
-    bindings.push(endpointPath);
+    const endpointPathSegments = endpointPath.split("/");
+    const hasTemplateSegment = endpointPathSegments.some((segment) =>
+      /^:[A-Za-z][A-Za-z0-9_]*$/.test(segment)
+    );
+    if (hasTemplateSegment) {
+      const likePattern = endpointPathSegments.map((segment) =>
+        /^:[A-Za-z][A-Za-z0-9_]*$/.test(segment)
+          ? "%"
+          : segment.replace(/[!%_]/g, (character) => `!${character}`)
+      ).join("/");
+      conditions.push("path LIKE ? ESCAPE '!' AND (length(path) - length(replace(path, '/', ''))) = ?");
+      bindings.push(likePattern, (endpointPath.match(/\//g) || []).length);
+    } else {
+      conditions.push("path = ?");
+      bindings.push(endpointPath);
+    }
     if (endpointMethod) {
       conditions.push("method = ?");
       bindings.push(endpointMethod);
