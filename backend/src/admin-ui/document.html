@@ -74,8 +74,6 @@
             </button>
             <div id="backend-settings-subnav" class="nav-submenu" role="group" aria-label="安全中心子菜单">
               <button class="tab-button" role="tab" type="button" data-tab="environment-anomalies"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 2 4 5v6c0 5.2 3.4 9.8 8 11 4.6-1.2 8-5.8 8-11V5l-8-3zm0 3.2 5 1.9V11c0 3.7-2.1 7.1-5 8.3-2.9-1.2-5-4.6-5-8.3V7.1l5-1.9z"/></svg><span>环境异常</span></button>
-              <button class="tab-button" role="tab" type="button" data-tab="api-statistics-configured"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 19h16v2H2V3h2v16zm3-2V9h3v8H7zm5 0V5h3v12h-3zm5 0v-5h3v5h-3z"/></svg><span>已预设端点</span></button>
-              <button class="tab-button" role="tab" type="button" data-tab="api-statistics-unconfigured"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 19h16v2H2V3h2v16zm3-2V9h3v8H7zm5 0V5h3v12h-3zm5 0v-5h3v5h-3z"/></svg><span>未预设端点</span></button>
               <button class="tab-button" role="tab" type="button" data-tab="system-logs"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M13 3a9 9 0 1 0 8.9 10h-2a7 7 0 1 1-2-6L15 10h7V3l-2.7 2.7A8.9 8.9 0 0 0 13 3zm-1 5v5l4 2.4 1-1.6-3-1.8V8h-2z"/></svg><span>网络日志</span></button>
               <button class="tab-button" role="tab" type="button" data-tab="system-log-settings"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 6h5m6 0h5M4 12h9m6 0h1M4 18h2m6 0h8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="11" cy="6" r="2" fill="currentColor"/><circle cx="15" cy="12" r="2" fill="currentColor"/><circle cx="9" cy="18" r="2" fill="currentColor"/></svg><span>&#x8bb0;&#x5f55;&#x8bbe;&#x7f6e;</span></button>
             </div>
@@ -335,26 +333,6 @@
     </section>
   </section>
 
-  <section class="card tab-panel" role="tabpanel" data-panel="api-statistics-configured" aria-labelledby="dashboardTitle">
-    <section class="security-risk-section api-statistics-section">
-      <div class="api-statistics-grid">
-        <section class="api-statistics-category">
-          <nav id="apiStatisticsConfiguredList" class="api-statistics-endpoint-tree" aria-label="&#x5df2;&#x9884;&#x8bbe;&#x7aef;&#x70b9;"><div class="api-statistics-endpoint-state">&#x6253;&#x5f00;&#x9875;&#x9762;&#x540e;&#x8bfb;&#x53d6;&#x7edf;&#x8ba1;</div></nav>
-        </section>
-      </div>
-    </section>
-  </section>
-
-  <section class="card tab-panel" role="tabpanel" data-panel="api-statistics-unconfigured" aria-labelledby="dashboardTitle">
-    <section class="security-risk-section api-statistics-section">
-      <div class="api-statistics-grid">
-        <section class="api-statistics-category">
-          <nav id="apiStatisticsUnconfiguredList" class="api-statistics-endpoint-tree" aria-label="&#x672a;&#x9884;&#x8bbe;&#x7aef;&#x70b9;"><div class="api-statistics-endpoint-state">&#x6253;&#x5f00;&#x9875;&#x9762;&#x540e;&#x8bfb;&#x53d6;&#x7edf;&#x8ba1;</div></nav>
-        </section>
-      </div>
-    </section>
-  </section>
-
   <section class="card tab-panel" role="tabpanel" data-panel="subscriptions">
     <div class="subscription-manager">
       <div class="subscription-manager-layout">
@@ -583,6 +561,8 @@
         <button id="systemLogSettingsTabSources" class="system-log-settings-tab active" type="button" role="tab" aria-selected="true" aria-controls="systemLogSettingsPanelSources" tabindex="0" data-system-log-settings-tab="sources">记录来源</button>
         <button id="systemLogSettingsTabSchedule" class="system-log-settings-tab" type="button" role="tab" aria-selected="false" aria-controls="systemLogSettingsPanelSchedule" tabindex="-1" data-system-log-settings-tab="schedule">记录时段</button>
         <button id="systemLogSettingsTabDetails" class="system-log-settings-tab" type="button" role="tab" aria-selected="false" aria-controls="systemLogSettingsPanelDetails" tabindex="-1" data-system-log-settings-tab="details">入站详细内容</button>
+        <button id="systemLogSettingsTabConfigured" class="system-log-settings-tab" type="button" role="tab" aria-selected="false" aria-controls="systemLogSettingsPanelConfigured" tabindex="-1" data-system-log-settings-tab="configured">已预设端点</button>
+        <button id="systemLogSettingsTabUnconfigured" class="system-log-settings-tab" type="button" role="tab" aria-selected="false" aria-controls="systemLogSettingsPanelUnconfigured" tabindex="-1" data-system-log-settings-tab="unconfigured">未预设端点</button>
       </div>
       <section id="systemLogSettingsPanelSources" class="system-log-settings-panel" role="tabpanel" aria-labelledby="systemLogSettingsTabSources" data-system-log-settings-panel="sources" tabindex="0">
         <div class="system-log-settings-content">
@@ -615,6 +595,16 @@
             <div class="system-log-detail-option"><span><strong>响应头</strong></span><label class="system-log-record-toggle" title="记录响应头"><input type="checkbox" data-system-log-detail="responseHeaders" disabled aria-label="记录响应头"><i aria-hidden="true"></i></label></div>
             <div class="system-log-detail-option"><span><strong>响应体</strong></span><label class="system-log-record-toggle" title="记录响应体"><input type="checkbox" data-system-log-detail="responseBody" disabled aria-label="记录响应体"><i aria-hidden="true"></i></label></div>
           </fieldset>
+        </div>
+      </section>
+      <section id="systemLogSettingsPanelConfigured" class="system-log-settings-panel" role="tabpanel" aria-labelledby="systemLogSettingsTabConfigured" data-system-log-settings-panel="configured" tabindex="0" hidden>
+        <div class="system-log-settings-content system-log-endpoint-settings-content">
+          <div class="api-statistics-category"><nav id="apiStatisticsConfiguredList" class="api-statistics-endpoint-tree" aria-label="已预设端点"><div class="api-statistics-endpoint-state">打开记录设置后读取端点</div></nav></div>
+        </div>
+      </section>
+      <section id="systemLogSettingsPanelUnconfigured" class="system-log-settings-panel" role="tabpanel" aria-labelledby="systemLogSettingsTabUnconfigured" data-system-log-settings-panel="unconfigured" tabindex="0" hidden>
+        <div class="system-log-settings-content system-log-endpoint-settings-content">
+          <div class="api-statistics-category"><nav id="apiStatisticsUnconfiguredList" class="api-statistics-endpoint-tree" aria-label="未预设端点"><div class="api-statistics-endpoint-state">打开记录设置后读取端点</div></nav></div>
         </div>
       </section>
     </div>

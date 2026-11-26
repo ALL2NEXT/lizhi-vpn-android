@@ -132,6 +132,7 @@ export interface SystemLogRecordingSettings {
   categories: SystemLogCategorySettings;
   details: SystemLogDetailSettings;
   schedule: SystemLogRecordingSchedule;
+  endpointRecording: Record<string, boolean>;
 }
 
 export interface SystemLogHttpBodyCapture {

@@ -61,9 +61,12 @@ const API_ENDPOINT_INVENTORY = [
 
 function apiStatisticsCatalog() {
   const adminPrefix = ADMIN_API_BASE.replace(/\/api$/, '');
-  return API_ENDPOINT_INVENTORY.map(function(item) {
-    return {method: item[0], path: item[2] ? adminPrefix + item[1] : item[1], requestCount: 0};
+  const endpoints = new Map();
+  API_ENDPOINT_INVENTORY.forEach(function(item) {
+    const path = item[2] ? adminPrefix + item[1] : item[1];
+    if (!endpoints.has(path)) endpoints.set(path, {path: path, requestCount: 0});
   });
+  return Array.from(endpoints.values());
 }
 
 function apiStatisticsEscapeRegex(value) {
@@ -76,6 +79,17 @@ function apiStatisticsMatchPattern(path) {
   }).join('/') + '$');
 }
 
+function apiStatisticsPathSpecificity(path) {
+  return path.split('/').filter(Boolean).reduce(function(total, segment) {
+    return total + (/^:[A-Za-z][A-Za-z0-9_]*$/.test(segment) ? 0 : 1);
+  }, 0);
+}
+
+function apiStatisticsEndpointIsEnabled(endpointPath) {
+  const endpointRecording = systemLogRecordingSettings && systemLogRecordingSettings.endpointRecording || {};
+  return endpointRecording[endpointPath] !== false;
+}
+
 function apiStatisticsApplyCounts(loggedEndpoints) {
   const catalog = apiStatisticsCatalog();
   const patterns = catalog.map(function(endpoint) {
@@ -83,20 +97,19 @@ function apiStatisticsApplyCounts(loggedEndpoints) {
   });
   const unconfigured = new Map();
   (Array.isArray(loggedEndpoints) ? loggedEndpoints : []).forEach(function(logged) {
-    const method = String(logged.method || '-').toUpperCase();
     const path = String(logged.path || '/');
     const count = Number(logged.requestCount) || 0;
-    const match = patterns.find(function(item) {
-      return item.endpoint.method === method && item.pattern.test(path);
-    });
+    const match = patterns.filter(function(item) { return item.pattern.test(path); })
+      .sort(function(left, right) {
+        return apiStatisticsPathSpecificity(right.endpoint.path) - apiStatisticsPathSpecificity(left.endpoint.path);
+      })[0];
     if (match) {
       match.endpoint.requestCount += count;
       return;
     }
-    const key = method + '\n' + path;
-    const row = unconfigured.get(key) || {method: method, path: path, requestCount: 0};
+    const row = unconfigured.get(path) || {path: path, requestCount: 0};
     row.requestCount += count;
-    unconfigured.set(key, row);
+    unconfigured.set(path, row);
   });
   return {catalog: catalog, unconfigured: Array.from(unconfigured.values())};
 }
@@ -128,8 +141,11 @@ function apiStatisticsBuildTree(endpoints) {
 
 function apiStatisticsRouteMarkup(route) {
   const displayPath = route.displayPath || route.path;
-  return '<div class="api-statistics-endpoint-item"><span class="api-statistics-endpoint-icon" aria-hidden="true">&#x25c9;</span><span class="api-statistics-endpoint-path">' + esc(displayPath) + '</span><span class="api-statistics-endpoint-count">' +
-    route.requestCount.toLocaleString() + '</span></div>';
+  const endpointPath = String(route.path || '/');
+  const checked = apiStatisticsEndpointIsEnabled(endpointPath);
+  const disabled = !systemLogRecordingSettings || systemLogRecordingSettingsLoading;
+  return '<div class="api-statistics-endpoint-item"><span class="api-statistics-endpoint-icon" aria-hidden="true">&#x25c9;</span><span class="api-statistics-endpoint-path" title="' + esc(endpointPath) + '">' + esc(displayPath) + '</span><span class="api-statistics-endpoint-count">' +
+    route.requestCount.toLocaleString() + '</span><label class="system-log-record-toggle" title="记录此端点"><input type="checkbox" data-system-log-endpoint="' + esc(endpointPath) + '" aria-label="记录端点 ' + esc(endpointPath) + '"' + (checked ? ' checked' : '') + (disabled ? ' disabled' : '') + '><i aria-hidden="true"></i></label></div>';
 }
 
 function apiStatisticsEntriesMarkup(node, category) {
@@ -171,12 +187,23 @@ function apiStatisticsFolderMarkup(node, root, category) {
 function renderApiStatistics() {
   if (!apiStatisticsData) return;
   const groups = apiStatisticsData;
+  const configuredPaths = apiStatisticsCatalog().map(function(endpoint) { return endpoint.path; });
+  const unconfigured = new Map((Array.isArray(groups.unconfigured) ? groups.unconfigured : []).map(function(endpoint) {
+    return [endpoint.path, endpoint];
+  }));
+  const endpointRecording = systemLogRecordingSettings && systemLogRecordingSettings.endpointRecording || {};
+  Object.keys(endpointRecording).forEach(function(path) {
+    if (endpointRecording[path] === false && !configuredPaths.includes(path) && !unconfigured.has(path)) {
+      const configuredPattern = configuredPaths.map(apiStatisticsMatchPattern).some(function(pattern) { return pattern.test(path); });
+      if (!configuredPattern) unconfigured.set(path, {path: path, requestCount: 0});
+    }
+  });
   [
     {category: 'request', key: 'catalog', listId: 'apiStatisticsConfiguredList'},
-    {category: 'unconfigured', key: 'unconfigured', listId: 'apiStatisticsUnconfiguredList'},
+    {category: 'unconfigured', key: 'unconfigured', listId: 'apiStatisticsUnconfiguredList', rows: Array.from(unconfigured.values())},
   ].forEach(function(item) {
     const list = el(item.listId);
-    const rows = Array.isArray(groups[item.key]) ? groups[item.key] : [];
+    const rows = item.rows || (Array.isArray(groups[item.key]) ? groups[item.key] : []);
     if (!list) return;
     if (!rows.length) {
       list.innerHTML = '<div class="api-statistics-endpoint-state">\u6682\u65e0\u6570\u636e</div>';
@@ -249,4 +276,11 @@ document.addEventListener('click', function(event) {
   toggle.setAttribute('aria-label', (nextExpanded ? '\u6536\u8d77' : '\u5c55\u5f00') + (path === '/' ? '\u6839\u76ee\u5f55' : path));
   const children = el(toggle.getAttribute('aria-controls'));
   if (children) children.hidden = !nextExpanded;
+});
+
+document.addEventListener('change', function(event) {
+  const input = event.target.closest('[data-system-log-endpoint]');
+  if (input && typeof updateSystemLogEndpointSetting === 'function') {
+    updateSystemLogEndpointSetting(input);
+  }
 });

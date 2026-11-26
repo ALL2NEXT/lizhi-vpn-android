@@ -17,6 +17,7 @@ import { ensureUserSchema } from "./user-store.ts";
 
 const LOG_RETENTION_DAYS = 30;
 const MAX_LOG_DETAILS_LENGTH = 1600;
+const MAX_ENDPOINT_RECORDING_RULES = 1500;
 const SYSTEM_LOG_CATEGORIES: SystemLogCategory[] = ["request", "outbound"];
 const SYSTEM_LOG_DETAIL_KEYS: SystemLogDetailKey[] = [
   "requestUrl",
@@ -41,7 +42,48 @@ const DEFAULT_SYSTEM_LOG_RECORDING_SETTINGS: SystemLogRecordingSettings = {
     responseBody: false,
   },
   schedule: { enabled: false, startTime: "00:00", endTime: "23:59" },
+  endpointRecording: {},
 };
+
+function normalizeEndpointRecordingPath(value: unknown): string | null {
+  if (typeof value !== "string" || value.length > 300 || !value.startsWith("/") ||
+    value.includes("?") || value.includes("#") || value.includes("\\") ||
+    value.includes("*") || value.includes("//") || value.trim() !== value) return null;
+  const path = value.replace(/\/+$/, "") || "/";
+  if (path === "/") return null;
+  return path;
+}
+
+function normalizeEndpointRecordingRules(value: unknown): Record<string, boolean> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const rules: Record<string, boolean> = {};
+  for (const [rawPath, enabled] of Object.entries(value).slice(0, MAX_ENDPOINT_RECORDING_RULES)) {
+    const path = normalizeEndpointRecordingPath(rawPath);
+    if (path && typeof enabled === "boolean") rules[path] = enabled;
+  }
+  return rules;
+}
+
+function endpointRecordingPathMatches(pattern: string, path: string) {
+  const patternSegments = pattern.split("/").filter(Boolean);
+  const pathSegments = path.split("/").filter(Boolean);
+  return patternSegments.length === pathSegments.length && patternSegments.every((segment, index) =>
+    /^:[A-Za-z][A-Za-z0-9_]*$/.test(segment) ? Boolean(pathSegments[index]) : segment === pathSegments[index]
+  );
+}
+
+export function isSystemLogEndpointRecordingEnabled(settings: SystemLogRecordingSettings, rawPath: string) {
+  const path = normalizeEndpointRecordingPath(rawPath);
+  if (!path) return true;
+  const matchedRules = Object.entries(settings.endpointRecording || {})
+    .filter(([pattern]) => endpointRecordingPathMatches(pattern, path))
+    .sort(([left], [right]) => {
+      const staticSegments = (value: string) => value.split("/").filter(Boolean)
+        .filter((segment) => !/^:[A-Za-z][A-Za-z0-9_]*$/.test(segment)).length;
+      return staticSegments(right) - staticSegments(left);
+    });
+  return matchedRules.length ? matchedRules[0][1] : true;
+}
 
 function normalizeSystemLogRecordingSettings(value: unknown): SystemLogRecordingSettings {
   const stored = value && typeof value === "object"
@@ -71,6 +113,7 @@ function normalizeSystemLogRecordingSettings(value: unknown): SystemLogRecording
       responseHeaders: typeof details.responseHeaders === "boolean" ? details.responseHeaders : legacyFullMode,
       responseBody: typeof details.responseBody === "boolean" ? details.responseBody : legacyFullMode,
     },
+    endpointRecording: normalizeEndpointRecordingRules(stored.endpointRecording),
     schedule: {
       enabled: schedule.enabled === true && startTime !== endTime,
       startTime,
@@ -136,6 +179,32 @@ export async function updateSystemLogDetailSetting(
     ...settings,
     details: { ...settings.details, [key as SystemLogDetailKey]: enabled },
   };
+  await env.CONFIG.put(SYSTEM_LOG_SETTINGS_KEY, JSON.stringify(next));
+  return next;
+}
+
+export async function updateSystemLogEndpointRecordingSettings(
+  env: Env,
+  value: unknown,
+): Promise<SystemLogRecordingSettings> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("invalid_system_log_endpoint_recording_settings");
+  }
+  const entries = Object.entries(value);
+  if (entries.length > MAX_ENDPOINT_RECORDING_RULES) {
+    throw new Error("too_many_system_log_endpoint_recording_rules");
+  }
+  const endpointRecording: Record<string, boolean> = {};
+  for (const [rawPath, enabled] of entries) {
+    const path = normalizeEndpointRecordingPath(rawPath);
+    if (!path || typeof enabled !== "boolean") {
+      throw new Error("invalid_system_log_endpoint_recording_rule");
+    }
+    endpointRecording[path] = enabled;
+  }
+  if (!env.CONFIG) throw new Error("Missing KV binding CONFIG");
+  const settings = await readSystemLogRecordingSettings(env);
+  const next = { ...settings, endpointRecording };
   await env.CONFIG.put(SYSTEM_LOG_SETTINGS_KEY, JSON.stringify(next));
   return next;
 }
@@ -325,6 +394,7 @@ export async function writeSystemLogs(
     const enabledEntries = entries.filter((entry) => {
       if (!SYSTEM_LOG_CATEGORIES.includes(entry.category)) return false;
       if (!settings.categories[entry.category]) return false;
+      if (entry.category === "request" && !isSystemLogEndpointRecordingEnabled(settings, entry.path || "/")) return false;
       const occurredAt = entry.occurredAt ? new Date(entry.occurredAt) : new Date();
       return isSystemLogScheduleActive(settings.schedule, occurredAt);
     });

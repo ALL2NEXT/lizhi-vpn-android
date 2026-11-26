@@ -271,16 +271,21 @@ function renderSystemLogRecordingSettings() {
     input.value = schedule[input.dataset.systemLogScheduleTime] || '';
     input.disabled = schedule.enabled !== true;
   });
+  if (typeof renderApiStatistics === 'function') renderApiStatistics();
 }
 
 function disableSystemLogSettingControls(disabled) {
-  document.querySelectorAll('[data-system-log-recording], [data-system-log-detail], [data-system-log-schedule-toggle], [data-system-log-schedule-time]').forEach(function(input) {
+  document.querySelectorAll('[data-system-log-recording], [data-system-log-detail], [data-system-log-endpoint], [data-system-log-schedule-toggle], [data-system-log-schedule-time]').forEach(function(input) {
     input.disabled = disabled;
   });
 }
 
 async function loadSystemLogRecordingSettings(force) {
-  if (systemLogRecordingSettingsLoading || (systemLogRecordingSettings && !force)) return;
+  if (systemLogRecordingSettingsLoading) return;
+  if (systemLogRecordingSettings && !force) {
+    if (typeof loadApiStatistics === 'function' && !apiStatisticsData) await loadApiStatistics(false);
+    return;
+  }
   systemLogRecordingSettingsLoading = true;
   disableSystemLogSettingControls(true);
   try {
@@ -300,6 +305,8 @@ async function loadSystemLogRecordingSettings(force) {
     show(error.message || '日志记录设置读取失败', true);
   } finally {
     systemLogRecordingSettingsLoading = false;
+    if (typeof renderApiStatistics === 'function') renderApiStatistics();
+    if (typeof loadApiStatistics === 'function') await loadApiStatistics(force);
   }
 }
 
@@ -391,6 +398,48 @@ async function updateSystemLogDetailSetting(input) {
     renderSystemLogRecordingSettings();
     show(error.message || '详细记录设置保存失败', true);
   }
+}
+
+function systemLogEndpointRecordingSnapshot() {
+  const endpointRecording = Object.assign({}, systemLogRecordingSettings.endpointRecording || {});
+  if (typeof apiStatisticsCatalog === 'function') {
+    apiStatisticsCatalog().forEach(function(endpoint) {
+      if (!Object.prototype.hasOwnProperty.call(endpointRecording, endpoint.path)) endpointRecording[endpoint.path] = true;
+    });
+  }
+  return endpointRecording;
+}
+
+async function saveSystemLogEndpointRecording(endpointRecording, enabled) {
+  disableSystemLogSettingControls(true);
+  try {
+    const response = await fetch(ADMIN_API_BASE + '/system-log-settings', {
+      method: 'PUT',
+      headers: headers(),
+      body: JSON.stringify({endpointRecording: endpointRecording}),
+      cache: 'no-store'
+    });
+    const responseText = await response.text();
+    const data = parseResponseJson(responseText);
+    if (!response.ok || !data.settings) {
+      throw new Error(adminErrorMessage(data.error, '端点记录设置保存失败'));
+    }
+    systemLogRecordingSettings = data.settings;
+    renderSystemLogRecordingSettings();
+    show(enabled ? '已开启该端点日志记录' : '已关闭该端点日志记录');
+  } catch (error) {
+    renderSystemLogRecordingSettings();
+    show(error.message || '端点记录设置保存失败', true);
+  }
+}
+
+async function updateSystemLogEndpointSetting(input) {
+  if (!systemLogRecordingSettings) return;
+  const endpointPath = input.dataset.systemLogEndpoint;
+  if (!endpointPath) return;
+  const endpointRecording = systemLogEndpointRecordingSnapshot();
+  endpointRecording[endpointPath] = input.checked;
+  await saveSystemLogEndpointRecording(endpointRecording, input.checked);
 }
 
 async function updateSystemLogRecordingSchedule() {

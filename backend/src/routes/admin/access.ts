@@ -14,6 +14,7 @@ export function createAdminAccessRoutes(deps: Pick<
   | "readSystemLogRecordingSettings"
   | "updateSystemLogRecordingSetting"
   | "updateSystemLogDetailSetting"
+  | "updateSystemLogEndpointRecordingSettings"
   | "updateSystemLogRecordingSchedule"
 >) {
   const {
@@ -25,6 +26,7 @@ export function createAdminAccessRoutes(deps: Pick<
     readSystemLogRecordingSettings,
     updateSystemLogRecordingSetting,
     updateSystemLogDetailSetting,
+    updateSystemLogEndpointRecordingSettings,
     updateSystemLogRecordingSchedule,
   } = deps;
 
@@ -36,7 +38,9 @@ export function createAdminAccessRoutes(deps: Pick<
     if (path === "/api/system-log-settings" && request.method === "PUT") {
       try {
         const incoming = await readJsonObject(request);
-        const settings = incoming.schedule !== undefined
+        const settings = incoming.endpointRecording !== undefined
+          ? await updateSystemLogEndpointRecordingSettings(env, incoming.endpointRecording)
+          : incoming.schedule !== undefined
           ? await updateSystemLogRecordingSchedule(env, incoming.schedule)
           : incoming.detail !== undefined
             ? await updateSystemLogDetailSetting(env, incoming.detail, incoming.enabled)

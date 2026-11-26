@@ -92,11 +92,13 @@ import {
   deleteAllSystemLogs,
   deleteSystemLogs,
   isSystemLogScheduleActive,
+  isSystemLogEndpointRecordingEnabled,
   pruneSystemLogs,
   readSystemLogPayload,
   readSystemLogs,
   readSystemLogRecordingSettings,
   updateSystemLogDetailSetting,
+  updateSystemLogEndpointRecordingSettings,
   updateSystemLogRecordingSchedule,
   updateSystemLogRecordingSetting,
   writeSystemLogs,
@@ -162,6 +164,7 @@ const routeDeps = {
   readSystemLogs,
   readSystemLogRecordingSettings,
   updateSystemLogDetailSetting,
+  updateSystemLogEndpointRecordingSettings,
   updateSystemLogRecordingSchedule,
   updateSystemLogRecordingSetting,
 } satisfies RouteDependencies;
@@ -353,6 +356,7 @@ async function fetchObservedBackend(
     const details = recordingSettings?.details;
     const captureDetails = Boolean(
       recordingSettings?.categories.request &&
+      (!recordingSettings || isSystemLogEndpointRecordingEnabled(recordingSettings, path)) &&
       details &&
       isSystemLogScheduleActive(recordingSettings.schedule, new Date(occurredAt))
     );
