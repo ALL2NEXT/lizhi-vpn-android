@@ -470,26 +470,6 @@ function resetSystemLogFilters() {
   applySystemLogFilters();
 }
 
-function showSystemLogsForApiEndpoint(category, method, path, startDate, endDate) {
-  systemLogsCategory = category === 'outbound' ? 'outbound' : 'request';
-  el('systemLogCategory').value = systemLogsCategory;
-  systemLogsEndpointMethod = String(method || '');
-  systemLogsEndpointPath = String(path || '');
-  el('systemLogSearch').value = '';
-  el('systemLogStatus').value = '';
-  if (startDate || endDate) {
-    el('systemLogStartDate').value = startDate || '';
-    el('systemLogEndDate').value = endDate || '';
-  } else {
-    const now = new Date();
-    el('systemLogStartDate').value = systemLogBeijingDateTime(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000));
-    el('systemLogEndDate').value = systemLogBeijingDateTime(now);
-  }
-  const tab = document.querySelector('.tab-button[data-tab="system-logs"]');
-  if (tab && !tab.classList.contains('active')) tab.click();
-  applySystemLogFilters();
-}
-
 function changeSystemLogsPage(page) {
   const total = Number(systemLogsData && systemLogsData.total) || 0;
   const limit = Number(systemLogsData && systemLogsData.limit) || 20;

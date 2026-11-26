@@ -293,7 +293,7 @@
      .api-statistics-tree-root, .api-statistics-tree-folder { display: grid; align-items: center; gap: 6px; width: 100%; min-width: 0; min-height: 34px; margin: 0; padding: 5px 7px; color: #40516a; background: transparent; border: 0; border-radius: 7px; box-shadow: none; text-align: left; font-size: 13px; font-weight: 500; }
      .api-statistics-tree-root { grid-template-columns: 18px minmax(0, 1fr) auto; }
      .api-statistics-tree-folder { grid-template-columns: 14px 18px minmax(0, 1fr) auto; }
-     .api-statistics-tree-root:hover:not(:disabled), .api-statistics-tree-folder:hover:not(:disabled), .api-statistics-endpoint-item:hover:not(:disabled) { color: #174ea6; background: #f3f7fd; box-shadow: none; }
+     .api-statistics-tree-folder:hover:not(:disabled) { color: #174ea6; background: #f3f7fd; box-shadow: none; }
      .api-statistics-tree-root .subscription-icon { color: #718096; }
      .api-statistics-tree-folder-icon { color: #3385ec; fill: currentColor; stroke: none; }
      .api-statistics-tree-name, .api-statistics-endpoint-path { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

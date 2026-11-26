@@ -126,14 +126,10 @@ function apiStatisticsBuildTree(endpoints) {
   return root;
 }
 
-function apiStatisticsRouteMarkup(route, category) {
+function apiStatisticsRouteMarkup(route) {
   const displayPath = route.displayPath || route.path;
-  return '<button type="button" class="api-statistics-endpoint-item"' +
-    ' data-api-statistics-endpoint-category="' + category + '"' +
-    ' data-api-statistics-endpoint-method="' + esc(route.method) + '"' +
-    ' data-api-statistics-endpoint-path="' + esc(route.path) + '"' +
-    ' title="\u70b9\u51fb\u67e5\u770b\u6b64\u7aef\u70b9\u7684\u7f51\u7edc\u65e5\u5fd7"><span class="api-statistics-endpoint-path">' + esc(displayPath) + '</span><span class="api-statistics-endpoint-count">' +
-    route.requestCount.toLocaleString() + '</span></button>';
+  return '<div class="api-statistics-endpoint-item"><span class="api-statistics-endpoint-path">' + esc(displayPath) + '</span><span class="api-statistics-endpoint-count">' +
+    route.requestCount.toLocaleString() + '</span></div>';
 }
 
 function apiStatisticsEntriesMarkup(node, category) {
@@ -146,7 +142,7 @@ function apiStatisticsEntriesMarkup(node, category) {
       const parentPath = node.path === '/' ? '' : node.path;
       const displayPath = route.path.slice(parentPath.length) || '/';
       const displayRoute = Object.assign({}, route, {displayPath: displayPath});
-      entries.push({kind: 'route', count: route.requestCount, name: displayPath, markup: apiStatisticsRouteMarkup(displayRoute, category)});
+      entries.push({kind: 'route', count: route.requestCount, name: displayPath, markup: apiStatisticsRouteMarkup(displayRoute)});
     });
   });
   entries.sort(function(left, right) {
@@ -165,7 +161,7 @@ function apiStatisticsFolderMarkup(node, root, category) {
   const groupId = 'apiStatisticsTreeChildren_' + category + '_' + encodeURIComponent(node.path).replace(/%/g, '_');
   const label = root ? '/' : node.name;
   const folderButton = root
-    ? '<div class="api-statistics-endpoint-root-row"><button type="button" class="api-statistics-tree-toggle" data-api-statistics-tree-toggle="' + esc(node.path) + '" data-api-statistics-tree-category="' + category + '" aria-expanded="' + expanded + '" aria-controls="' + groupId + '" aria-label="' + (expanded ? '\u6536\u8d77' : '\u5c55\u5f00') + '\u6839\u76ee\u5f55"><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-next"></use></svg></button><button type="button" class="api-statistics-tree-root" data-api-statistics-root-category="' + category + '" title="\u70b9\u51fb\u67e5\u770b' + (category === 'unconfigured' ? '\u672a\u9884\u8bbe' : '\u9884\u8bbe') + '\u7aef\u70b9\u65e5\u5fd7"><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-all"></use></svg><span>' + label + '</span><span class="api-statistics-endpoint-count">' + node.requestCount.toLocaleString() + '</span></button></div>'
+    ? '<div class="api-statistics-endpoint-root-row"><button type="button" class="api-statistics-tree-toggle" data-api-statistics-tree-toggle="' + esc(node.path) + '" data-api-statistics-tree-category="' + category + '" aria-expanded="' + expanded + '" aria-controls="' + groupId + '" aria-label="' + (expanded ? '\u6536\u8d77' : '\u5c55\u5f00') + '\u6839\u76ee\u5f55"><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-next"></use></svg></button><div class="api-statistics-tree-root"><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-all"></use></svg><span>' + label + '</span><span class="api-statistics-endpoint-count">' + node.requestCount.toLocaleString() + '</span></div></div>'
     : '<button type="button" class="api-statistics-tree-folder" data-api-statistics-tree-toggle="' + esc(node.path) + '" data-api-statistics-tree-category="' + category + '" aria-expanded="' + expanded + '" aria-controls="' + groupId + '"><svg class="subscription-icon api-statistics-tree-caret" aria-hidden="true"><use href="#subscription-icon-next"></use></svg><svg class="subscription-icon api-statistics-tree-folder-icon" aria-hidden="true"><use href="#subscription-icon-folder"></use></svg><span class="api-statistics-tree-name" title="' + esc(node.path) + '">' + esc(label) + '</span><span class="api-statistics-endpoint-count">' + node.requestCount.toLocaleString() + '</span></button>';
   const entries = apiStatisticsEntriesMarkup(node, category);
   return '<div class="api-statistics-tree-branch' + (root ? ' root' : '') + '">' + folderButton +
@@ -255,21 +251,5 @@ el('apiStatisticsGrid').addEventListener('click', function(event) {
     toggle.setAttribute('aria-label', (nextExpanded ? '\u6536\u8d77' : '\u5c55\u5f00') + (path === '/' ? '\u6839\u76ee\u5f55' : path));
     const children = el(toggle.getAttribute('aria-controls'));
     if (children) children.hidden = !nextExpanded;
-    return;
-  }
-  const root = event.target.closest('[data-api-statistics-root-category]');
-  if (root) {
-    showSystemLogsForApiEndpoint('request', '', '', '', '');
-    return;
-  }
-  const endpoint = event.target.closest('[data-api-statistics-endpoint-path]');
-  if (endpoint) {
-    showSystemLogsForApiEndpoint(
-      'request',
-      endpoint.dataset.apiStatisticsEndpointMethod || '',
-      endpoint.dataset.apiStatisticsEndpointPath || '',
-      '',
-      '',
-    );
   }
 });
