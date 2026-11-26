@@ -35,44 +35,6 @@ export function beijingTimestamp(date = new Date()) {
   return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}+08:00`;
 }
 
-export interface BeijingDateTimeRange {
-  start: string;
-  end: string;
-  endExclusive: string;
-  startMilliseconds: number;
-  endMilliseconds: number;
-  endExclusiveMilliseconds: number;
-}
-
-/** 将 datetime-local 分钟值按北京时间解析，并让结束分钟包含在范围内。 */
-export function normalizeBeijingDateTimeRange(
-  startValue: unknown,
-  endValue: unknown,
-  maximumDurationMilliseconds: number,
-): BeijingDateTimeRange | null {
-  const parseMinute = (value: unknown) => {
-    if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) return null;
-    const milliseconds = Date.parse(`${value}:00+08:00`);
-    if (!Number.isFinite(milliseconds) || beijingTimestamp(new Date(milliseconds)).slice(0, 16) !== value) return null;
-    return { value, milliseconds };
-  };
-
-  const start = parseMinute(startValue);
-  const end = parseMinute(endValue);
-  if (!start || !end || start.milliseconds > end.milliseconds ||
-    end.milliseconds - start.milliseconds > maximumDurationMilliseconds) return null;
-
-  const endExclusiveMilliseconds = end.milliseconds + 60_000;
-  return {
-    start: beijingTimestamp(new Date(start.milliseconds)),
-    end: beijingTimestamp(new Date(end.milliseconds)),
-    endExclusive: beijingTimestamp(new Date(endExclusiveMilliseconds)),
-    startMilliseconds: start.milliseconds,
-    endMilliseconds: end.milliseconds,
-    endExclusiveMilliseconds,
-  };
-}
-
 export function normalizeReportTimestamp(value: unknown, fallback: string | null = ""): string | null {
   if (value === undefined || value === null || value === "") return fallback;
   const date = typeof value === "number"

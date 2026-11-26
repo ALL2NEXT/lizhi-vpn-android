@@ -33,7 +33,6 @@ export function createAdminSecurityRoutes(deps: Pick<
   | "normalizeAccountId"
   | "normalizeAndroidSdk"
   | "normalizeStoredUid"
-  | "readState"
   | "rowToUser"
 >) {
   const {
@@ -44,7 +43,6 @@ export function createAdminSecurityRoutes(deps: Pick<
     normalizeAccountId,
     normalizeAndroidSdk,
     normalizeStoredUid,
-    readState,
     rowToUser,
   } = deps;
 
@@ -395,7 +393,6 @@ export function createAdminSecurityRoutes(deps: Pick<
 
     if (path === "/api/security/accounts" && request.method === "GET") {
       const db = await ensureUserSchema(env);
-      const state = await readState(env);
       const results = await db.batch([
         db.prepare(
           `SELECT
@@ -465,7 +462,7 @@ export function createAdminSecurityRoutes(deps: Pick<
       return json({
         ok: true,
         accounts: accountResult.results.map((row) => {
-          const user = rowToUser(row, state.settings);
+          const user = rowToUser(row);
           return {
             uid: user.uid,
             nickname: user.nickname,

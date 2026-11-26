@@ -15,7 +15,6 @@ export const SUBSCRIPTION_CACHE_KEY_PREFIX = "chimera:subscription-cache:v1:";
 export const SUBSCRIPTION_CONTENT_KEY_PREFIX = "chimera:subscription-content:v1:";
 export const DEFAULT_SUBSCRIPTION_CACHE_MINUTES = 30;
 export const MAX_SUBSCRIPTION_CACHE_MINUTES = 7 * 24 * 60;
-export const PLAINTEXT_NODE_PATTERN = /(?:^|\n)\s*(?:vless|vmess|trojan|hysteria2|hy2|anytls|tuic|naive|naive\+https|wireguard|masque|ss|socks|socks5|socks4|socks4a|https?):\/\/\S+/i;
 export const TEXT_ENCODER = new TextEncoder();
 const REGISTRATION_CODE_USAGE_SCHEMA = `CREATE TABLE IF NOT EXISTS registration_code_usages_mb (
   id INTEGER PRIMARY KEY,

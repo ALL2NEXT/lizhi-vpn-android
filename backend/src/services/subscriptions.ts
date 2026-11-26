@@ -5,7 +5,6 @@ import {
   DEFAULT_SUBSCRIPTION_CACHE_MINUTES,
   MAX_MANAGED_SUBSCRIPTION_BYTES,
   MAX_SUBSCRIPTION_CACHE_MINUTES,
-  PLAINTEXT_NODE_PATTERN,
   SUBSCRIPTION_CACHE_KEY_PREFIX,
   TEXT_ENCODER,
 } from "../config.ts";
@@ -63,14 +62,6 @@ export function isAppVersionAtLeast(currentVersion: unknown, minimumVersion: unk
     if (currentPart !== minimumPart) return currentPart > minimumPart;
   }
   return true;
-}
-
-export function assertPlainSubscriptionContent(value: unknown) {
-  const content = normalizeManagedContent(value);
-  if (!content || !PLAINTEXT_NODE_PATTERN.test(content)) {
-    throw new Error("subscription_must_be_plaintext_nodes");
-  }
-  return content;
 }
 
 /** 本地导入与远程更新使用相同的 URI / Base64 / Clash / sing-box / Xray 转换。 */

@@ -344,7 +344,7 @@
      .system-log-detail-option small { color: #697990; font-size: 12px; line-height: 1.4; }
      .system-log-category-settings legend, .system-log-schedule-settings legend { padding: 0 5px; }
      .system-log-schedule-settings { gap: 12px; padding: 10px 14px 12px; border: 1px solid #e1e7ef; border-radius: 10px; }
-     .system-log-schedule-settings legend { padding: 0 5px; }
+
      .system-log-schedule-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
      .system-log-schedule-toggle-row > span { display: grid; gap: 4px; min-width: 0; }
      .system-log-schedule-toggle-row strong { color: #26364d; font-size: 13px; }
@@ -447,54 +447,31 @@
      .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; clip-path: inset(50%); border: 0; }
      .source-row .row-actions { display: flex; align-items: center; justify-content: space-between; }
      .source-row small { display: block; margin-top: 8px; }
-     .security-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
-     .security-toolbar input { flex: 1 1 280px; max-width: 520px; }
-     .security-toolbar button { margin: 0; }
-     .security-batch-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: -4px 0 16px; padding: 10px 12px; background: #f8fafd; border: 1px solid #dadce0; border-radius: 8px; }
-     .security-batch-toolbar button { margin: 0; }
-     .security-batch-toolbar label { display: inline-flex; align-items: center; margin: 0; color: #202124; white-space: nowrap; }
-     .security-batch-toolbar input[type="checkbox"] { margin-right: 8px; }
+
      .security-selection-count { color: #5f6368; font-size: 13px; }
-     .security-summary { margin: 0 0 14px; color: #5f6368; }
-     .security-account-list { overflow: auto; border: 1px solid #dadce0; border-radius: 10px; background: #ffffff; }
+
      .security-account-table { width: max-content; min-width: 100%; border-collapse: collapse; font-size: 13px; }
      .security-account-table th, .security-account-table td { padding: 10px 12px; text-align: left; vertical-align: middle; border-right: 1px solid #dadce0; border-bottom: 1px solid #dadce0; white-space: nowrap; }
      .security-account-table th { position: sticky; top: 0; z-index: 1; color: #5f6368; background: #f1f3f4; }
      .security-account-table td { color: #202124; }
-     .security-account-table tr.banned td { background: #fce8e6; }
      .security-account-table code { color: #6941c6; }
-     .security-account-name { color: #202124; font-weight: 700; }
-     .security-account-email { color: #5f6368; }
-     .security-account-devices { min-width: 180px; white-space: normal; }
-     .security-account-devices summary { cursor: pointer; color: #5f6368; }
-     .security-account-devices summary:hover { color: #202124; }
+
      .security-badge { display: inline-flex; align-items: center; padding: 3px 8px; border-radius: 999px; color: #137333; background: #e6f4ea; font-size: 13px; font-weight: 700; }
      .security-badge.banned { color: #b3261e; background: #fce8e6; }
-     .security-action { flex: 0 0 auto; margin: 0; }
-     .security-device-wrap { margin-top: 14px; overflow: auto; border: 1px solid #dadce0; border-radius: 8px; }
-     .security-device-table { width: 100%; min-width: 860px; border-collapse: collapse; font-size: 13px; }
-     .security-device-table th, .security-device-table td { padding: 9px; text-align: left; border-right: 1px solid #dadce0; border-bottom: 1px solid #dadce0; vertical-align: top; }
-     .security-device-table th { color: #5f6368; background: #f1f3f4; white-space: nowrap; }
-     .security-device-table code { color: #6941c6; word-break: break-all; white-space: normal; }
+
      .security-device-empty { margin-top: 14px; padding: 12px; color: #5f6368; border: 1px dashed #dadce0; border-radius: 8px; }
-     .traffic-detail-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+
      .traffic-zero-filters { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; width: 100%; }
      .traffic-filter-button { margin: 0; }
      .traffic-filter-button.active { color: #174ea6; border-color: #1a73e8; background: #e6f4ea; }
-     .traffic-detail-search { display: flex; align-items: center; flex: 1 1 100%; flex-wrap: wrap; gap: 10px; }
-     .traffic-detail-search input { flex: 1 1 280px; max-width: 520px; }
-     .traffic-detail-summary { color: #5f6368; font-size: 13px; }
+
      .traffic-detail-wrap { overflow: auto; border: 1px solid #dadce0; border-radius: 10px; background: #ffffff; }
      .traffic-detail-table { width: max-content; min-width: 100%; border-collapse: collapse; font-size: 13px; }
      .traffic-detail-table th, .traffic-detail-table td { padding: 9px 10px; text-align: left; vertical-align: middle; border-right: 1px solid #dadce0; border-bottom: 1px solid #dadce0; white-space: nowrap; }
      .traffic-detail-table th { position: sticky; top: 0; z-index: 1; color: #5f6368; background: #f1f3f4; }
-     .traffic-detail-table th.traffic-sort-header { padding: 0; }
-     .traffic-sort-button { display: flex; align-items: center; gap: 4px; width: 100%; padding: 9px 10px; border: 0; border-radius: 0; color: inherit; background: transparent; font: inherit; font-weight: 700; text-align: left; cursor: pointer; }
-     .traffic-sort-button:hover, .traffic-sort-button:focus-visible { color: #202124; background: #e8f0fe; outline: none; }
-     .traffic-sort-indicator { display: inline-block; min-width: 12px; color: #1a73e8; font-size: 13px; }
+
      .traffic-detail-table td { color: #202124; }
      .traffic-detail-table code { color: #6941c6; }
-     .traffic-detail-table tr.banned td { background: #fce8e6; }
      .user-admin-table input:not(.user-admin-checkbox) { width: 130px; min-width: 110px; padding: 7px 8px; }
      .user-admin-table th:first-child, .user-admin-table td:first-child { width: 34px; min-width: 34px; max-width: 34px; padding-left: 6px; padding-right: 6px; text-align: center; }
      .user-admin-table .user-admin-checkbox { width: auto; min-width: 0; padding: 0; margin: 0; }
@@ -570,13 +547,7 @@
      .user-admin-ip-list code { overflow-wrap: anywhere; color: #202124; font-size: 12px; }
      .user-admin-zero-filter { margin: 0; }
      .user-admin-zero-filter.active { color: #174ea6; border-color: #1a73e8; background: #e6f4ea; }
-     .device-relation-devices { min-width: 440px; max-width: 860px; white-space: normal !important; vertical-align: top !important; }
-     .device-relation-device-list { display: flex; flex-wrap: wrap; gap: 6px; max-width: 840px; }
-     .device-relation-chip { display: inline-flex; flex: 0 1 250px; align-items: center; min-height: 34px; padding: 6px 10px; border: 1px solid #dadce0; border-radius: 7px; color: #202124; background: #f8fafd; font: inherit; text-align: left; white-space: normal; cursor: pointer; }
-     .device-relation-chip:hover, .device-relation-chip:focus-visible { border-color: #1a73e8; color: #202124; background: #e8f0fe; outline: none; }
-     .device-relation-modal { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 24px; background: rgba(2, 6, 23, .72); }
-     .device-relation-modal[hidden] { display: none; }
-     .device-relation-modal-card { width: min(620px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow: auto; padding: 20px; border: 1px solid #dadce0; border-radius: 14px; background: #ffffff; box-shadow: 0 20px 70px rgba(0, 0, 0, .45); }
+
      .user-admin-column-dialog { width: min(760px, calc(100vw - 32px)); max-width: none; max-height: calc(100vh - 48px); margin: auto; overflow: auto; padding: 22px; border: 1px solid #dadce0; border-radius: 14px; color: #202124; background: #ffffff; box-shadow: 0 20px 70px rgba(0, 0, 0, .45); }
      .user-admin-column-dialog::backdrop { background: rgba(2, 6, 23, .62); }
      .user-admin-column-dialog-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
@@ -591,54 +562,13 @@
      .user-admin-column-option { display: inline-flex; align-items: center; gap: 6px; min-width: 0; min-height: 28px; margin: 0; color: #526078; font-size: 13px; font-weight: 400; cursor: pointer; }
      .user-admin-column-master-option input, .user-admin-column-option input { flex: 0 0 16px; width: 16px; height: 16px; min-height: 0; margin: 0; padding: 0; }
      .user-admin-column-dialog-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 16px; }
-     .device-relation-modal-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
-     .device-relation-modal-header h3 { margin: 0; color: #202124; }
-     .device-relation-modal-close { width: 38px; min-width: 38px; margin: 0; padding: 6px; font-size: 22px; line-height: 1; }
-     .device-relation-modal-device-name { margin: 0 0 16px; color: #1a73e8; font-size: 18px; font-weight: 700; }
-     .device-relation-detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-     .device-relation-detail-item { min-width: 0; padding: 10px 12px; border: 1px solid #dadce0; border-radius: 8px; background: #f8fafd; }
-     .device-relation-detail-item span { display: block; margin-bottom: 5px; color: #5f6368; font-size: 13px; }
-     .device-relation-detail-item strong { display: block; color: #202124; word-break: break-word; }
-     .user-sheet-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
-     .user-sheet-toolbar button { margin: 0; }
-     .user-sheet-toolbar small { margin-left: auto; }
-     .user-search { flex: 1 1 220px; width: min(300px, 100%); min-width: 180px; padding: 9px 10px; }
+
       .table-wrap { max-height: calc(100vh - 210px); overflow: auto; border: 1px solid #dadce0; border-radius: 10px; background: #ffffff; }
-      .user-tables { display: grid; gap: 14px; }
-      .user-table-card { min-width: 0; padding: 14px; background: #ffffff; border: 1px solid #dadce0; border-radius: 10px; }
-      .user-table-card h3 { margin: 0 0 8px; color: #202124; font-size: 16px; }
-      .user-table-meta { margin-bottom: 10px; color: #5f6368; font-size: 13px; }
-      .user-table-scroll { max-height: 520px; overflow: auto; border: 1px solid #dadce0; border-radius: 8px; }
-      table.user-data-table { width: max-content; min-width: 100%; border-collapse: collapse; font-size: 13px; }
-      .user-data-table th, .user-data-table td { padding: 8px; text-align: left; vertical-align: top; border-right: 1px solid #dadce0; border-bottom: 1px solid #dadce0; white-space: pre-wrap; word-break: break-word; }
-      .user-data-table th { position: sticky; top: 0; z-index: 1; color: #5f6368; background: #f1f3f4; white-space: nowrap; }
-      .user-data-table td { min-width: 110px; color: #202124; }
-      .user-data-table td:first-child, .user-data-table th:first-child { min-width: 42px; color: #5f6368; }
+
       .user-table-empty { padding: 18px; color: #5f6368; border: 1px dashed #dadce0; border-radius: 8px; }
-      table.user-sheet { width: 100%; min-width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: 13px; }
-     .user-sheet th, .user-sheet td { text-align: left; padding: 0; overflow: hidden; text-overflow: ellipsis; border-right: 1px solid #dadce0; border-bottom: 1px solid #dadce0; white-space: nowrap; background: #ffffff; }
-     .user-sheet th { position: sticky; top: 0; z-index: 3; padding: 9px 12px 9px 8px; overflow: visible; color: #5f6368; background: #f1f3f4; font-weight: 700; user-select: none; }
-     .user-sheet th[data-sort-column] { cursor: pointer; }
-     .user-sheet th[data-sort-column]:hover { background: #e8f0fe; color: #202124; }
-     .sort-indicator { display: inline-block; width: 14px; color: #1a73e8; }
-     .column-resizer { position: absolute; top: 0; right: -4px; width: 9px; height: 100%; z-index: 6; cursor: col-resize; touch-action: none; }
-     .column-resizer::after { content: ''; position: absolute; top: 20%; bottom: 20%; left: 4px; width: 1px; background: #dadce0; }
-     .column-resizer:hover::after, .column-resizer:focus::after, body.column-resizing .column-resizer::after { background: #1a73e8; width: 2px; }
+
      body.column-resizing, body.column-resizing * { cursor: col-resize !important; user-select: none !important; }
-     .user-sheet th:first-child, .user-sheet td:first-child { position: sticky; left: 0; z-index: 2; }
-     .user-sheet th:first-child { z-index: 4; }
-     .user-sheet td:first-child { padding: 8px; background: #f8fafd; }
-     .user-sheet .selection-cell { text-align: center; padding: 8px !important; }
-     .user-sheet .selection-cell input { margin: 0; }
-     .user-sheet td.readonly { padding: 8px; color: #5f6368; }
-     .user-sheet td code { color: #6941c6; }
-     .sheet-input, .sheet-select { width: 100%; min-width: 0; height: 36px; padding: 7px 8px; border: 0; border-radius: 0; background: transparent; }
-     .sheet-input:focus, .sheet-select:focus { position: relative; z-index: 1; outline: 2px solid #1a73e8; outline-offset: -2px; background: #ffffff; }
-     .sheet-save, .sheet-delete { margin: 4px 2px; padding: 7px 10px; }
-     .user-row.dirty td { background: #fef7e0; }
-     .user-row.dirty td:first-child { background: #feefc3; }
-      .user-row.search-current td { box-shadow: inset 0 0 0 2px #1a73e8; }
-      .user-row[hidden] { display: none; }
+
       button:disabled { cursor: not-allowed; opacity: .5; }
      #status { position: sticky; top: var(--dashboard-title-row-height); z-index: 20; box-sizing: border-box; color: #1a73e8; background: #ffffff; }
      #status:not(:empty) { min-height: 44px; padding: 11px 28px; border-bottom: 1px solid #dadce0; }
@@ -774,7 +704,7 @@
       }
     }
     .dashboard-heading { align-items: center; margin-bottom: 30px; }
-    .growth-card, .distribution-card, .user-table-card {
+    .growth-card, .distribution-card{
       background: var(--surface);
       border-color: #e3e9f1;
       border-radius: 16px;
@@ -804,15 +734,14 @@
     .user-admin-table td { white-space: normal; overflow-wrap: anywhere; word-break: break-word; }
     .user-admin-table th:first-child, .user-admin-table td:first-child { width: 46px; min-width: 46px; max-width: 46px; }
     .user-admin-cell-ellipsis { max-width: 100%; overflow-wrap: anywhere; white-space: normal; }
-    .user-admin-operations-panel { margin: 0; }
+
     .user-admin-summary { color: var(--ink-muted); background: var(--surface-soft); }
     .user-admin-filter-section { border-color: var(--line); background: var(--surface); }
     .user-admin-filter-option { color: var(--ink); }
     .user-admin-filter-toggle { color: var(--ink-muted); }
     .user-admin-filter-note { color: var(--ink-muted); }
     .user-admin-zero-filter.active { color: var(--blue-ink); border-color: #a8c7fa; background: var(--surface-active); }
-    .growth-toolbar h3, .distribution-card h3, .user-admin-control-panel h3,
-    .user-table-card h3, .settings-section-title, .source-section-title { color: var(--ink); }
+    .growth-toolbar h3, .distribution-card h3, .user-admin-control-panel h3, .settings-section-title, .source-section-title{ color: var(--ink); }
     .growth-toolbar small, .distribution-card > small { color: var(--ink-muted); }
     .settings-sections { gap: 0; }
     .settings-section {
@@ -828,8 +757,7 @@
     .source-row { background: transparent; border-color: transparent; border-top: 1px solid #e3e9f1; border-radius: 0; padding: 16px 0; margin: 0; }
     .subscription-group { background: #f8fafd; border-color: #e2e9f1; border-radius: 12px; }
     .source-section { padding: 12px 0; background: transparent; border: 0; border-radius: 0; }
-    .user-admin-device-detail, .device-relation-detail-item,
-    .security-batch-toolbar { background: var(--surface-soft); }
+    .user-admin-device-detail{ background: var(--surface-soft); }
     input, textarea, select {
       min-height: 40px;
       color: var(--ink);
@@ -873,7 +801,7 @@
     .growth-period-button:hover:not(:disabled) { background: #e8eaed; }
     .growth-period-button.active { color: var(--blue-ink); background: var(--surface-active); }
     .growth-period-button.active:hover:not(:disabled) { background: #d3e3fd; }
-    .traffic-filter-button.active, .user-admin-zero-filter.active {
+    .traffic-filter-button.active{
       color: var(--blue-ink);
       border-color: #a8c7fa;
       background: var(--surface-active);
@@ -884,43 +812,30 @@
     }
     .growth-legend i, .traffic-legend i { border-radius: 99px; }
     .traffic-upload i { background: #34a853; }
-    .traffic-download i { background: #a142f4; }
-    .traffic-total i { background: #f9ab00; }
+
     .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
     .security-risk-section { display: grid; min-width: 0; gap: 9px; }
     .security-risk-section-heading { display: flex; min-width: 0; align-items: center; gap: 9px; padding-top: 3px; }
     .security-risk-section-heading h3 { margin: 0; color: var(--ink); font-size: 16px; }
-    .traffic-detail-wrap, .security-account-list, .system-logs-wrap,
-    .table-wrap, .user-table-scroll, .security-device-wrap {
+    .traffic-detail-wrap, .system-logs-wrap, .table-wrap{
       background: var(--surface);
       border-color: var(--line);
       border-radius: 12px;
     }
-    .traffic-detail-table th, .security-account-table th, .system-logs-table th,
-    .security-device-table th, .user-data-table th, .user-sheet th {
+    .traffic-detail-table th, .security-account-table th, .system-logs-table th{
       color: #3c4043;
       background: var(--surface-soft);
       border-color: var(--line);
     }
-    .traffic-detail-table td, .security-account-table td, .system-logs-table td,
-    .security-device-table td, .user-data-table td, .user-sheet td { color: #3c4043; border-color: #e8eaed; }
-    .traffic-detail-table tbody tr:hover td, .security-account-table tbody tr:hover td,
-    .system-logs-table tbody tr:hover td, .user-data-table tbody tr:hover td { background: #f8fafd; }
-    .user-sheet th[data-sort-column]:hover, .traffic-sort-button:hover,
-    .traffic-sort-button:focus-visible { color: var(--blue-ink); background: #e8f0fe; }
-    button.traffic-sort-button:hover:not(:disabled), button.traffic-sort-button:focus-visible {
-      color: var(--blue-ink);
-      background: #e8f0fe;
-      box-shadow: none;
-    }
-    .user-sheet td code, .traffic-detail-table code, .security-account-table code,
-    .system-logs-table code { color: #6941c6; }
-    .user-sheet td:first-child { background: #f8fafd; }
-    .user-sheet th { background: var(--surface-soft); }
+    .traffic-detail-table td, .security-account-table td, .system-logs-table td{ color: #3c4043; border-color: #e8eaed; }
+    .traffic-detail-table tbody tr:hover td, .security-account-table tbody tr:hover td, .system-logs-table tbody tr:hover td{ background: #f8fafd; }
+
+    .system-logs-table code{ color: #6941c6; }
+
     .settings-save-bar { background: rgb(255 255 255 / 96%); border-color: var(--line); border-radius: 14px; box-shadow: 0 -4px 16px rgb(60 64 67 / 8%); backdrop-filter: blur(8px); }
     #status { color: var(--green); background: var(--surface); }
     #status:not(:empty) { padding-right: 32px; padding-left: 32px; border-bottom-color: var(--line); }
-    .source-settings-dialog, .subscription-permissions-dialog, .subscription-editor, .device-relation-modal-card, .user-admin-column-dialog {
+    .source-settings-dialog, .subscription-permissions-dialog, .subscription-editor, .user-admin-column-dialog{
       color: var(--ink); background: var(--surface); border-color: var(--line); box-shadow: 0 8px 28px rgb(60 64 67 / 20%);
     }
     .user-admin-column-group { border-color: var(--line); background: var(--surface); }
@@ -930,19 +845,12 @@
     .user-admin-device-toolbar { border-color: var(--line); background: var(--surface-soft); }
     .user-admin-device-search, .user-admin-device-select-all,
     .user-admin-separation-note, .admin-device-account-status { color: var(--ink-muted); }
-    button.device-relation-chip:hover:not(:disabled), button.device-relation-chip:focus-visible {
-      color: var(--blue-ink);
-      background: var(--surface-active);
-      border-color: #a8c7fa;
-      box-shadow: none;
-    }
+
     .source-settings-dialog::backdrop, .subscription-permissions-dialog::backdrop,
     .subscription-editor::backdrop, .user-admin-column-dialog::backdrop { background: rgb(32 33 36 / 48%); }
-    .device-relation-modal { background: rgb(32 33 36 / 48%); }
-    .device-relation-modal-card { border-color: var(--line); box-shadow: 0 8px 28px rgb(60 64 67 / 20%); }
+
     .source-settings-dialog-header, .source-settings-dialog-actions { border-color: var(--line); }
-    .source-settings-dialog-header h3, .device-relation-modal-header h3,
-    .user-admin-column-dialog-header h3 { color: var(--ink); }
+    .source-settings-dialog-header h3, .user-admin-column-dialog-header h3{ color: var(--ink); }
     .security-badge { color: #137333; background: #e6f4ea; }
     .security-badge.banned { color: var(--red); background: #fce8e6; }
     .login-gate { width: min(430px, calc(100% - 32px)); margin-top: max(8vh, 48px); }
@@ -951,33 +859,20 @@
     /* 用留白和细分隔线维持层级，避免每个嵌套区域都加边框。 */
     .growth-card { margin-bottom: 20px; }
     .distribution-grid { gap: 18px; }
-    .user-table-card { padding: 20px; }
-    .user-table-scroll { border: 0; border-top: 1px solid var(--line); border-radius: 0; }
+
     .growth-range-field, .subscription-version-range label,
     .subscription-group-permissions legend, .source-row-heading label { font-size: 13px; }
-    .settings-section-description, .traffic-detail-summary,
-    .security-selection-count, .user-table-meta, .user-admin-device-detail span,
-    .device-relation-detail-item span { font-size: 13px; }
-    .system-logs-table, .security-account-table, .security-device-table,
-    .traffic-detail-table, .user-data-table { font-size: 13px; }
-    .system-logs-table th, .system-logs-table td, .security-account-table th,
-    .security-account-table td, .security-device-table th, .security-device-table td,
-    .traffic-detail-table th, .traffic-detail-table td, .user-data-table th,
-    .user-data-table td, .user-sheet th, .user-sheet td {
+    .settings-section-description, .security-selection-count, .user-admin-device-detail span{ font-size: 13px; }
+    .system-logs-table, .security-account-table, .traffic-detail-table{ font-size: 13px; }
+    .system-logs-table th, .system-logs-table td, .security-account-table th, .security-account-table td, .traffic-detail-table th, .traffic-detail-table td{
       border-right: 0;
       border-bottom-color: #e7edf4;
     }
-    .system-logs-table th, .system-logs-table td, .security-account-table th,
-    .security-account-table td, .security-device-table th, .security-device-table td,
-    .traffic-detail-table th, .traffic-detail-table td, .user-data-table th,
-    .user-data-table td { padding: 10px 12px; }
-    .traffic-detail-table th, .security-account-table th, .system-logs-table th,
-    .security-device-table th, .user-data-table th, .user-sheet th { background: #e9eff6; }
-    .user-sheet td:first-child { background: #f8fafd; }
-    .traffic-detail-wrap, .security-account-list, .system-logs-wrap,
-    .table-wrap, .security-device-wrap { border-color: #e1e8f0; }
-    .security-device-wrap { border-right: 0; border-bottom: 0; border-left: 0; border-radius: 0; }
-    .device-relation-chip { border-color: #dfe6ee; border-radius: 8px; background: #fff; }
+    .system-logs-table th, .system-logs-table td, .security-account-table th, .security-account-table td, .traffic-detail-table th, .traffic-detail-table td{ padding: 10px 12px; }
+    .traffic-detail-table th, .security-account-table th, .system-logs-table th{ background: #e9eff6; }
+
+    .traffic-detail-wrap, .system-logs-wrap, .table-wrap{ border-color: #e1e8f0; }
+
     .security-badge { border-radius: 8px; font-size: 13px; }
     .settings-save-bar {
       padding: 12px 16px;
@@ -989,7 +884,7 @@
       backdrop-filter: none;
     }
     #status { background: var(--surface-page); }
-    .source-settings-dialog, .device-relation-modal-card {
+    .source-settings-dialog{
       border-radius: 16px;
       box-shadow: 0 8px 28px rgb(32 33 36 / 16%);
     }
@@ -1096,7 +991,7 @@
       border-radius: 0;
     }
     .source-row-header, .source-row-heading { display: contents; }
-    .source-row-heading .field { min-width: 0; }
+
     .source-row-heading input { height: 34px; min-height: 34px; padding: 7px 9px; }
     button.secondary.subscription-group-add {
       min-height: 34px;
@@ -1235,9 +1130,9 @@
     .source-traffic-line { min-width: 0; }
     [data-source-traffic-text] { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .source-traffic-track { display: block; width: 100%; height: 8px; overflow: hidden; background: #e3e7ec; border-radius: 999px; }
-    .source-traffic-track[hidden] { display: none !important; }
+
     .source-traffic-progress { display: block; height: 100%; background: #55b86a; border-radius: inherit; }
-    .source-traffic-progress.warning { background: #f9ab00; }
+
     .source-traffic-progress.critical, .source-traffic-progress.exhausted { background: #ea4335; }
     .source-expiry-cell { min-width: 0; color: #46556b; font-size: 13px; }
     .source-expiry { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1266,7 +1161,7 @@
     .subscription-move-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
     .subscription-move-dialog-actions button { margin: 0; }
     .subscription-editor[open] { display: flex; flex-direction: column; }
-    .subscription-editor::backdrop { background: rgb(32 33 36 / 48%); }
+
     .subscription-editor-header { display: flex; flex: 0 0 auto; align-items: center; justify-content: space-between; min-height: 54px; padding: 10px 16px; border-bottom: 1px solid #e6ebf2; }
     .subscription-editor-header h3 { margin: 0; color: #111827; font-size: 18px; }
     .subscription-editor-header button { display: grid; place-items: center; width: 34px; min-width: 34px; min-height: 34px; margin: 0; padding: 0; color: #3f4c60; background: transparent; }
@@ -1412,7 +1307,6 @@
       .notification-modal { padding: 8px; }
       .notification-modal-card { width: calc(100vw - 16px); max-height: calc(100vh - 16px); padding: 16px; }
     }
-
 
 /* 后台界面采用 Windows 10 风格，截图中的侧栏保留原有配色与字体。 */
 body {

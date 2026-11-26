@@ -1,59 +1,15 @@
   let currentState = null;
   let adminToken = '';
-  let currentUsersData = null;
-  let accountSecurityData = null;
-  let accountSecurityLoading = false;
-  const accountSecuritySelection = new Set();
-  let deviceRelationsData = null;
-  let deviceRelationsLoading = false;
-  let trafficDetailsData = null;
-  let trafficDetailsLoading = false;
   let systemLogsData = null;
   let systemLogsLoading = false;
   let systemLogsOffset = 0;
   let systemLogsCategory = 'request';
-  let trafficDetailsSortKey = '';
-  let trafficDetailsSortDirection = 'asc';
-  const trafficZeroFilters = {today: false, month: false, total: false};
  let growthPeriod = 'day';
  let growthRequestId = 0;
  let activityPeriod = 'day';
  let activityRequestId = 0;
  let trafficPeriod = 'day';
  let trafficRequestId = 0;
- const dirtyUserIds = new Set();
- const selectedUserIds = new Set();
- let savingAllUsers = false;
- let userSearchMatches = [];
- let userSearchIndex = -1;
- let userSortKey = '';
- let userSortDirection = 'desc';
- const USER_COLUMN_WIDTHS_KEY = 'chimera:user-sheet-column-widths:v1';
- const LEGACY_USER_COLUMN_WIDTHS_KEY = 'firefly:user-sheet-column-widths:v1';
- const USER_SHEET_COLUMNS = [
-   {key: 'select', label: '选择', width: 48, min: 44},
-   {key: 'accountId', label: '用户 UID', width: 150, min: 110},
-   {key: 'nickname', label: '昵称', width: 110, min: 70},
-   {key: 'brand', label: '品牌', width: 90, min: 60},
-   {key: 'model', label: '型号', width: 120, min: 70},
-   {key: 'androidVersion', label: 'Android', width: 85, min: 65},
-   {key: 'appVersion', label: 'App 版本', width: 85, min: 65},
-   {key: 'activeToday', label: '今日活跃', width: 70, min: 60},
-   {key: 'activeMonth', label: '本月活跃', width: 70, min: 60},
-   {key: 'trafficTodayUpload', label: '今日上传', width: 90, min: 65},
-   {key: 'trafficTodayDownload', label: '今日下载', width: 90, min: 65},
-   {key: 'trafficToday', label: '今日总流量', width: 90, min: 65},
-   {key: 'trafficMonthUpload', label: '本月上传', width: 90, min: 65},
-   {key: 'trafficMonthDownload', label: '本月下载', width: 90, min: 65},
-   {key: 'trafficMonth', label: '本月总流量', width: 90, min: 65},
-   {key: 'trafficTotalUpload', label: '累计上传', width: 90, min: 65},
-   {key: 'trafficTotalDownload', label: '累计下载', width: 90, min: 65},
-   {key: 'trafficTotal', label: '累计总流量', width: 90, min: 65},
-   {key: 'createdAt', label: '注册时间', width: 140, min: 90},
-   {key: 'lastReportAt', label: '最后上报', width: 140, min: 90},
-   {key: 'actions', label: '操作', width: 130, min: 100}
- ];
- let userColumnWidths = loadUserColumnWidths();
  const ADMIN_API_BASE = "__ADMIN_BASE_PATH__/api";
  const ADMIN_PANEL_AUTO_REFRESH_STORAGE_KEY = 'chimera.admin.panel-auto-refresh.v1';
  const ADMIN_PANEL_AUTO_REFRESH_INTERVAL_MS = 30000;
@@ -70,6 +26,15 @@
  function setValue(id, data) { el(id).value = data == null ? '' : data; }
  function checked(id, data) { el(id).checked = Boolean(data); }
  function esc(data) { return String(data == null ? '' : data).replace(/[&<>"']/g, function(c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+ function formatMegabytes(megabytes) {
+   let value = Number(megabytes) || 0;
+   const units = ['MB', 'GB', 'TB', 'PB'];
+   let index = 0;
+   while (value >= 1024 && index < units.length - 1) { value /= 1024; index++; }
+   if (value === 0) return '0 MB';
+   if (index === 0 && value < 0.01) return '<0.01 MB';
+   return value.toFixed(value >= 100 ? 0 : value >= 10 ? 1 : 2) + ' ' + units[index];
+ }
  function headers() { return {'content-type':'application/json','authorization':'Bearer ' + adminToken}; }
  function show(message, error) { statusEl.textContent = message; statusEl.style.color = error ? '#c42b1c' : '#107c10'; }
  // 页面标题与临时操作提示分开，保存控件可以和标题保持同一行。
@@ -110,10 +75,6 @@
    if (settingsSection && (settingsSectionHasUnsavedChanges(settingsSection) ||
        (typeof settingsSaveInFlight !== 'undefined' && (settingsSaveInFlight === settingsSection || settingsManualSaveRun)))) {
      return '当前模块有未保存修改或正在保存，请稍后刷新';
-   }
-   if ((panelName === 'user-trends' || panelName === 'profile-ratio') &&
-       typeof dirtyUserIds !== 'undefined' && dirtyUserIds.size > 0) {
-     return '用户信息有未保存修改，请先保存后刷新';
    }
    if (panelName === 'users' && typeof adminUserBatchBusy !== 'undefined' && adminUserBatchBusy) {
      return '账户批量操作进行中，请稍后再刷新';
@@ -315,22 +276,12 @@
    if (typeof resetAdminUsers === 'function') resetAdminUsers();
    if (typeof resetAdminDeviceManagement === 'function') resetAdminDeviceManagement();
    if (typeof resetAdminNotifications === 'function') resetAdminNotifications();
-   accountSecurityData = null;
-   accountSecuritySelection.clear();
-   deviceRelationsData = null;
-   deviceRelationsLoading = false;
-   if (typeof resetIpRelations === 'function') resetIpRelations();
-   trafficDetailsData = null;
-   closeDeviceRelationDetail();
    stopAdminPanelAutoRefresh();
    if (typeof closeSystemLogDetails === 'function') closeSystemLogDetails();
    systemLogsData = null;
    systemLogsLoading = false;
    systemLogsOffset = 0;
    systemLogsCategory = 'request';
-   trafficZeroFilters.today = false;
-   trafficZeroFilters.month = false;
-   trafficZeroFilters.total = false;
    statusEl.textContent = '';
    el('dashboard').hidden = true;
    loginGate.hidden = false;
@@ -361,18 +312,12 @@
      panel.classList.toggle('active', panel.dataset.panel === name);
    });
    syncAdminPanelAutoRefresh(name);
-   if (name === 'account-security' && !accountSecurityData && !accountSecurityLoading) {
-     loadAccountSecurity();
-   }
    if (name === 'users' && typeof loadAdminUsers === 'function' && !adminUserData && !adminUserLoading) {
      loadAdminUsers();
    }
    if (name === 'device-management' && typeof loadAdminDevices === 'function' &&
        !adminDeviceData && !adminDeviceLoading) {
      loadAdminDevices();
-   }
-   if (name === 'traffic-query' && !trafficDetailsData && !trafficDetailsLoading) {
-     loadTrafficDetails();
    }
    if (name === 'system-logs' && !systemLogsData && !systemLogsLoading) {
      loadSystemLogs();

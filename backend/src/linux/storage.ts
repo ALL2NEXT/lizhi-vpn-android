@@ -129,7 +129,7 @@ class SqliteConfigStore implements ConfigStore {
   private readonly writeStatement: SqliteStatement;
   private readonly deleteStatement: SqliteStatement;
 
-  constructor(private readonly database: DatabaseSync) {
+  constructor(database: DatabaseSync) {
     database.exec(`
       CREATE TABLE IF NOT EXISTS linux_config_kv (
         key TEXT PRIMARY KEY,

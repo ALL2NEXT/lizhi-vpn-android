@@ -4,7 +4,6 @@ import type {
   AccountType,
   DeviceProfile,
   PublicAccount,
-  Settings,
   SubscriptionAccountStatus,
   User,
   UserIdentityType,
@@ -268,7 +267,7 @@ export async function resolveAccountAccess(env: Env, deviceId: string): Promise<
   };
 }
 
-export async function readUser(env: Env, userId: number, settings?: Settings) {
+export async function readUser(env: Env, userId: number) {
   const db = await ensureUserSchema(env);
   const normalizedUserId = Number(userId);
   if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return null;
@@ -281,10 +280,10 @@ export async function readUser(env: Env, userId: number, settings?: Settings) {
     "ORDER BY last_seen_at DESC, id DESC LIMIT 1" +
     ") WHERE u.id = ?",
   ).bind(normalizedUserId).first<UserRow>();
-  return row ? rowToUser(row, settings) : null;
+  return row ? rowToUser(row) : null;
 }
 
-export async function readUserWithTraffic(env: Env, userId: number, settings?: Settings, now = new Date()) {
+export async function readUserWithTraffic(env: Env, userId: number, now = new Date()) {
   const db = await ensureUserSchema(env);
   const normalizedUserId = Number(userId);
   if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return null;
@@ -320,7 +319,7 @@ export async function readUserWithTraffic(env: Env, userId: number, settings?: S
   ).bind(day, day, month, month, normalizedUserId).first<UserRow>();
   if (!row) return null;
   return {
-    ...rowToUser(row, settings),
+    ...rowToUser(row),
     traffic: accountTrafficFromRow(row),
   };
 }
@@ -349,7 +348,7 @@ function safeTrafficBytes(value: unknown) {
   return Math.min(Math.round(bytes), Number.MAX_SAFE_INTEGER);
 }
 
-export function rowToUser(row: AccountRow, settings?: Settings): User {
+export function rowToUser(row: AccountRow): User {
   const uid = normalizeStoredUid(row.uid);
   return {
     uid,
@@ -390,7 +389,7 @@ export function publicAccount(user: User | null): PublicAccount {
   return account;
 }
 
-export function publicAdminUser(row: UserRow, settings?: Settings) {
+export function publicAdminUser(row: UserRow) {
   const todayUpload = bytesToMegabytes(row.today_upload_bytes);
   const todayDownload = bytesToMegabytes(row.today_download_bytes);
   const monthUpload = bytesToMegabytes(row.month_upload_bytes);
@@ -398,7 +397,7 @@ export function publicAdminUser(row: UserRow, settings?: Settings) {
   const totalUpload = bytesToMegabytes(row.total_upload_bytes);
   const totalDownload = bytesToMegabytes(row.total_download_bytes);
   return {
-    ...publicAccount(rowToUser(row, settings)),
+    ...publicAccount(rowToUser(row)),
     identityType: normalizeUserIdentityType(row.identity_type),
     createdAt: cleanText(row.created_at),
     lastReportAt: cleanText(row.last_report_at) || null,

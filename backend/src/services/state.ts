@@ -312,9 +312,6 @@ export function normalizeState(input: unknown): AppState {
 export function normalizeSettings(value: unknown): Settings {
   const settings = plainObject(value) ? value : {};
   // 旧版状态没有注册控制字段，升级时采用新的邮箱绑定经验默认值。
-  const hasRegistrationControl =
-    Object.prototype.hasOwnProperty.call(settings, "registrationEnabled") ||
-    Object.prototype.hasOwnProperty.call(settings, "formalRegistrationEnabled");
   const latestAppVersion = normalizeLatestAppVersion(settings.latestAppVersion);
   const appDownloadUrl = normalizeAppDownloadUrl(settings.appDownloadUrl);
   if (Boolean(latestAppVersion) !== Boolean(appDownloadUrl)) {

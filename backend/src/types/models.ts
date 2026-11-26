@@ -62,21 +62,6 @@ export interface DeviceProfile {
   appVersion?: unknown;
 }
 
-export interface DeviceContext {
-  deviceRowId: number;
-  deviceId: string;
-  deviceBanned: boolean;
-  blockReason: string;
-  userId: number;
-  uid: string;
-  userStatus: string;
-  registered: boolean;
-  brand: string;
-  model: string;
-  androidVersion: string;
-  androidSdk: number;
-  appVersion: string;
-}
 
 export interface RequestUserIdentity {
   userId: number;
