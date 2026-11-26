@@ -74,6 +74,7 @@
             </button>
             <div id="backend-settings-subnav" class="nav-submenu" role="group" aria-label="安全中心子菜单">
               <button class="tab-button" role="tab" type="button" data-tab="environment-anomalies"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 2 4 5v6c0 5.2 3.4 9.8 8 11 4.6-1.2 8-5.8 8-11V5l-8-3zm0 3.2 5 1.9V11c0 3.7-2.1 7.1-5 8.3-2.9-1.2-5-4.6-5-8.3V7.1l5-1.9z"/></svg><span>环境异常</span></button>
+              <button class="tab-button" role="tab" type="button" data-tab="api-statistics"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 19h16v2H2V3h2v16zm3-2V9h3v8H7zm5 0V5h3v12h-3zm5 0v-5h3v5h-3z"/></svg><span>API统计</span></button>
               <button class="tab-button" role="tab" type="button" data-tab="system-logs"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M13 3a9 9 0 1 0 8.9 10h-2a7 7 0 1 1-2-6L15 10h7V3l-2.7 2.7A8.9 8.9 0 0 0 13 3zm-1 5v5l4 2.4 1-1.6-3-1.8V8h-2z"/></svg><span>网络日志</span></button>
             </div>
           </div>
@@ -332,6 +333,32 @@
     </section>
   </section>
 
+  <section class="card tab-panel" role="tabpanel" data-panel="api-statistics" aria-labelledby="dashboardTitle">
+    <section class="security-risk-section api-statistics-section" aria-labelledby="apiStatisticsTitle">
+      <div class="security-risk-section-heading api-statistics-heading">
+        <div><h3 id="apiStatisticsTitle">请求端点统计</h3><p>默认统计最近 30 天；点击端点可查看对应网络日志。</p></div>
+      </div>
+      <div class="api-statistics-toolbar">
+        <input id="apiStatisticsSearch" type="search" placeholder="搜索方法或端点路径…" aria-label="搜索 API 端点">
+        <label><span>开始时间</span><input id="apiStatisticsStartDate" type="datetime-local" step="60" aria-label="API统计开始时间"></label>
+        <span class="api-statistics-date-separator">至</span>
+        <label><span>结束时间</span><input id="apiStatisticsEndDate" type="datetime-local" step="60" aria-label="API统计结束时间"></label>
+        <button class="secondary" type="button" onclick="resetApiStatisticsFilters()">重置</button>
+      </div>
+      <p id="apiStatisticsSummary" class="api-statistics-summary" role="status" aria-live="polite">进入 API 统计后读取端点数据</p>
+      <div id="apiStatisticsGrid" class="api-statistics-grid">
+        <section class="api-statistics-category" aria-labelledby="apiStatisticsInboundTitle">
+          <header class="api-statistics-category-heading"><h4 id="apiStatisticsInboundTitle">入站端点</h4><span id="apiStatisticsInboundSummary"></span></header>
+          <nav id="apiStatisticsInboundList" class="api-statistics-endpoint-tree" aria-label="入站 API 端点"><div class="api-statistics-endpoint-state">打开此页面后读取统计</div></nav>
+        </section>
+        <section class="api-statistics-category" aria-labelledby="apiStatisticsOutboundTitle">
+          <header class="api-statistics-category-heading"><h4 id="apiStatisticsOutboundTitle">出站端点</h4><span id="apiStatisticsOutboundSummary"></span></header>
+          <nav id="apiStatisticsOutboundList" class="api-statistics-endpoint-tree" aria-label="出站 API 端点"><div class="api-statistics-endpoint-state">打开此页面后读取统计</div></nav>
+        </section>
+      </div>
+    </section>
+  </section>
+
   <section class="card tab-panel" role="tabpanel" data-panel="subscriptions">
     <div class="subscription-manager">
       <div class="subscription-manager-layout">
@@ -520,24 +547,7 @@
         <button id="systemLogsSettingsButton" class="system-logs-settings-button secondary" type="button" aria-label="网络日志设置" title="网络日志设置"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.14 12.94a7.7 7.7 0 0 0 .05-.94 7.7 7.7 0 0 0-.05-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7.3 7.3 0 0 0-1.63-.94l-.36-2.54A.49.49 0 0 0 13.89 2h-3.78a.49.49 0 0 0-.49.42L9.26 4.96a7.3 7.3 0 0 0-1.63.94l-2.39-.96a.5.5 0 0 0-.61.22L2.71 8.48a.5.5 0 0 0 .12.64l2.03 1.58a7.7 7.7 0 0 0-.05.94c0 .32.02.63.05.94l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32c.13.22.39.31.61.22l2.39-.96c.5.39 1.05.71 1.63.94l.36 2.54c.04.24.25.42.49.42h3.78c.24 0 .45-.18.49-.42l.36-2.54c.58-.23 1.13-.55 1.63-.94l2.39.96c.22.09.48 0 .61-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58ZM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z"/></svg></button>
       </div>
     </div>
-    <div class="subscription-manager-layout system-logs-manager-layout">
-      <aside class="system-logs-sidebar" aria-label="网络日志导航">
-        <section id="systemLogEndpointPanel" class="system-logs-endpoint-panel" aria-labelledby="systemLogEndpointTitle">
-          <header class="system-logs-panel-heading"><h3 id="systemLogEndpointTitle">请求端点</h3></header>
-          <label class="subscription-list-search system-logs-endpoint-search"><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-search"></use></svg><input id="systemLogEndpointSearch" type="search" placeholder="搜索端点路径…" aria-label="搜索入站和出站端点"></label>
-          <div id="systemLogEndpointGroups" class="system-log-endpoint-groups">
-            <section class="system-log-endpoint-group" aria-labelledby="systemLogInboundEndpointTitle">
-              <header class="system-log-endpoint-group-heading"><h4 id="systemLogInboundEndpointTitle">入站端点</h4><span id="systemLogInboundEndpointSummary"></span></header>
-              <nav id="systemLogInboundEndpointList" class="system-log-endpoint-tree" aria-label="入站端点层级"><div class="system-log-endpoint-state">正在读取端点统计…</div></nav>
-            </section>
-            <section class="system-log-endpoint-group" aria-labelledby="systemLogOutboundEndpointTitle">
-              <header class="system-log-endpoint-group-heading"><h4 id="systemLogOutboundEndpointTitle">出站端点</h4><span id="systemLogOutboundEndpointSummary"></span></header>
-              <nav id="systemLogOutboundEndpointList" class="system-log-endpoint-tree" aria-label="出站端点层级"><div class="system-log-endpoint-state">正在读取端点统计…</div></nav>
-            </section>
-          </div>
-        </section>
-      </aside>
-      <section class="subscription-group-workspace system-logs-workspace" aria-label="网络日志列表">
+    <section class="system-logs-workspace" aria-label="网络日志列表">
         <section class="system-logs-browser" aria-label="网络日志列表">
           <div class="system-logs-toolbar">
             <input id="systemLogSearch" type="search" placeholder="⌕ 搜索路径、说明、IP、请求关联 ID、User-Agent…" aria-label="搜索网络日志">
@@ -562,8 +572,7 @@
             <label class="system-logs-page-size"><select id="systemLogsPageSize" aria-label="每页条数"><option value="20" selected>20 条/页</option><option value="50">50 条/页</option><option value="100">100 条/页</option></select></label>
           </div>
         </section>
-      </section>
-    </div>
+    </section>
     <div id="systemLogSettingsModal" class="system-log-settings-modal" hidden>
       <div class="system-log-settings-backdrop" aria-hidden="true"></div>
       <section class="system-log-settings-dialog" role="dialog" aria-modal="true" aria-labelledby="systemLogSettingsTitle">

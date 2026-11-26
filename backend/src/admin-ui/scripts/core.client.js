@@ -121,6 +121,7 @@
      'update-management': function() { return refreshAdminSettingsPanel('update-management'); },
      'notifications': function() { return loadAdminNotifications(); },
      'environment-anomalies': function() { return loadClientSecurityReports(true); },
+     'api-statistics': function() { return loadApiStatistics(true); },
      'system-logs': function() { return loadSystemLogs(true); }
    };
    if (!adminToken || adminPanelRefreshInFlight) return false;
@@ -282,6 +283,10 @@
    systemLogsLoading = false;
    systemLogsOffset = 0;
    systemLogsCategory = 'request';
+   systemLogsEndpointPath = '';
+   systemLogsEndpointMethod = '';
+   if (typeof apiStatisticsData !== 'undefined') apiStatisticsData = null;
+   if (typeof apiStatisticsRequestId !== 'undefined') apiStatisticsRequestId += 1;
    statusEl.textContent = '';
    el('dashboard').hidden = true;
    loginGate.hidden = false;
@@ -324,6 +329,9 @@
    }
    if (name === 'environment-anomalies' && typeof loadClientSecurityReports === 'function') {
      loadClientSecurityReports();
+   }
+   if (name === 'api-statistics' && typeof loadApiStatistics === 'function') {
+     loadApiStatistics();
    }
    if (name === 'system-logs') {
      loadSystemLogRecordingSettings();
