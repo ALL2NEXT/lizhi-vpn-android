@@ -579,35 +579,44 @@
 
   <section class="card tab-panel" role="tabpanel" data-panel="system-log-settings" aria-labelledby="dashboardTitle">
     <div class="system-log-settings-page">
+      <div class="system-log-settings-tabs" role="tablist" aria-label="记录规则">
+        <button id="systemLogSettingsTabSources" class="system-log-settings-tab active" type="button" role="tab" aria-selected="true" aria-controls="systemLogSettingsPanelSources" tabindex="0" data-system-log-settings-tab="sources">记录来源</button>
+        <button id="systemLogSettingsTabSchedule" class="system-log-settings-tab" type="button" role="tab" aria-selected="false" aria-controls="systemLogSettingsPanelSchedule" tabindex="-1" data-system-log-settings-tab="schedule">记录时段</button>
+        <button id="systemLogSettingsTabDetails" class="system-log-settings-tab" type="button" role="tab" aria-selected="false" aria-controls="systemLogSettingsPanelDetails" tabindex="-1" data-system-log-settings-tab="details">入站详细内容</button>
+      </div>
+      <section id="systemLogSettingsPanelSources" class="system-log-settings-panel" role="tabpanel" aria-labelledby="systemLogSettingsTabSources" data-system-log-settings-panel="sources" tabindex="0">
         <div class="system-log-settings-content">
-          <fieldset class="system-log-category-settings">
-            <legend>记录来源</legend>
+          <fieldset class="system-log-category-settings" aria-label="记录来源">
             <div class="system-log-setting-category"><span><i class="system-log-type-mark request" aria-hidden="true"></i>入站网络</span><label class="system-log-record-toggle" title="记录入站网络"><input type="checkbox" data-system-log-recording="request" checked disabled aria-label="记录入站网络"><i aria-hidden="true"></i></label></div>
             <div class="system-log-setting-category"><span><i class="system-log-type-mark outbound" aria-hidden="true"></i>出站网络</span><label class="system-log-record-toggle" title="记录出站网络"><input type="checkbox" data-system-log-recording="outbound" checked disabled aria-label="记录出站网络"><i aria-hidden="true"></i></label></div>
           </fieldset>
-          <fieldset class="system-log-schedule-settings">
-            <legend>记录时段</legend>
+        </div>
+      </section>
+      <section id="systemLogSettingsPanelSchedule" class="system-log-settings-panel" role="tabpanel" aria-labelledby="systemLogSettingsTabSchedule" data-system-log-settings-panel="schedule" tabindex="0" hidden>
+        <div class="system-log-settings-content">
+          <fieldset class="system-log-schedule-settings" aria-label="记录时段">
             <div class="system-log-schedule-toggle-row">
-              <span><strong>限制记录时间</strong><small>关闭时全天记录；开启后该时段同时应用于入站和出站网络。</small></span>
+              <span><strong>限制记录时间</strong></span>
               <label class="system-log-record-toggle" title="限制记录时间"><input id="systemLogScheduleToggle" type="checkbox" data-system-log-schedule-toggle disabled aria-label="限制记录时间"><i aria-hidden="true"></i></label>
             </div>
             <div class="system-log-schedule-range">
               <label><span>开始时间</span><input type="time" data-system-log-schedule-time="startTime" value="00:00" disabled></label>
               <label><span>结束时间</span><input type="time" data-system-log-schedule-time="endTime" value="23:59" disabled></label>
             </div>
-            <p class="system-log-schedule-hint">按北京时间执行；开始时间包含在内，结束时间不包含，支持跨午夜。</p>
-          </fieldset>
-          <fieldset class="system-log-detail-settings">
-            <legend>入站详细内容</legend>
-            <p class="system-log-detail-hint">开启入站记录后，基础摘要始终记录。勾选的详细内容按原样保存，不做脱敏。</p>
-            <div class="system-log-detail-option"><span><strong>完整 URL</strong><small>包含查询参数。</small></span><label class="system-log-record-toggle" title="记录完整 URL"><input type="checkbox" data-system-log-detail="requestUrl" disabled aria-label="记录完整 URL"><i aria-hidden="true"></i></label></div>
-            <div class="system-log-detail-option"><span><strong>请求头</strong><small>包括 Cookie、认证头等原始值。</small></span><label class="system-log-record-toggle" title="记录请求头"><input type="checkbox" data-system-log-detail="requestHeaders" disabled aria-label="记录请求头"><i aria-hidden="true"></i></label></div>
-            <div class="system-log-detail-option"><span><strong>请求正文</strong><small>按请求原始内容保存。</small></span><label class="system-log-record-toggle" title="记录请求正文"><input type="checkbox" data-system-log-detail="requestBody" disabled aria-label="记录请求正文"><i aria-hidden="true"></i></label></div>
-            <div class="system-log-detail-option"><span><strong>响应头</strong><small>按响应原始内容保存。</small></span><label class="system-log-record-toggle" title="记录响应头"><input type="checkbox" data-system-log-detail="responseHeaders" disabled aria-label="记录响应头"><i aria-hidden="true"></i></label></div>
-            <div class="system-log-detail-option"><span><strong>响应正文</strong><small>按响应原始内容保存。</small></span><label class="system-log-record-toggle" title="记录响应正文"><input type="checkbox" data-system-log-detail="responseBody" disabled aria-label="记录响应正文"><i aria-hidden="true"></i></label></div>
-            <p class="system-log-detail-warning">请求路径、勾选的详细内容和出站失败说明不做敏感信息脱敏，可能包含密码、令牌或 Cookie；日志按 30 天清理。</p>
           </fieldset>
         </div>
+      </section>
+      <section id="systemLogSettingsPanelDetails" class="system-log-settings-panel" role="tabpanel" aria-labelledby="systemLogSettingsTabDetails" data-system-log-settings-panel="details" tabindex="0" hidden>
+        <div class="system-log-settings-content">
+          <fieldset class="system-log-detail-settings" aria-label="入站详细内容">
+            <div class="system-log-detail-option"><span><strong>完整 URL</strong></span><label class="system-log-record-toggle" title="记录完整 URL"><input type="checkbox" data-system-log-detail="requestUrl" disabled aria-label="记录完整 URL"><i aria-hidden="true"></i></label></div>
+            <div class="system-log-detail-option"><span><strong>请求头</strong></span><label class="system-log-record-toggle" title="记录请求头"><input type="checkbox" data-system-log-detail="requestHeaders" disabled aria-label="记录请求头"><i aria-hidden="true"></i></label></div>
+            <div class="system-log-detail-option"><span><strong>请求体</strong></span><label class="system-log-record-toggle" title="记录请求体"><input type="checkbox" data-system-log-detail="requestBody" disabled aria-label="记录请求体"><i aria-hidden="true"></i></label></div>
+            <div class="system-log-detail-option"><span><strong>响应头</strong></span><label class="system-log-record-toggle" title="记录响应头"><input type="checkbox" data-system-log-detail="responseHeaders" disabled aria-label="记录响应头"><i aria-hidden="true"></i></label></div>
+            <div class="system-log-detail-option"><span><strong>响应体</strong></span><label class="system-log-record-toggle" title="记录响应体"><input type="checkbox" data-system-log-detail="responseBody" disabled aria-label="记录响应体"><i aria-hidden="true"></i></label></div>
+          </fieldset>
+        </div>
+      </section>
     </div>
   </section>
    </div>

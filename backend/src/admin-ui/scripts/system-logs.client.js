@@ -303,6 +303,39 @@ async function loadSystemLogRecordingSettings(force) {
   }
 }
 
+function selectSystemLogSettingsTab(tab, moveFocus) {
+  if (!tab) return;
+  const selected = tab.dataset.systemLogSettingsTab;
+  document.querySelectorAll('[data-system-log-settings-tab]').forEach(function(item) {
+    const isSelected = item === tab;
+    item.classList.toggle('active', isSelected);
+    item.setAttribute('aria-selected', String(isSelected));
+    item.tabIndex = isSelected ? 0 : -1;
+  });
+  document.querySelectorAll('[data-system-log-settings-panel]').forEach(function(panel) {
+    panel.hidden = panel.dataset.systemLogSettingsPanel !== selected;
+  });
+  if (moveFocus) tab.focus();
+}
+
+document.querySelectorAll('[data-system-log-settings-tab]').forEach(function(tab) {
+  tab.addEventListener('click', function() {
+    selectSystemLogSettingsTab(tab, false);
+  });
+  tab.addEventListener('keydown', function(event) {
+    const tabs = Array.from(document.querySelectorAll('[data-system-log-settings-tab]'));
+    const index = tabs.indexOf(tab);
+    let nextIndex = index;
+    if (event.key === 'ArrowRight') nextIndex = (index + 1) % tabs.length;
+    else if (event.key === 'ArrowLeft') nextIndex = (index - 1 + tabs.length) % tabs.length;
+    else if (event.key === 'Home') nextIndex = 0;
+    else if (event.key === 'End') nextIndex = tabs.length - 1;
+    else return;
+    event.preventDefault();
+    selectSystemLogSettingsTab(tabs[nextIndex], true);
+  });
+});
+
 async function updateSystemLogRecordingSetting(input) {
   const category = input.dataset.systemLogRecording;
   if (!category || !systemLogRecordingSettings) return;
