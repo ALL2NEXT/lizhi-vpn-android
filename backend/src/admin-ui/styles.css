@@ -306,10 +306,10 @@
      .api-statistics-tree-root .subscription-icon { color: #718096; }
      .api-statistics-tree-folder-icon { color: #3385ec; fill: currentColor; stroke: none; }
      .api-statistics-tree-name, .api-statistics-endpoint-path { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+     .api-statistics-endpoint-path { overflow: visible; overflow-wrap: anywhere; text-overflow: clip; white-space: normal; }
      .api-statistics-tree-children { display: grid; gap: 2px; margin: 2px 0 4px 12px; padding-left: 9px; border-left: 1px solid #e2e9f2; }
      .api-statistics-tree-children[hidden] { display: none !important; }
-     .api-statistics-endpoint-item { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; align-items: center; gap: 6px; width: 100%; min-width: 0; min-height: 32px; margin: 0; padding: 5px 7px; color: #526078; background: transparent; border: 0; border-radius: 6px; box-shadow: none; text-align: left; font-size: 12px; font-weight: 500; }
-     .api-statistics-endpoint-method { display: inline-flex; align-items: center; justify-content: center; min-height: 19px; padding: 2px 5px; color: #1769d2; background: #eaf2ff; border-radius: 6px; font-size: 12px; font-weight: 750; }
+     .api-statistics-endpoint-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px; width: 100%; min-width: 0; min-height: 32px; margin: 0; padding: 5px 7px; color: #526078; background: transparent; border: 0; border-radius: 6px; box-shadow: none; text-align: left; font-size: 12px; font-weight: 500; }
      .api-statistics-endpoint-count { color: #718096; font-size: 12px; font-variant-numeric: tabular-nums; }
      .api-statistics-endpoint-state { padding: 14px 8px; color: #718096; font-size: 12px; line-height: 1.45; }
      .api-statistics-endpoint-state.error { color: #bd2028; }

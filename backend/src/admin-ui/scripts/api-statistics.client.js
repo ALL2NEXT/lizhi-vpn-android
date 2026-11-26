@@ -138,22 +138,17 @@ function apiStatisticsNodeMatches(node, query) {
 }
 
 function apiStatisticsRouteMarkup(route, category) {
+  const displayPath = route.displayPath || route.path;
   return '<button type="button" class="api-statistics-endpoint-item"' +
     ' data-api-statistics-endpoint-category="' + category + '"' +
     ' data-api-statistics-endpoint-method="' + esc(route.method) + '"' +
     ' data-api-statistics-endpoint-path="' + esc(route.path) + '"' +
-    ' title="\u70b9\u51fb\u67e5\u770b\u6b64\u7aef\u70b9\u7684\u7f51\u7edc\u65e5\u5fd7"><span class="api-statistics-endpoint-method">' + esc(route.method) +
-    '</span><span class="api-statistics-endpoint-path">' + esc(route.path) + '</span><span class="api-statistics-endpoint-count">' +
+    ' title="\u70b9\u51fb\u67e5\u770b\u6b64\u7aef\u70b9\u7684\u7f51\u7edc\u65e5\u5fd7"><span class="api-statistics-endpoint-path">' + esc(displayPath) + '</span><span class="api-statistics-endpoint-count">' +
     route.requestCount.toLocaleString() + '</span></button>';
 }
 
 function apiStatisticsEntriesMarkup(node, query, category) {
   const entries = [];
-  node.routes.filter(function(route) {
-    return !query || (route.method + ' ' + route.path).toLowerCase().includes(query);
-  }).forEach(function(route) {
-    entries.push({kind: 'route', count: route.requestCount, name: route.path, markup: apiStatisticsRouteMarkup(route, category)});
-  });
   Array.from(node.children.values()).filter(function(child) {
     return apiStatisticsNodeMatches(child, query);
   }).forEach(function(child) {
@@ -163,7 +158,10 @@ function apiStatisticsEntriesMarkup(node, query, category) {
     child.routes.filter(function(route) {
       return !query || (route.method + ' ' + route.path).toLowerCase().includes(query);
     }).forEach(function(route) {
-      entries.push({kind: 'route', count: route.requestCount, name: route.path, markup: apiStatisticsRouteMarkup(route, category)});
+      const parentPath = node.path === '/' ? '' : node.path;
+      const displayPath = route.path.slice(parentPath.length) || '/';
+      const displayRoute = Object.assign({}, route, {displayPath: displayPath});
+      entries.push({kind: 'route', count: route.requestCount, name: displayPath, markup: apiStatisticsRouteMarkup(displayRoute, category)});
     });
   });
   entries.sort(function(left, right) {
