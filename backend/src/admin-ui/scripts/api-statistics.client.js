@@ -128,7 +128,7 @@ function apiStatisticsBuildTree(endpoints) {
 
 function apiStatisticsRouteMarkup(route) {
   const displayPath = route.displayPath || route.path;
-  return '<div class="api-statistics-endpoint-item"><span class="api-statistics-endpoint-path">' + esc(displayPath) + '</span><span class="api-statistics-endpoint-count">' +
+  return '<div class="api-statistics-endpoint-item"><svg class="api-statistics-endpoint-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4 1.75h5l3 3v9.5H4z"/><path d="M9 2v3h3M6 8l-1.25 1.25L6 10.5M10 8l1.25 1.25L10 10.5"/></svg><span class="api-statistics-endpoint-path">' + esc(displayPath) + '</span><span class="api-statistics-endpoint-count">' +
     route.requestCount.toLocaleString() + '</span></div>';
 }
 
