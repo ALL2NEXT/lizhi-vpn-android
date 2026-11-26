@@ -79,29 +79,9 @@ GET /<ADMIN_PATH>/api/ip-relations?limit=50&offset=0
 
 `ip` 和 `uid` 可组合筛选；无效参数返回 `400`。统计范围仅覆盖当前保留的日志，不从旧关联表或已过期数据补齐。删除用户后，保留期内日志中的 UID 与 IP 关联仍可见，账户状态显示“已删除”。系统日志新增用户 UID、设备 ID 和身份来源，可按 UID 或设备 ID 搜索，详情中可查看这些字段。
 
-## 环境异常与行为异常
+## 环境异常
 
-后台菜单拆分为“环境异常”和“行为异常”。“环境异常”展示客户端检测上报；“行为异常”展示 Gemini 辅助分析。Gemini 分析可读取系统请求日志，并只在管理员手动触发时运行。
-
-“行为异常”中的 Gemini 辅助分析可配置 Google Gemini 模型与最多 20 个 API Key，并手动运行 24 小时、3 天或 7 天分析。多个 Key 用英文逗号或分号分隔，每个 Worker 运行实例内按轮询顺序分配；认证失败、配额限制、服务端错误或某个 Key 无权访问选定模型时，会继续尝试其他 Key。模型目录会分页读取所有 Key 的模型并合并，仅保留 Gemini 对话模型，过滤 TTS、长任务和实时双向模型；后台显示每个模型可用 Key 数、输入/输出 token 上限与思考能力。当前接入使用 Google Gemini REST API；默认模型为 `gemini-3.8-flash`。思考强度可选模型默认、低、中、高；Gemini 3 使用 `thinkingLevel`，Gemini 2.5 映射为 `thinkingBudget`，旧模型使用其默认行为。分析结果会回传 Gemini 的输入、输出和思考 token 用量（若 API 提供）。Key 保存在服务端 `CONFIG` KV，设置读取接口会返回模型、提示词、Key 数量及配置状态，不会回传密钥；保存密钥的请求不会进入系统日志完整请求捕获。留空保存会保留当前 Key 列表，替换或撤销 Key 后请在后台更新配置。
-
-分析请求从 `system_logs_mb` 汇总订阅请求、逐小时活动、错误状态、访问端点与单 IP 账户数。另提供系统逐小时请求基线，用于判断全站低峰时段是否仍有订阅请求；日志采样或覆盖不完整时应降低置信度。发送给 Google 前，IP 与 UID 会使用本次分析临时密钥替换为伪名引用；不发送请求正文、密码或订阅内容。分析数据遵循系统日志开关、记录时段和 30 天保留期。分析只在管理员手动触发时执行，结果需要人工复核，不会自动封禁。
-
-“提示词模板”设置支持自定义 Gemini 风险分析规则，服务端最多保存 12,000 字符，并要求模板中恰好包含一次 `{{DATASET_JSON}}` 占位符；分析时会将其替换为本次脱敏遥测 JSON。默认模板覆盖 24 小时持续订阅、全站低峰期仍订阅、只访问订阅接口、单 IP 多账户和 4xx 参数异常，并要求证据不足时说明无法判断。系统级安全约束仍要求模型忽略遥测中的指令、仅给人工复核建议且不得自动封禁。
-
-管理员 API：
-
-```http
-GET  /<ADMIN_PATH>/api/ai-risk/settings
-PUT  /<ADMIN_PATH>/api/ai-risk/settings
-GET  /<ADMIN_PATH>/api/ai-risk/models
-POST /<ADMIN_PATH>/api/ai-risk/test
-GET  /<ADMIN_PATH>/api/ai-risk/data?windowHours=24
-GET  /<ADMIN_PATH>/api/ai-risk/dashboard-data?windowHours=24
-POST /<ADMIN_PATH>/api/ai-risk/analyze
-```
-
-`windowHours` 支持 1 到 168 小时。数据接口返回按 IP/UID 伪名化的请求行为数据，可在接入 Gemini 前预览；分析接口在服务端调用 Gemini，并仅在本地响应中还原命中的 IP 与 UID，原始标识不会发给 Google。
+后台“环境异常”页面展示客户端检测上报。
 
 ## 订阅分组
 

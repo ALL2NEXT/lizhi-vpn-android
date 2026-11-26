@@ -8,7 +8,6 @@ import type { AppState } from "./types/models.ts";
 export const STATE_KEY = "chimera:state:v1";
 export const LEGACY_STATE_KEY = "fireflyvpn:state:v1";
 export const SYSTEM_LOG_SETTINGS_KEY = "chimera:system-log-settings:v1";
-export const AI_RISK_SETTINGS_KEY = "chimera:ai-risk-settings:v1";
 export const MAX_MANAGED_SUBSCRIPTION_BYTES = 2 * 1024 * 1024;
 export const MAX_BATCH_USER_COUNT = 100;
 export const MAX_TRAFFIC_BYTES = 1e15;
@@ -154,7 +153,87 @@ const USER_EMAIL_REQUIRED_TRIGGERS = [
    BEGIN SELECT RAISE(ABORT, 'user_email_required'); END`,
 ];
 
-export const USER_SCHEMA_VERSION = 30;
+export const USER_SCHEMA_VERSION = 31;
+const USER_SESSIONS_SCHEMA_STATEMENTS = [
+  `CREATE TABLE IF NOT EXISTS user_sessions_mb (
+    id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    device_row_id INTEGER NOT NULL,
+    access_token_hash TEXT NOT NULL UNIQUE,
+    refresh_token_hash TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL,
+    access_expires_at TEXT NOT NULL,
+    refresh_expires_at TEXT NOT NULL,
+    absolute_expires_at TEXT NOT NULL,
+    last_used_at TEXT NOT NULL,
+    revoked_at TEXT,
+    revoke_reason TEXT NOT NULL DEFAULT '',
+    FOREIGN KEY (user_id) REFERENCES users_mb(id) ON DELETE CASCADE,
+    FOREIGN KEY (device_row_id) REFERENCES user_devices_mb(id) ON DELETE CASCADE
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_user_sessions_mb_user_active
+    ON user_sessions_mb(user_id, revoked_at, absolute_expires_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_user_sessions_mb_device_active
+    ON user_sessions_mb(device_row_id, revoked_at, absolute_expires_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_user_sessions_mb_expiry
+    ON user_sessions_mb(absolute_expires_at, revoked_at)`,
+  `CREATE TABLE IF NOT EXISTS user_session_refresh_history_mb (
+    session_id TEXT NOT NULL,
+    token_hash TEXT NOT NULL UNIQUE,
+    used_at TEXT NOT NULL,
+    PRIMARY KEY (session_id, token_hash),
+    FOREIGN KEY (session_id) REFERENCES user_sessions_mb(id) ON DELETE CASCADE
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_user_session_refresh_history_used
+    ON user_session_refresh_history_mb(used_at)`,
+  `CREATE TRIGGER IF NOT EXISTS trg_user_sessions_revoke_banned_mb
+   AFTER UPDATE OF status ON users_mb WHEN NEW.status = 'banned'
+   BEGIN
+     UPDATE user_sessions_mb SET revoked_at = COALESCE(revoked_at, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+       revoke_reason = CASE WHEN revoked_at IS NULL THEN 'account_banned' ELSE revoke_reason END
+     WHERE user_id = NEW.id AND revoked_at IS NULL;
+   END`,
+  `CREATE TRIGGER IF NOT EXISTS trg_user_sessions_revoke_password_mb
+   AFTER UPDATE OF password_hash ON users_mb WHEN NEW.password_hash <> OLD.password_hash
+   BEGIN
+     UPDATE user_sessions_mb SET revoked_at = COALESCE(revoked_at, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+       revoke_reason = CASE WHEN revoked_at IS NULL THEN 'password_changed' ELSE revoke_reason END
+     WHERE user_id = NEW.id AND revoked_at IS NULL;
+   END`,
+  `CREATE TRIGGER IF NOT EXISTS trg_user_sessions_revoke_device_switch_mb
+   AFTER UPDATE OF user_id ON user_devices_mb WHEN NEW.user_id IS NOT OLD.user_id
+   BEGIN
+     UPDATE user_sessions_mb SET revoked_at = COALESCE(revoked_at, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+       revoke_reason = CASE WHEN revoked_at IS NULL THEN 'device_account_switch' ELSE revoke_reason END
+     WHERE device_row_id = NEW.id AND revoked_at IS NULL;
+   END`,
+  `CREATE TRIGGER IF NOT EXISTS trg_user_sessions_revoke_device_ban_mb
+   AFTER INSERT ON device_bans_mb WHEN NEW.lifted_at IS NULL
+   BEGIN
+     UPDATE user_sessions_mb SET revoked_at = COALESCE(revoked_at, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+       revoke_reason = CASE WHEN revoked_at IS NULL THEN 'device_banned' ELSE revoke_reason END
+     WHERE device_row_id = NEW.device_row_id AND revoked_at IS NULL;
+   END`,
+  `CREATE TRIGGER IF NOT EXISTS trg_user_sessions_revoke_device_reban_mb
+   AFTER UPDATE OF lifted_at ON device_bans_mb
+   WHEN NEW.lifted_at IS NULL AND OLD.lifted_at IS NOT NULL
+   BEGIN
+     UPDATE user_sessions_mb SET revoked_at = COALESCE(revoked_at, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+       revoke_reason = CASE WHEN revoked_at IS NULL THEN 'device_banned' ELSE revoke_reason END
+     WHERE device_row_id = NEW.device_row_id AND revoked_at IS NULL;
+   END`,
+];
+const API_RATE_LIMIT_SCHEMA_STATEMENTS = [
+  `CREATE TABLE IF NOT EXISTS api_rate_limits_mb (
+    bucket_key TEXT NOT NULL,
+    window_start INTEGER NOT NULL,
+    hit_count INTEGER NOT NULL CHECK (hit_count > 0),
+    expires_at INTEGER NOT NULL,
+    PRIMARY KEY (bucket_key, window_start)
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_api_rate_limits_mb_expiry
+    ON api_rate_limits_mb(expires_at)`,
+];
 export const USER_SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS app_schema_mb (
     component TEXT PRIMARY KEY,
@@ -296,6 +375,8 @@ export const USER_SCHEMA_STATEMENTS = [
   ...USER_IP_LINKS_SCHEMA_STATEMENTS,
   CLIENT_SECURITY_REPORTS_SCHEMA,
   CLIENT_SECURITY_REPORTS_INDEX,
+  ...USER_SESSIONS_SCHEMA_STATEMENTS,
+  ...API_RATE_LIMIT_SCHEMA_STATEMENTS,
   `INSERT OR IGNORE INTO app_schema_mb (component, version, applied_at)
     VALUES ('users', ${USER_SCHEMA_VERSION}, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`,
 ];
@@ -524,6 +605,7 @@ export const USER_SCHEMA_MIGRATIONS: Record<number, string[]> = {
     `DROP INDEX IF EXISTS idx_security_risk_rule_hits_mb_ip_time`,
     `DROP TABLE IF EXISTS security_risk_rule_hits_mb`,
   ],
+  31: [...USER_SESSIONS_SCHEMA_STATEMENTS, ...API_RATE_LIMIT_SCHEMA_STATEMENTS],
 };
 export function resolveAdminBasePath(value: unknown): string | null {
   const route = String(value || "").trim().replace(/^\/+|\/+$/g, "");

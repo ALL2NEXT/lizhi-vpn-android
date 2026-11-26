@@ -121,9 +121,6 @@
    if (panelName === 'device-management' && typeof adminDeviceBatchBusy !== 'undefined' && adminDeviceBatchBusy) {
      return '设备批量操作进行中，请稍后再刷新';
    }
-   if ((panelName === 'ai-risk' || panelName === 'ai-config') && typeof aiRiskOperationInFlight !== 'undefined' && aiRiskOperationInFlight) {
-     return 'AI 配置或分析操作进行中，请稍后再刷新';
-   }
    const notificationEditor = document.getElementById('notificationEditor');
    if (panelName === 'notifications' && notificationEditor && !notificationEditor.hidden) {
      return '通知编辑窗口打开时暂停刷新';
@@ -163,8 +160,6 @@
      'update-management': function() { return refreshAdminSettingsPanel('update-management'); },
      'notifications': function() { return loadAdminNotifications(); },
      'environment-anomalies': function() { return loadClientSecurityReports(true); },
-     'ai-risk': function() { return loadAiRiskDashboard(false); },
-     'ai-config': function() { return loadAiRiskSettings(true); },
      'system-logs': function() { return loadSystemLogs(true); }
    };
    if (!adminToken || adminPanelRefreshInFlight) return false;
@@ -384,12 +379,6 @@
    }
    if (name === 'environment-anomalies' && typeof loadClientSecurityReports === 'function') {
      loadClientSecurityReports();
-   }
-   if (name === 'ai-config' && typeof loadAiRiskSettings === 'function') {
-     loadAiRiskSettings();
-   }
-   if (name === 'ai-risk' && typeof loadAiRiskDashboard === 'function') {
-     loadAiRiskDashboard(false);
    }
    if (name === 'system-logs') {
      loadSystemLogRecordingSettings();
