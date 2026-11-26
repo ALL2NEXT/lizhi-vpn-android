@@ -2,7 +2,6 @@ let apiStatisticsData = null;
 let apiStatisticsLoading = false;
 let apiStatisticsReloadQueued = false;
 let apiStatisticsRequestId = 0;
-let apiStatisticsFilterTimer = null;
 let apiStatisticsExpandedPaths = new Set(['request:/', 'request:/api', 'unconfigured:/']);
 
 const API_ENDPOINT_INVENTORY = [
@@ -127,16 +126,6 @@ function apiStatisticsBuildTree(endpoints) {
   return root;
 }
 
-function apiStatisticsNodeMatches(node, query) {
-  if (!query) return true;
-  if (node.routes.some(function(route) {
-    return (route.method + ' ' + route.path).toLowerCase().includes(query);
-  })) return true;
-  return Array.from(node.children.values()).some(function(child) {
-    return apiStatisticsNodeMatches(child, query);
-  });
-}
-
 function apiStatisticsRouteMarkup(route, category) {
   const displayPath = route.displayPath || route.path;
   return '<button type="button" class="api-statistics-endpoint-item"' +
@@ -147,17 +136,13 @@ function apiStatisticsRouteMarkup(route, category) {
     route.requestCount.toLocaleString() + '</span></button>';
 }
 
-function apiStatisticsEntriesMarkup(node, query, category) {
+function apiStatisticsEntriesMarkup(node, category) {
   const entries = [];
-  Array.from(node.children.values()).filter(function(child) {
-    return apiStatisticsNodeMatches(child, query);
-  }).forEach(function(child) {
+  Array.from(node.children.values()).forEach(function(child) {
     if (child.children.size) {
       entries.push({kind: 'folder', count: child.requestCount, name: child.name, node: child});
     }
-    child.routes.filter(function(route) {
-      return !query || (route.method + ' ' + route.path).toLowerCase().includes(query);
-    }).forEach(function(route) {
+    child.routes.forEach(function(route) {
       const parentPath = node.path === '/' ? '' : node.path;
       const displayPath = route.path.slice(parentPath.length) || '/';
       const displayRoute = Object.assign({}, route, {displayPath: displayPath});
@@ -169,47 +154,27 @@ function apiStatisticsEntriesMarkup(node, query, category) {
   });
   return entries.map(function(entry) {
     return entry.kind === 'folder'
-      ? apiStatisticsFolderMarkup(entry.node, query, false, category)
+      ? apiStatisticsFolderMarkup(entry.node, false, category)
       : entry.markup;
   }).join('');
 }
 
-function apiStatisticsFolderMarkup(node, query, root, category) {
+function apiStatisticsFolderMarkup(node, root, category) {
   const expandedKey = category + ':' + node.path;
-  const expanded = Boolean(query) || apiStatisticsExpandedPaths.has(expandedKey);
+  const expanded = apiStatisticsExpandedPaths.has(expandedKey);
   const groupId = 'apiStatisticsTreeChildren_' + category + '_' + encodeURIComponent(node.path).replace(/%/g, '_');
   const label = root ? '/' : node.name;
   const folderButton = root
     ? '<div class="api-statistics-endpoint-root-row"><button type="button" class="api-statistics-tree-toggle" data-api-statistics-tree-toggle="' + esc(node.path) + '" data-api-statistics-tree-category="' + category + '" aria-expanded="' + expanded + '" aria-controls="' + groupId + '" aria-label="' + (expanded ? '\u6536\u8d77' : '\u5c55\u5f00') + '\u6839\u76ee\u5f55"><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-next"></use></svg></button><button type="button" class="api-statistics-tree-root" data-api-statistics-root-category="' + category + '" title="\u70b9\u51fb\u67e5\u770b' + (category === 'unconfigured' ? '\u672a\u9884\u8bbe' : '\u9884\u8bbe') + '\u7aef\u70b9\u65e5\u5fd7"><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-all"></use></svg><span>' + label + '</span><span class="api-statistics-endpoint-count">' + node.requestCount.toLocaleString() + '</span></button></div>'
     : '<button type="button" class="api-statistics-tree-folder" data-api-statistics-tree-toggle="' + esc(node.path) + '" data-api-statistics-tree-category="' + category + '" aria-expanded="' + expanded + '" aria-controls="' + groupId + '"><svg class="subscription-icon api-statistics-tree-caret" aria-hidden="true"><use href="#subscription-icon-next"></use></svg><svg class="subscription-icon api-statistics-tree-folder-icon" aria-hidden="true"><use href="#subscription-icon-folder"></use></svg><span class="api-statistics-tree-name" title="' + esc(node.path) + '">' + esc(label) + '</span><span class="api-statistics-endpoint-count">' + node.requestCount.toLocaleString() + '</span></button>';
-  const entries = apiStatisticsEntriesMarkup(node, query, category);
+  const entries = apiStatisticsEntriesMarkup(node, category);
   return '<div class="api-statistics-tree-branch' + (root ? ' root' : '') + '">' + folderButton +
     '<div id="' + groupId + '" class="api-statistics-tree-children"' + (expanded ? '' : ' hidden') + '>' + entries + '</div></div>';
 }
 
-function apiStatisticsSummaryText(groups) {
-  const start = el('apiStatisticsStartDate').value;
-  const end = el('apiStatisticsEndDate').value;
-  const range = start || end
-    ? (start ? start.replace('T', ' ') : '\u6700\u65e9') + ' \u81f3 ' + (end ? end.replace('T', ' ') : '\u73b0\u5728')
-    : '\u6700\u8fd1 30 \u5929';
-  const requestCount = groups.catalog.reduce(function(total, endpoint) {
-    return total + (Number(endpoint.requestCount) || 0);
-  }, 0);
-  const unconfiguredCount = groups.unconfigured.reduce(function(total, endpoint) {
-    return total + (Number(endpoint.requestCount) || 0);
-  }, 0);
-  return range + ' \u00b7 \u9884\u8bbe API \u7aef\u70b9 ' + groups.catalog.length.toLocaleString() + ' \u4e2a \u00b7 ' +
-    requestCount.toLocaleString() + ' \u6b21\u8bf7\u6c42 \u00b7 \u672a\u9884\u8bbe\u7aef\u70b9 ' + groups.unconfigured.length.toLocaleString() +
-    ' \u4e2a \u00b7 ' + unconfiguredCount.toLocaleString() + ' \u6b21\u8bf7\u6c42';
-}
-
 function renderApiStatistics() {
-  const query = String(el('apiStatisticsSearch').value || '').trim().toLowerCase();
-  const summary = el('apiStatisticsSummary');
   if (!apiStatisticsData) return;
   const groups = apiStatisticsData;
-  if (summary) summary.textContent = apiStatisticsSummaryText(groups);
   [
     {category: 'request', key: 'catalog', listId: 'apiStatisticsInboundList', summaryId: 'apiStatisticsInboundSummary'},
     {category: 'unconfigured', key: 'unconfigured', listId: 'apiStatisticsUnconfiguredList', summaryId: 'apiStatisticsUnconfiguredSummary'},
@@ -217,19 +182,12 @@ function renderApiStatistics() {
     const list = el(item.listId);
     const count = el(item.summaryId);
     const rows = Array.isArray(groups[item.key]) ? groups[item.key] : [];
-    const visibleCount = rows.filter(function(route) {
-      return !query || (String(route.method || '') + ' ' + String(route.path || '/')).toLowerCase().includes(query);
-    }).length;
-    if (count) count.textContent = query
-      ? visibleCount.toLocaleString() + ' / ' + rows.length.toLocaleString() + ' \u4e2a\u7aef\u70b9'
-      : rows.length.toLocaleString() + ' \u4e2a\u7aef\u70b9';
+    if (count) count.textContent = rows.length.toLocaleString() + ' \u4e2a\u7aef\u70b9';
     if (!list) return;
     if (!rows.length) {
       list.innerHTML = '<div class="api-statistics-endpoint-state">\u6682\u65e0\u6570\u636e</div>';
-    } else if (!visibleCount) {
-      list.innerHTML = '<div class="api-statistics-endpoint-state">\u6ca1\u6709\u5339\u914d\u7684\u7aef\u70b9</div>';
     } else {
-      list.innerHTML = apiStatisticsFolderMarkup(apiStatisticsBuildTree(rows), query, true, item.category);
+      list.innerHTML = apiStatisticsFolderMarkup(apiStatisticsBuildTree(rows), true, item.category);
     }
   });
 }
@@ -251,10 +209,6 @@ async function loadApiStatistics(force) {
   });
   try {
     const query = new URLSearchParams({includeEndpoints: 'true', limit: '1', offset: '0'});
-    const startDate = el('apiStatisticsStartDate').value;
-    const endDate = el('apiStatisticsEndDate').value;
-    if (startDate) query.set('startDate', startDate);
-    if (endDate) query.set('endDate', endDate);
     const response = await fetch(ADMIN_API_BASE + '/system-logs?' + query.toString(), {
       method: 'GET', headers: headers(), cache: 'no-store'
     });
@@ -275,7 +229,6 @@ async function loadApiStatistics(force) {
         const list = el(id);
         if (list) list.innerHTML = '<div class="api-statistics-endpoint-state error">' + message + '</div>';
       });
-      if (el('apiStatisticsSummary')) el('apiStatisticsSummary').textContent = 'API\u7edf\u8ba1\u8bfb\u53d6\u5931\u8d25';
     }
     return false;
   } finally {
@@ -287,33 +240,6 @@ async function loadApiStatistics(force) {
     }
   }
 }
-
-function scheduleApiStatisticsRefresh() {
-  if (apiStatisticsFilterTimer) clearTimeout(apiStatisticsFilterTimer);
-  apiStatisticsFilterTimer = setTimeout(function() {
-    apiStatisticsFilterTimer = null;
-    apiStatisticsRequestId += 1;
-    apiStatisticsData = null;
-    if (apiStatisticsLoading) apiStatisticsReloadQueued = true;
-    else loadApiStatistics(true);
-  }, 250);
-}
-
-function resetApiStatisticsFilters() {
-  el('apiStatisticsSearch').value = '';
-  el('apiStatisticsStartDate').value = '';
-  el('apiStatisticsEndDate').value = '';
-  apiStatisticsExpandedPaths = new Set(['request:/', 'request:/api', 'unconfigured:/']);
-  apiStatisticsRequestId += 1;
-  apiStatisticsData = null;
-  loadApiStatistics(true);
-}
-
-el('apiStatisticsSearch').addEventListener('input', renderApiStatistics);
-['apiStatisticsStartDate', 'apiStatisticsEndDate'].forEach(function(id) {
-  el(id).addEventListener('input', scheduleApiStatisticsRefresh);
-  el(id).addEventListener('change', scheduleApiStatisticsRefresh);
-});
 
 el('apiStatisticsGrid').addEventListener('click', function(event) {
   const toggle = event.target.closest('[data-api-statistics-tree-toggle]');
@@ -333,7 +259,7 @@ el('apiStatisticsGrid').addEventListener('click', function(event) {
   }
   const root = event.target.closest('[data-api-statistics-root-category]');
   if (root) {
-    showSystemLogsForApiEndpoint('request', '', '', el('apiStatisticsStartDate').value, el('apiStatisticsEndDate').value);
+    showSystemLogsForApiEndpoint('request', '', '', '', '');
     return;
   }
   const endpoint = event.target.closest('[data-api-statistics-endpoint-path]');
@@ -342,8 +268,8 @@ el('apiStatisticsGrid').addEventListener('click', function(event) {
       'request',
       endpoint.dataset.apiStatisticsEndpointMethod || '',
       endpoint.dataset.apiStatisticsEndpointPath || '',
-      el('apiStatisticsStartDate').value,
-      el('apiStatisticsEndDate').value,
+      '',
+      '',
     );
   }
 });

@@ -275,15 +275,6 @@
      .system-logs-settings-button { display: grid; place-items: center; width: 34px; min-width: 34px; min-height: 34px; margin: 0; padding: 6px; }
      .system-logs-settings-button svg { width: 19px; height: 19px; fill: currentColor; }
      .api-statistics-section { gap: 14px; }
-     .api-statistics-heading { align-items: flex-start; justify-content: space-between; }
-     .api-statistics-heading p { margin: 5px 0 0; color: #718099; font-size: 13px; }
-     .api-statistics-toolbar { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 10px; }
-     .api-statistics-toolbar > input[type="search"] { flex: 1 1 260px; min-width: 180px; height: 40px; margin: 0; }
-     .api-statistics-toolbar > label { display: grid; flex: 0 1 210px; gap: 5px; color: #526078; font-size: 12px; }
-     .api-statistics-toolbar > label input { box-sizing: border-box; width: 100%; min-width: 0; height: 40px; margin: 0; }
-     .api-statistics-date-separator { padding-bottom: 12px; color: #718099; }
-     .api-statistics-toolbar > button { min-height: 40px; margin: 0; }
-     .api-statistics-summary { margin: 0; color: #718099; font-size: 13px; }
      .api-statistics-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; min-width: 0; }
      .api-statistics-category { display: flex; flex-direction: column; min-width: 0; min-height: 400px; padding: 12px; overflow: hidden; border: 1px solid #e1e8f0; border-radius: 12px; background: #fff; box-shadow: 0 2px 8px rgb(40 62 92 / 3%); }
      .api-statistics-category-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 2px 8px; }
@@ -1222,10 +1213,6 @@
       .system-logs-toolbar { align-items: stretch; flex-wrap: wrap; padding: 12px; }
       .system-logs-toolbar input[type="search"], .system-logs-toolbar select,
       .system-logs-date-filter, .system-logs-toolbar > button { flex: 1 1 100%; width: 100%; }
-      .api-statistics-toolbar { align-items: stretch; }
-      .api-statistics-toolbar > input[type="search"], .api-statistics-toolbar > label,
-      .api-statistics-toolbar > button { flex: 1 1 100%; width: 100%; }
-      .api-statistics-date-separator { display: none; }
       .api-statistics-category { min-height: 320px; }
       .system-logs-date-separator { display: none; }
       .system-logs-wrap { max-height: 60vh; }
