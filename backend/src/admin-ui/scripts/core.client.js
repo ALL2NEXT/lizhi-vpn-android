@@ -123,7 +123,8 @@
      'environment-anomalies': function() { return loadClientSecurityReports(true); },
      'api-statistics-configured': function() { return loadApiStatistics(true); },
      'api-statistics-unconfigured': function() { return loadApiStatistics(true); },
-     'system-logs': function() { return loadSystemLogs(true); }
+     'system-logs': function() { return loadSystemLogs(true); },
+     'system-log-settings': function() { return loadSystemLogRecordingSettings(true); }
    };
    if (!adminToken || adminPanelRefreshInFlight) return false;
    const refresh = refreshers[panelName];
@@ -335,7 +336,7 @@
    if ((name === 'api-statistics-configured' || name === 'api-statistics-unconfigured') && typeof loadApiStatistics === 'function') {
      loadApiStatistics();
    }
-   if (name === 'system-logs') {
+   if (name === 'system-log-settings' && typeof loadSystemLogRecordingSettings === 'function') {
      loadSystemLogRecordingSettings();
    }
  }

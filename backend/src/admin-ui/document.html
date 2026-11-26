@@ -77,6 +77,7 @@
               <button class="tab-button" role="tab" type="button" data-tab="api-statistics-configured"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 19h16v2H2V3h2v16zm3-2V9h3v8H7zm5 0V5h3v12h-3zm5 0v-5h3v5h-3z"/></svg><span>已预设端点</span></button>
               <button class="tab-button" role="tab" type="button" data-tab="api-statistics-unconfigured"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 19h16v2H2V3h2v16zm3-2V9h3v8H7zm5 0V5h3v12h-3zm5 0v-5h3v5h-3z"/></svg><span>未预设端点</span></button>
               <button class="tab-button" role="tab" type="button" data-tab="system-logs"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M13 3a9 9 0 1 0 8.9 10h-2a7 7 0 1 1-2-6L15 10h7V3l-2.7 2.7A8.9 8.9 0 0 0 13 3zm-1 5v5l4 2.4 1-1.6-3-1.8V8h-2z"/></svg><span>网络日志</span></button>
+              <button class="tab-button" role="tab" type="button" data-tab="system-log-settings"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 6h5m6 0h5M4 12h9m6 0h1M4 18h2m6 0h8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="11" cy="6" r="2" fill="currentColor"/><circle cx="15" cy="12" r="2" fill="currentColor"/><circle cx="9" cy="18" r="2" fill="currentColor"/></svg><span>&#x8bb0;&#x5f55;&#x8bbe;&#x7f6e;</span></button>
             </div>
           </div>
        </nav>
@@ -537,11 +538,6 @@
     <div id="registrationCodeUsagesTable" class="traffic-detail-wrap"><div class="loading-state">正在读取使用记录</div></div>
   </dialog>
   <section class="card tab-panel" role="tabpanel" data-panel="system-logs">
-    <div class="dashboard-heading system-logs-heading">
-      <div class="system-logs-title">
-        <button id="systemLogsSettingsButton" class="system-logs-settings-button secondary" type="button" aria-label="网络日志设置" title="网络日志设置"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.14 12.94a7.7 7.7 0 0 0 .05-.94 7.7 7.7 0 0 0-.05-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7.3 7.3 0 0 0-1.63-.94l-.36-2.54A.49.49 0 0 0 13.89 2h-3.78a.49.49 0 0 0-.49.42L9.26 4.96a7.3 7.3 0 0 0-1.63.94l-2.39-.96a.5.5 0 0 0-.61.22L2.71 8.48a.5.5 0 0 0 .12.64l2.03 1.58a7.7 7.7 0 0 0-.05.94c0 .32.02.63.05.94l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32c.13.22.39.31.61.22l2.39-.96c.5.39 1.05.71 1.63.94l.36 2.54c.04.24.25.42.49.42h3.78c.24 0 .45-.18.49-.42l.36-2.54c.58-.23 1.13-.55 1.63-.94l2.39.96c.22.09.48 0 .61-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58ZM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z"/></svg></button>
-      </div>
-    </div>
     <section class="system-logs-workspace" aria-label="网络日志列表">
         <section class="system-logs-browser" aria-label="网络日志列表">
           <div class="system-logs-toolbar">
@@ -569,10 +565,20 @@
           </div>
         </section>
     </section>
-    <div id="systemLogSettingsModal" class="system-log-settings-modal" hidden>
-      <div class="system-log-settings-backdrop" aria-hidden="true"></div>
-      <section class="system-log-settings-dialog" role="dialog" aria-modal="true" aria-labelledby="systemLogSettingsTitle">
-        <header class="system-log-settings-header"><h3 id="systemLogSettingsTitle">记录设置</h3><button type="button" class="system-log-drawer-close" data-system-log-settings-close aria-label="关闭设置">×</button></header>
+    <aside id="systemLogDetailDrawer" class="system-log-detail-drawer" aria-label="日志详情" aria-hidden="true" hidden>
+      <header class="system-log-drawer-header"><h3>日志详情</h3><button type="button" class="system-log-drawer-close" onclick="closeSystemLogDetails()" aria-label="关闭日志详情">×</button></header>
+      <nav class="system-log-detail-tabs" aria-label="日志详情内容">
+        <button type="button" class="active" data-system-log-detail-tab="basic">基本信息</button>
+        <button type="button" data-system-log-detail-tab="request">请求内容</button>
+        <button type="button" data-system-log-detail-tab="response">响应内容</button>
+        <button type="button" data-system-log-detail-tab="raw">原始日志</button>
+      </nav>
+      <div id="systemLogDrawerContent" class="system-log-drawer-content"></div>
+    </aside>
+  </section>
+
+  <section class="card tab-panel" role="tabpanel" data-panel="system-log-settings" aria-labelledby="dashboardTitle">
+    <div class="system-log-settings-page">
         <div class="system-log-settings-content">
           <fieldset class="system-log-category-settings">
             <legend>记录来源</legend>
@@ -602,19 +608,7 @@
             <p class="system-log-detail-warning">请求路径、勾选的详细内容和出站失败说明不做敏感信息脱敏，可能包含密码、令牌或 Cookie；日志按 30 天清理。</p>
           </fieldset>
         </div>
-        <footer class="system-log-settings-footer"><button type="button" class="secondary" data-system-log-settings-close>完成</button></footer>
-      </section>
     </div>
-    <aside id="systemLogDetailDrawer" class="system-log-detail-drawer" aria-label="日志详情" aria-hidden="true" hidden>
-      <header class="system-log-drawer-header"><h3>日志详情</h3><button type="button" class="system-log-drawer-close" onclick="closeSystemLogDetails()" aria-label="关闭日志详情">×</button></header>
-      <nav class="system-log-detail-tabs" aria-label="日志详情内容">
-        <button type="button" class="active" data-system-log-detail-tab="basic">基本信息</button>
-        <button type="button" data-system-log-detail-tab="request">请求内容</button>
-        <button type="button" data-system-log-detail-tab="response">响应内容</button>
-        <button type="button" data-system-log-detail-tab="raw">原始日志</button>
-      </nav>
-      <div id="systemLogDrawerContent" class="system-log-drawer-content"></div>
-    </aside>
   </section>
    </div>
    </div>

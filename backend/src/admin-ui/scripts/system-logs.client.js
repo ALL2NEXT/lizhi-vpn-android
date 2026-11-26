@@ -399,24 +399,6 @@ async function updateSystemLogRecordingSchedule() {
   }
 }
 
-function openSystemLogSettings() {
-  const modal = el('systemLogSettingsModal');
-  if (!modal) return;
-  modal.hidden = false;
-  modal.setAttribute('aria-hidden', 'false');
-  loadSystemLogRecordingSettings(true);
-  const closeButton = modal.querySelector('[data-system-log-settings-close]');
-  if (closeButton) closeButton.focus();
-}
-
-function closeSystemLogSettings() {
-  const modal = el('systemLogSettingsModal');
-  if (!modal) return;
-  modal.hidden = true;
-  modal.setAttribute('aria-hidden', 'true');
-  el('systemLogsSettingsButton').focus();
-}
-
 function applySystemLogFilters() {
   clearSystemLogSelection();
   systemLogsFilterRevision += 1;
@@ -756,16 +738,6 @@ document.querySelectorAll('[data-system-log-schedule-time]').forEach(function(in
   input.addEventListener('change', updateSystemLogRecordingSchedule);
 });
 
-el('systemLogsSettingsButton').addEventListener('click', openSystemLogSettings);
-document.querySelectorAll('[data-system-log-settings-close]').forEach(function(button) {
-  button.addEventListener('click', closeSystemLogSettings);
-});
-el('systemLogSettingsModal').addEventListener('click', function(event) {
-  if (event.target === event.currentTarget || event.target.classList.contains('system-log-settings-backdrop')) {
-    closeSystemLogSettings();
-  }
-});
-
 document.querySelectorAll('[data-system-log-detail-tab]').forEach(function(button) {
   button.addEventListener('click', function() {
     systemLogDetailTab = button.dataset.systemLogDetailTab || 'basic';
@@ -815,9 +787,7 @@ el('systemLogsPageSize').addEventListener('change', function() {
 
 document.addEventListener('keydown', function(event) {
   if (event.key !== 'Escape') return;
-  const settingsModal = el('systemLogSettingsModal');
-  if (settingsModal && !settingsModal.hidden) closeSystemLogSettings();
-  else if (systemLogDetailRecord) closeSystemLogDetails();
+  if (systemLogDetailRecord) closeSystemLogDetails();
 });
 
 setDefaultSystemLogDateRange();
