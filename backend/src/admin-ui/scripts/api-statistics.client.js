@@ -172,7 +172,7 @@ function renderApiStatistics() {
   if (!apiStatisticsData) return;
   const groups = apiStatisticsData;
   [
-    {category: 'request', key: 'catalog', listId: 'apiStatisticsInboundList', summaryId: 'apiStatisticsInboundSummary'},
+    {category: 'request', key: 'catalog', listId: 'apiStatisticsConfiguredList', summaryId: 'apiStatisticsConfiguredSummary'},
     {category: 'unconfigured', key: 'unconfigured', listId: 'apiStatisticsUnconfiguredList', summaryId: 'apiStatisticsUnconfiguredSummary'},
   ].forEach(function(item) {
     const list = el(item.listId);
@@ -199,7 +199,7 @@ async function loadApiStatistics(force) {
   }
   apiStatisticsLoading = true;
   const requestId = ++apiStatisticsRequestId;
-  ['apiStatisticsInboundList', 'apiStatisticsUnconfiguredList'].forEach(function(id) {
+  ['apiStatisticsConfiguredList', 'apiStatisticsUnconfiguredList'].forEach(function(id) {
     const list = el(id);
     if (list) list.innerHTML = '<div class="loading-state">\u6b63\u5728\u7edf\u8ba1\u7aef\u70b9\u2026</div>';
   });
@@ -221,7 +221,7 @@ async function loadApiStatistics(force) {
   } catch (error) {
     if (requestId === apiStatisticsRequestId) {
       const message = esc(error.message || 'API\u7edf\u8ba1\u8bfb\u53d6\u5931\u8d25');
-      ['apiStatisticsInboundList', 'apiStatisticsUnconfiguredList'].forEach(function(id) {
+      ['apiStatisticsConfiguredList', 'apiStatisticsUnconfiguredList'].forEach(function(id) {
         const list = el(id);
         if (list) list.innerHTML = '<div class="api-statistics-endpoint-state error">' + message + '</div>';
       });
@@ -237,19 +237,18 @@ async function loadApiStatistics(force) {
   }
 }
 
-el('apiStatisticsGrid').addEventListener('click', function(event) {
+document.addEventListener('click', function(event) {
   const toggle = event.target.closest('[data-api-statistics-tree-toggle]');
-  if (toggle) {
-    const path = toggle.dataset.apiStatisticsTreeToggle || '/';
-    const category = toggle.dataset.apiStatisticsTreeCategory || 'request';
-    const key = category + ':' + path;
-    const expanded = toggle.getAttribute('aria-expanded') === 'true';
-    const nextExpanded = !expanded;
-    if (nextExpanded) apiStatisticsExpandedPaths.add(key);
-    else apiStatisticsExpandedPaths.delete(key);
-    toggle.setAttribute('aria-expanded', String(nextExpanded));
-    toggle.setAttribute('aria-label', (nextExpanded ? '\u6536\u8d77' : '\u5c55\u5f00') + (path === '/' ? '\u6839\u76ee\u5f55' : path));
-    const children = el(toggle.getAttribute('aria-controls'));
-    if (children) children.hidden = !nextExpanded;
-  }
+  if (!toggle) return;
+  const path = toggle.dataset.apiStatisticsTreeToggle || '/';
+  const category = toggle.dataset.apiStatisticsTreeCategory || 'request';
+  const key = category + ':' + path;
+  const expanded = toggle.getAttribute('aria-expanded') === 'true';
+  const nextExpanded = !expanded;
+  if (nextExpanded) apiStatisticsExpandedPaths.add(key);
+  else apiStatisticsExpandedPaths.delete(key);
+  toggle.setAttribute('aria-expanded', String(nextExpanded));
+  toggle.setAttribute('aria-label', (nextExpanded ? '\u6536\u8d77' : '\u5c55\u5f00') + (path === '/' ? '\u6839\u76ee\u5f55' : path));
+  const children = el(toggle.getAttribute('aria-controls'));
+  if (children) children.hidden = !nextExpanded;
 });

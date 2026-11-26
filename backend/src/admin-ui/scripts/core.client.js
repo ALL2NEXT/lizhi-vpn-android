@@ -121,7 +121,8 @@
      'update-management': function() { return refreshAdminSettingsPanel('update-management'); },
      'notifications': function() { return loadAdminNotifications(); },
      'environment-anomalies': function() { return loadClientSecurityReports(true); },
-     'api-statistics': function() { return loadApiStatistics(true); },
+     'api-statistics-configured': function() { return loadApiStatistics(true); },
+     'api-statistics-unconfigured': function() { return loadApiStatistics(true); },
      'system-logs': function() { return loadSystemLogs(true); }
    };
    if (!adminToken || adminPanelRefreshInFlight) return false;
@@ -331,7 +332,7 @@
    if (name === 'environment-anomalies' && typeof loadClientSecurityReports === 'function') {
      loadClientSecurityReports();
    }
-   if (name === 'api-statistics' && typeof loadApiStatistics === 'function') {
+   if ((name === 'api-statistics-configured' || name === 'api-statistics-unconfigured') && typeof loadApiStatistics === 'function') {
      loadApiStatistics();
    }
    if (name === 'system-logs') {
